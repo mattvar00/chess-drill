@@ -119,14 +119,18 @@ function reanalyseAll(){ buildBook(); for(const id in P.games){ const g=P.games[
 function recomputeBranchStats(){
   for(const id in P.br){ P.br[id].devs=0; P.br[id].freq=0; }
   const cut=Date.now()-60*864e5; // 60 derniers jours
-  for(const id in P.games){ const g=P.games[id]; if(g.t*1000<cut||P.ignored[id]) continue;
+  for(const id in P.games){ const g=P.games[id]; if(g.t*1000<cut||P.ignored[id]||!tcOk(g)) continue;
     const br=g.a.branches||[]; br.forEach(b=>{ const s=brState(b); s.freq=(s.freq||0)+1; P.br[b]=s; });
     if(g.a.status==='dev') br.forEach(b=>{ const s=brState(b); s.devs=(s.devs||0)+1; P.br[b]=s; });
   }
 }
 
 /* ---------- UI onglet Parties ---------- */
-function gamesList(){ return Object.values(P.games).sort((a,b)=>b.t-a.t); }
+const TC_LABEL={all:'Toutes',rapid:'Rapid',blitz:'Blitz',bullet:'Bullet'};
+function tcOk(g){ const f=P.settings.tcFilter||'all'; return f==='all'||g.tc===f; }
+function gamesList(){ return Object.values(P.games).filter(tcOk).sort((a,b)=>b.t-a.t); }
+function tcChips(){ const f=P.settings.tcFilter||'all'; return `<div class="chips" id="tcChips">${Object.keys(TC_LABEL).map(k=>`<button data-tc="${k}" class="${f===k?'on':''}">${TC_LABEL[k]}</button>`).join('')}</div>`; }
+function bindTcChips(h,rerender){ h.querySelectorAll('#tcChips button').forEach(b=>b.onclick=()=>{ P.settings.tcFilter=b.dataset.tc; save(); recomputeBranchStats(); rerender(); }); }
 function coverage(list){
   const rel=list.filter(g=>g.a.status!=='nobook'&&g.a.status!=='err'); if(!rel.length) return null;
   const inBook=rel.filter(g=>g.a.status==='ok'||g.a.depth>=8||(g.a.status==='gap')).length; // gap = ce n'est pas toi qui as dévié
@@ -134,6 +138,7 @@ function coverage(list){
 }
 function renderGames(h){
   const now=new Date(); const list=gamesList();
+  const only=(navTop()&&navTop().filter)||null;
   const devs=list.filter(g=>g.a.status==='dev'&&!P.ignored[g.id]);
   const gaps=list.filter(g=>g.a.status==='gap'&&!P.ignored[g.id]);
   const cov=coverage(list); const notAn=list.filter(g=>!g.st&&!P.ignored[g.id]);
@@ -147,6 +152,8 @@ function renderGames(h){
     <button id="gGo" class="pri">Analyser</button>
   </div>
   <div id="gStatus" class="why"></div>
+  ${tcChips()}
+  <details class="help"><summary>Comment lire cette page</summary>Chaque partie est rejouée contre ton répertoire. <b>Déviation</b> : tu as quitté ta ligne (ouvre la ligne à cet endroit ; « Autre ligne » si tu préfères une autre variante). <b>Trou</b> : l'adversaire a joué un coup que le répertoire ne couvre pas. Le moteur (bouton ci-dessous) note ensuite chaque coup et extrait tes fautes. Le filtre de cadence s'applique partout (Profil compris).</details>
   <details class="pgnbox"><summary>Scouting : préparer un adversaire</summary>
     <div class="fetch"><input id="scUser" placeholder="pseudo de l'adversaire" autocapitalize="off"><button id="scGo" class="pri">Scouter</button></div>
     <div id="scOut"></div>
@@ -160,8 +167,9 @@ function renderGames(h){
   ${list.length?`<div class="sysbar"><button id="gBatch" ${ENGINE.busy?'disabled':''}>${ENGINE.busy?'Analyse en cours…':`Moteur · analyser ${Math.min(10,notAn.length)} partie${Math.min(10,notAn.length)>1?'s':''} (${notAn.length} restantes)`}</button>${ENGINE.busy?'<button id="gCancel" class="sec">Stop</button>':''}</div><div id="gProg" class="prog2 hidden"><b></b><span></span></div>`:''}
   ${list.length?'':'<div class="intro">Récupère un mois de parties : chaque partie est rejouée contre ton répertoire. <b>Déviation</b> = tu as quitté la ligne ; <b>Trou</b> = l\'adversaire a joué un coup que le répertoire ne couvre pas. Rien ne quitte ton navigateur.</div>'}
   ${devs.length?`<h2 class="sec">Déviations — tu as quitté la ligne</h2>${devs.map(gameCard).join('')}`:''}
-  ${gaps.length?`<h2 class="sec">Trous — l'adversaire sort du répertoire</h2>${gaps.slice(0,25).map(gameCard).join('')}`:''}
-  ${list.length?`<h2 class="sec">Toutes les parties</h2>${list.slice(0,60).map(gameCard).join('')}`:''}`;
+  ${only==='dev'?'':`${gaps.length?`<h2 class="sec">Trous — l'adversaire sort du répertoire</h2>${gaps.slice(0,25).map(gameCard).join('')}`:''}
+  ${list.length?`<h2 class="sec">Toutes les parties</h2>${list.slice(0,60).map(gameCard).join('')}`:''}`}`;
+  bindTcChips(h,()=>renderGames(h));
   $('#gGo').onclick=doFetch;
   const gb=$('#gBatch'); if(gb) gb.onclick=()=>runBatch(notAn.slice(0,10).map(g=>g.id));
   const gc=$('#gCancel'); if(gc) gc.onclick=()=>{ ENGINE.cancel=true; };
@@ -174,7 +182,7 @@ function renderGames(h){
 const STATUS_LABEL={ok:'en livre',dev:'déviation',gap:'trou',out:'hors livre',nobook:'hors répertoire',err:'illisible'};
 function gameCard(g){
   const a=g.a; const d=new Date(g.t*1000).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
-  const ign=P.ignored[g.id];
+  const ign=P.ignored[g.id]; const fixed=P.fixed[g.id];
   let detail='';
   if(a.status==='dev') detail=`coup ${Math.floor(a.ply/2)+1}${a.ply%2?'…':'.'} tu as joué <b>${a.played}</b>, le répertoire dit <b>${a.expected.map(e=>e.san).join(' / ')}</b>`;
   else if(a.status==='gap') detail=`coup ${Math.floor(a.ply/2)+1}${a.ply%2?'…':'.'} il a joué <b>${a.played}</b> — ligne à ajouter`;
@@ -183,7 +191,7 @@ function gameCard(g){
   else detail=`${g.sans.slice(0,6).join(' ')}…`;
   const br=(a.branches||[]).slice(0,2).map(id=>BR[id]?BR[id].br.titre:id).join(' · ');
   const st=g.st?` <span class="acc ${g.st.acc>=80?'hi':g.st.acc>=65?'mid':'lo'}">${g.st.acc}%</span>${g.st.blunder?` <span class="dim">${g.st.blunder} gaffe${g.st.blunder>1?'s':''}</span>`:''}`:'';
-  return `<div class="card g ${a.status} ${ign?'ign':''}" data-g="${g.id}"><div class="sw k ${g.color}"></div><div class="body"><div class="t"><span class="res ${g.res}">${g.res}</span> vs ${g.opp} <span class="dim">(${g.oppElo}) · ${d} · ${g.tc}</span>${st}</div><div class="s">${detail}${br?`<br><span class="dim">${br}</span>`:''}</div></div>${a.status==='dev'||a.status==='gap'?`<button class="ign" data-g="${g.id}" title="ignorer">${ign?'↺':'✕'}</button>`:''}<span class="badge ${a.status}">${STATUS_LABEL[a.status]}</span></div>`;
+  return `<div class="card g ${a.status} ${ign?'ign':''}" data-g="${g.id}"><div class="sw k ${g.color}"></div><div class="body"><div class="t"><span class="res ${g.res}">${g.res}</span> vs ${g.opp} <span class="dim">(${g.oppElo}) · ${d} · ${g.tc}</span>${st}</div><div class="s">${detail}${br?`<br><span class="dim">${br}</span>`:''}</div></div>${a.status==='dev'||a.status==='gap'?`<button class="ign" data-g="${g.id}" title="ignorer">${ign?'↺':'✕'}</button>`:''}<span class="badge ${fixed&&a.status==='dev'?'ok':a.status}">${fixed&&a.status==='dev'?'corrigée':STATUS_LABEL[a.status]}</span></div>`;
 }
 async function doFetch(){
   const user=$('#gUser').value.trim(); if(!user) return;
@@ -194,7 +202,7 @@ async function doFetch(){
     const games=await fetchMonth(user,y,m,n=>{ st.textContent=`chess.com ne répond pas, nouvel essai (${n}/5)…`; });
     st.textContent=`${games.length} parties reçues, analyse…`;
     await new Promise(r=>setTimeout(r,30));
-    const added=ingestGames(games,user);
+    const added=ingestGames(games,user); P.settings.lastSync=Date.now(); save();
     st.textContent=`${added} nouvelle${added>1?'s':''} partie${added>1?'s':''} analysée${added>1?'s':''}.`;
     renderGames($('#home')); $('#gStatus').textContent=st.textContent;
   }catch(e){ st.textContent='Erreur : '+e.message+(location.protocol==='file:'?' (ouvre l\'app via http, pas file://)':' — réessaie dans une minute, ou importe un PGN ci-dessous.'); btn.disabled=false; }
@@ -208,17 +216,18 @@ function ingestPgnText(){
 function openGame(id){
   const g=P.games[id]; const a=g.a;
   if((a.status==='dev'||a.status==='gap')&&a.branches&&a.branches.length){
-    // branche préférée : celle où le coup attendu est le coup de la branche à ce ply
-    let pick=a.branches[0];
-    if(a.status==='dev'){ const cand=a.branches.filter(b=>{ const mv=BR[b].br.moves[a.ply]; return mv && a.expected.some(e=>e.uci===mv.uci); }); if(cand.length) pick=cand[0]; }
-    startBranch(pick,'drill',null,{startPly:a.ply, fromGame:g});
-  } else {
-    replayGame(g);
-  }
+    const key=fenKey(a.fen); let cands=a.branches;
+    if(a.status==='dev'){ const c=a.branches.filter(b=>{ const mv=BR[b].br.moves[a.ply]; return mv && a.expected.some(e=>e.uci===mv.uci); }); if(c.length) cands=c; }
+    const pref=P.pref[key]; const pick=(pref&&cands.includes(pref))?pref:cands[0];
+    const open=b=>startBranch(b,'drill',null,{startPly:a.ply, fromGame:g});
+    // plusieurs systèmes différents à cette position → on demande, une fois, puis on retient
+    const systems=new Set(cands.map(b=>BR[b].sys.id));
+    if(systems.size>1 && !pref) pickBranch(cands,null,b=>{ P.pref[key]=b; save(); open(b); }); else open(pick);
+  } else replayGame(g);
 }
 /* replay : la partie en mode explorer (lecture seule) */
 function replayGame(g){
-  const sans=g.sans; mode='games'; ['rep','fault','games','prof','settings'].forEach(t=>$('#tab-'+t).classList.toggle('on',t==='games')); $('#home').classList.add('hidden'); $('#drill').classList.remove('hidden');
+  const sans=g.sans; showBoard();
   const fake={id:'game',titre:`vs ${g.opp}`,moves:[],notes:{}};
   const t=new Chess(); sans.forEach(s=>{ const m=t.move(s); if(m) fake.moves.push({san:m.san,uci:m.from+m.to+(m.promotion||'')}); });
   cur={kind:'rep',id:'game',game:g,br:fake,sys:{titre:`${g.res==='W'?'Victoire':g.res==='D'?'Nulle':'Défaite'} · ${g.tc}`,resume:`${g.a.status==='ok'?'Partie restée dans le répertoire.':STATUS_LABEL[g.a.status]+'.'} ${g.eco||''}`},bloc:{titre:'Partie',side:g.color},mode:'explore',ply:0,steps:[],session:null,readonly:true,bookDepth:g.a.depth||0};

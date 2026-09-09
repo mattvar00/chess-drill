@@ -21,7 +21,7 @@ function sessions(list){ // parties triées par date croissante, coupées aux pa
 
 function computeProfile(days){
   const cut=Date.now()/1000-days*86400;
-  const all=Object.values(P.games).filter(g=>g.t>=cut&&!P.ignored[g.id]&&g.a.status!=='err').sort((a,b)=>a.t-b.t);
+  const all=Object.values(P.games).filter(g=>g.t>=cut&&!P.ignored[g.id]&&g.a.status!=='err'&&tcOk(g)).sort((a,b)=>a.t-b.t);
   const an=all.filter(g=>g.st&&g.ev);
   const pr={n:all.length, nAn:an.length, days};
   if(!all.length) return pr;
@@ -79,9 +79,10 @@ const bar=(v,max,cls)=>`<div class="axisbar"><b class="${cls||''}" style="width:
 function renderProfile(h){
   const days=+(P.settings.profDays||30); const pr=computeProfile(days); const ts=tiltStatus();
   const opts=[7,30,90].map(d=>`<button class="${d===days?'on':''}" data-d="${d}">${d} j</button>`).join('');
-  let html=`<div class="modes prof">${opts}</div>`;
+  let html=`<div class="modes prof">${opts}</div>${tcChips()}`;
   html+=`<div class="intro tilt ${ts.warn?'warn':''}"><b>Aujourd'hui : ${ts.n} partie${ts.n>1?'s':''}</b>${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}. ${ts.warn?'Stop. Tes chutes d\'Elo viennent des longues séries, pas des ouvertures.':`Limite ${ts.lim}/jour (réglable dans ⚙).`}</div>`;
   if(!pr.n){ h.innerHTML=html+`<div class="intro">Aucune partie sur ${days} jours. Récupère un mois dans l'onglet Parties.</div>`; bindProf(h); return; }
+  html+=radar(pr);
   html+=`<div class="stats"><div class="stat"><div class="n">${pr.n}</div><div class="l">parties · ${days} j</div></div><div class="stat"><div class="n">${pr.winRate}%</div><div class="l">victoires</div></div><div class="stat"><div class="n">${pr.nAn}</div><div class="l">analysées au moteur</div></div></div>`;
   for(const tc in pr.elo){ const pts=pr.elo[tc]; if(pts.length>=3) html+=`<div class="card static"><div class="body"><div class="t">${tc} <span class="dim">${pts[0].e} → ${pts[pts.length-1].e}</span></div>${spark(pts,300,40)}</div></div>`; }
   const o=pr.opening;
@@ -102,4 +103,26 @@ function renderProfile(h){
   h.innerHTML=html; bindProf(h);
 }
 function axis(title, big, label, barHtml, sub){ return `<div class="axis"><div class="axh"><span class="t">${title}</span><span class="big">${big}</span></div><div class="l">${label}</div>${barHtml}<div class="s">${sub}</div></div>`; }
-function bindProf(h){ h.querySelectorAll('.prof button').forEach(b=>b.onclick=()=>{ P.settings.profDays=+b.dataset.d; save(); renderProfile(h); }); }
+function bindProf(h){ h.querySelectorAll('.prof button').forEach(b=>b.onclick=()=>{ P.settings.profDays=+b.dataset.d; save(); renderProfile(h); }); bindTcChips(h,()=>renderProfile(h)); }
+/* radar 0-100 par axe (échelles indicatives, pas des percentiles) */
+function axisScores(pr){
+  const o=pr.opening||{}, t=pr.tactics, c=pr.clock||{}, ti=pr.tilt||{};
+  const sc={};
+  sc['Ouverture']=o.coverage==null?null:o.coverage;
+  sc['Tactique']=t?Math.max(0,Math.min(100,(t.acc-50)*2)):null;
+  sc['Conversion']=pr.conversion&&pr.conversion.rate!=null?pr.conversion.rate:null;
+  sc['Résilience']=pr.resilience&&pr.resilience.rate!=null?Math.min(100,pr.resilience.rate*2.5):null;
+  sc['Horloge']=c.fastBlunders!=null?Math.max(0,100-c.fastBlunders-c.fastShare/2):null;
+  const tiltPen=(ti.maxDay?Math.min(60,ti.maxDay*2):0)+(ti.wrAfterTwoL!=null&&ti.wrBase!=null?Math.max(0,(ti.wrBase-ti.wrAfterTwoL)*2):0);
+  sc['Tilt']=pr.n?Math.max(0,100-tiltPen):null;
+  return sc;
+}
+function radar(pr){
+  const sc=axisScores(pr); const keys=Object.keys(sc); const n=keys.length; const cx=170,cy=150,R=105;
+  const pt=(i,r)=>{ const a=-Math.PI/2+i*2*Math.PI/n; return [cx+r*Math.cos(a),cy+r*Math.sin(a)]; };
+  const grid=[0.25,0.5,0.75,1].map(f=>`<polygon points="${keys.map((k,i)=>pt(i,R*f).join(',')).join(' ')}" fill="none" stroke="var(--line)"/>`).join('');
+  const spokes=keys.map((k,i)=>{ const [x,y]=pt(i,R); return `<line x1="${cx}" y1="${cy}" x2="${x}" y2="${y}" stroke="var(--line)"/>`; }).join('');
+  const poly=keys.map((k,i)=>pt(i,R*((sc[k]==null?0:sc[k])/100)).join(',')).join(' ');
+  const labels=keys.map((k,i)=>{ const [x,y]=pt(i,R+22); const v=sc[k]; return `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle" font-size="11" fill="var(--mute)">${k}</text><text x="${x}" y="${y+13}" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="700" fill="${v==null?'var(--dim)':v>=70?'var(--ok)':v>=45?'var(--brass)':'var(--bad)'}">${v==null?'–':Math.round(v)}</text>`; }).join('');
+  return `<svg viewBox="0 0 340 300" class="radar">${grid}${spokes}<polygon points="${poly}" fill="rgba(209,165,74,.25)" stroke="var(--brass)" stroke-width="2"/>${labels}</svg><details class="help"><summary>Lire le radar</summary>Scores 0-100 sur des échelles fixes (pas des percentiles) : ouverture = couverture du répertoire ; tactique = précision moteur ; conversion = positions gagnantes converties ; résilience = positions perdues sauvées ; horloge = pénalise les gaffes jouées vite ; tilt = pénalise le volume et les défaites en série. Les axes moteur exigent des parties analysées.</details>`;
+}

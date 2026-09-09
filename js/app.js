@@ -48,54 +48,30 @@ function tap(sq){
 }
 
 /* ---------- navigation listes ---------- */
-$('#tab-rep').onclick=()=>{mode='rep';view={level:'blocs'};home();};
-$('#tab-fault').onclick=()=>{mode='fault';home();};
-$('#tab-games').onclick=()=>{mode='games';home();};
-$('#tab-settings').onclick=()=>{mode='settings';home();};
-$('#tab-prof').onclick=()=>{mode='prof';home();};
-$('#back').onclick=()=>{ if(WOOD){ WOOD=null; } home(); };
-function home(){
-  cur=null; $('#drill').classList.add('hidden'); $('#home').classList.remove('hidden');
-  ['rep','fault','games','prof','settings'].forEach(t=>$('#tab-'+t).classList.toggle('on',mode===t));
-  const h=$('#home');
-  if(mode==='fault'){ renderFaults(h); return; }
-  if(mode==='games'){ renderGames(h); return; }
-  if(mode==='settings'){ renderSettings(h); return; }
-  if(mode==='prof'){ renderProfile(h); return; }
-  if(view.level==='blocs') renderBlocs(h);
-  else if(view.level==='threats') renderThreats(h);
-  else if(view.level==='sys') renderSys(h, DATA.blocs.find(b=>b.id===view.bloc));
-  else renderBranches(h, view.bloc, view.sys);
-  window.scrollTo(0,0);
-}
+function threatCountFor(ids){ if(!P.maia) return 0; const set=new Set(ids); return P.maia.threats.filter(t=>t.branches.some(b=>set.has(b))).length; }
 function renderBlocs(h){
   const all=DATA.blocs.flatMap(b=>b.systemes.flatMap(s=>s.branches));
-  const v=all.filter(b=>isValid(b.id)).length;
-  const due=all.filter(b=>isDue(b.id)).length; const never=all.filter(b=>!brState(b.id).runs).length;
-  h.innerHTML=`<div class="stats"><div class="stat"><div class="n">${all.length}</div><div class="l">branches</div></div><div class="stat"><div class="n">${v}</div><div class="l">validées (2× sans faute)</div></div><div class="stat"><div class="n">${due}</div><div class="l">à réviser aujourd'hui</div></div></div>
-  <div class="intro"><b>Répertoire complet</b>, 5 blocs, chaque branche vérifiée coup par coup au moteur. Ouvre un bloc, puis un système : <b>Drill</b> te sert une branche au hasard parmi celles à travailler ; <b>Explorer</b> montre la ligne avec tous les commentaires. Une branche est validée après deux passages sans faute, puis revient en révision à intervalles croissants. Les déviations repérées dans tes parties (onglet Parties) remontent en priorité dans le drill.</div>
-  <div class="sysbar">${due?`<button id="bRev">Révision · ${due} branche${due>1?'s':''}</button>`:''}<button id="bThreats" class="sec">Menaces (Maia)${P.maia?` · ${P.maia.threats.length}`:''}</button></div>`;
-  h.innerHTML+=DATA.blocs.map(bl=>`<div class="card" data-bloc="${bl.id}"><div class="sw k ${bl.side}"></div><div class="body"><div class="t">${bl.titre}</div><div class="s">${bl.sous} · ${bl.systemes.length} système${bl.systemes.length>1?'s':''}, ${bl.systemes.reduce((a,s)=>a+s.branches.length,0)} branches</div></div><div class="prog"><b style="width:${blocPct(bl)}%"></b></div><div class="go">›</div></div>`).join('');
-  h.querySelectorAll('.card').forEach(el=>el.onclick=()=>{view={level:'sys',bloc:el.dataset.bloc};home();});
-  $('#bThreats').onclick=()=>{view={level:'threats'};home();};
+  const v=all.filter(b=>isValid(b.id)).length; const due=all.filter(b=>isDue(b.id)).length;
+  h.innerHTML=`<div class="stats"><div class="stat"><div class="n">${all.length}</div><div class="l">lignes</div></div><div class="stat"><div class="n">${v}</div><div class="l">validées</div></div><div class="stat"><div class="n">${due}</div><div class="l">à réviser</div></div></div>
+  <details class="help"><summary>Comment ça marche</summary>Ouvre un bloc puis un système. <b>Drill</b> te fait rejouer une ligne de mémoire ; <b>Explorer</b> montre la ligne avec les plans. Deux passages sans faute valident une ligne, qui revient ensuite à intervalles croissants. Le tirage favorise les lignes neuves, celles que tu rencontres souvent et celles où tu as dévié en partie.</details>
+  <div class="sysbar">${due?`<button id="bRev">Réviser · ${due}</button>`:''}<button id="bAllDrill" class="${due?'sec':''}">Drill mixte</button></div>`;
+  h.innerHTML+=DATA.blocs.map(bl=>{ const th=threatCountFor(bl.systemes.flatMap(s=>s.branches.map(b=>b.id))); return `<div class="card" data-bloc="${bl.id}"><div class="sw k ${bl.side}"></div><div class="body"><div class="t">${bl.titre}</div><div class="s">${bl.sous} · ${bl.systemes.reduce((a,s)=>a+s.branches.length,0)} lignes${th?` · <span class="warn">${th} réponse${th>1?'s':''} adverse${th>1?'s':''} non couverte${th>1?'s':''}</span>`:''}</div></div><div class="prog"><b style="width:${blocPct(bl)}%"></b></div><div class="go">›</div></div>`; }).join('');
+  h.querySelectorAll('.card').forEach(el=>el.onclick=()=>go({s:'sys',bloc:el.dataset.bloc}));
   const rv=$('#bRev'); if(rv) rv.onclick=()=>startDrill(all.filter(b=>isDue(b.id)).map(b=>b.id),'Révision');
+  $('#bAllDrill').onclick=()=>startDrill(all.map(b=>b.id),'Drill mixte');
 }
 function renderSys(h,bl){
-  h.innerHTML=`<div class="crumb"><button data-l="blocs">Blocs</button><span class="sep">›</span><span>${bl.titre}</span></div>
-  <div class="sysbar"><button id="bAll">Drill · tout le bloc</button></div>`;
-  h.innerHTML+=bl.systemes.map(sy=>`<div class="card" data-sys="${sy.id}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${sy.titre} <span class="badge ${sy.statut==='alternatif'?'alt':''}">${sy.statut}</span></div><div class="s">${sy.branches.length} branches · ${sy.branches.filter(b=>isValid(b.id)).length} validées</div></div><div class="prog"><b style="width:${sysPct(sy)}%"></b></div><div class="go">›</div></div>`).join('');
-  h.querySelector('.crumb button').onclick=()=>{view={level:'blocs'};home();};
-  h.querySelectorAll('.card').forEach(el=>el.onclick=()=>{view={level:'br',bloc:bl.id,sys:el.dataset.sys};home();});
+  h.innerHTML=`<div class="sysbar"><button id="bAll">Drill · tout le bloc</button></div>`;
+  h.innerHTML+=bl.systemes.map(sy=>{ const th=threatCountFor(sy.branches.map(b=>b.id)); return `<div class="card" data-sys="${sy.id}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${sy.titre} <span class="badge ${sy.statut==='alternatif'?'alt':''}">${sy.statut}</span></div><div class="s">${sy.branches.length} lignes · ${sy.branches.filter(b=>isValid(b.id)).length} validées${th?` · <span class="warn">${th} trou${th>1?'s':''} probable${th>1?'s':''}</span>`:''}</div></div><div class="prog"><b style="width:${sysPct(sy)}%"></b></div><div class="go">›</div></div>`; }).join('');
+  h.querySelectorAll('.card').forEach(el=>el.onclick=()=>go({s:'br',bloc:bl.id,sys:el.dataset.sys}));
   $('#bAll').onclick=()=>startDrill(bl.systemes.flatMap(s=>s.branches.map(b=>b.id)),bl.titre);
 }
 function renderBranches(h,blId,syId){
   const bl=DATA.blocs.find(b=>b.id===blId), sy=bl.systemes.find(s=>s.id===syId);
-  h.innerHTML=`<div class="crumb"><button data-l="blocs">Blocs</button><span class="sep">›</span><button data-l="sys">${bl.titre}</button><span class="sep">›</span><span>${sy.titre}</span></div>
-  <div class="intro">${sy.resume}</div>
+  h.innerHTML=`<div class="intro">${sy.resume}</div>
   <div class="sysbar"><button id="bDrill">Drill · ce système</button><button id="bExpl" class="sec">Explorer la 1ʳᵉ</button></div>`;
-  h.innerHTML+=sy.branches.map(br=>{const st=brState(br.id); const v=isValid(br.id);
-    return `<div class="card" data-br="${br.id}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${br.titre}</div><div class="s">${br.moves.length} demi-coups · ${Object.keys(br.notes).length} commentaires${st.runs?` · ${st.runs} passage${st.runs>1?'s':''}`:''}${v?` · révision ${isDue(br.id)?'due':'dans '+daysUntil(st.due)+' j'}`:''}${st.devs?` · <span class="warn">${st.devs} déviation${st.devs>1?'s':''}</span>`:''}</div></div>${v?'<span class="badge ok">validée</span>':st.clean>=1?'<span class="badge">1/2</span>':''}<div class="go">›</div></div>`;}).join('');
-  h.querySelectorAll('.crumb button').forEach(b=>b.onclick=()=>{view=b.dataset.l==='blocs'?{level:'blocs'}:{level:'sys',bloc:blId};home();});
+  h.innerHTML+=sy.branches.map(br=>{const st=brState(br.id); const v=isValid(br.id); const th=P.maia?P.maia.threats.filter(t=>t.branches.includes(br.id)):[];
+    return `<div class="card" data-br="${br.id}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${br.titre}</div><div class="s">${br.moves.length} demi-coups · ${Object.keys(br.notes).length} plans${st.runs?` · ${st.runs} passage${st.runs>1?'s':''}`:''}${v?` · révision ${isDue(br.id)?'due':'dans '+daysUntil(st.due)+' j'}`:''}${st.devs?` · <span class="warn">${st.devs} déviation${st.devs>1?'s':''}</span>`:''}${th.length?` · <span class="warn">humains : ${th[0].miss[0].san} ${Math.round(100*th[0].miss[0].p)}%</span>`:''}</div></div>${v?'<span class="badge ok">validée</span>':st.clean>=1?'<span class="badge">1/2</span>':''}<div class="go">›</div></div>`;}).join('');
   h.querySelectorAll('.card').forEach(el=>el.onclick=()=>startBranch(el.dataset.br,'explore'));
   $('#bDrill').onclick=()=>startDrill(sy.branches.map(b=>b.id),sy.titre);
   $('#bExpl').onclick=()=>startBranch(sy.branches[0].id,'explore');
@@ -109,19 +85,27 @@ function rebuildFaults(){ /* rien à recalculer : allFaults() lit P.gfaults à l
 function renderFaults(h){
   const L=allFaults(); const n=L.length, done=L.filter(x=>P.fault[x.key]&&P.fault[x.key].done).length;
   const nGen=L.filter(x=>x.src==='game').length;
-  const W=P.wood||[]; const last=W[W.length-1];
-  const woodHtml=`<div class="sysbar"><button id="bWood">Cycle Woodpecker · ${n} fautes${last?` · dernier ${fmtT(last.time)} / ${last.solved}·${last.n}`:''}</button></div>${W.length?`<div class="why">Cycles : ${W.slice(-6).map(c=>`${fmtT(c.time)} (${Math.round(100*c.solved/c.n)}%)`).join(' → ')}. Même jeu, plus vite à chaque passage : c'est la méthode.</div>`:''}`;
-  h.innerHTML=`<div class="stats"><div class="stat"><div class="n">${n}</div><div class="l">fautes sélectionnées</div></div><div class="stat"><div class="n">${done}</div><div class="l">trouvées</div></div><div class="stat"><div class="n">${n-done}</div><div class="l">à revoir</div></div></div>
-  <div class="intro">${nGen?`<b>${nGen}</b> faute${nGen>1?'s':''} extraite${nGen>1?'s':''} de tes parties analysées au moteur, puis les 20 fautes de référence d'août. `:'Les 20 coups les plus chers d\'août. Analyse tes parties au moteur (onglet Parties) pour en extraire de nouvelles. '}Ton coup de la partie est piégé : il te renverra une explication.</div>`;
-  h.innerHTML+=L.map((x,i)=>{const f=x.F; return `<div class="card" data-i="${i}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${x.src==='game'?'<span class="tag b">partie</span> ':String(i+1-nGen).padStart(2,'0')+' · '}${f.theme}</div><div class="s">${f.side==='w'?'Blancs':'Noirs'} · coup ${f.move_no} · vs ${f.opp} · ${Math.round(f.played.wp_before)}% → ${Math.round(f.played.wp_after)}%</div></div>${P.fault[x.key]&&P.fault[x.key].done?'<span class="badge ok">trouvée</span>':''}<div class="go">›</div></div>`;}).join('');
+  const W=P.wood||[]; const last=W[W.length-1]; const WC=P.woodCur;
+  const woodHtml=`<div class="sysbar">${WC?`<button id="bWoodResume">Reprendre le cycle · ${WC.i}/${WC.ids.length} · ${fmtT(WC.elapsed)}</button><button id="bWood" class="sec">Nouveau</button>`:`<button id="bWood">Cycle Woodpecker · ${n} fautes${last?` · dernier ${fmtT(last.time)}`:''}</button>`}</div>${W.length?`<div class="why">Cycles : ${W.slice(-6).map(c=>`${fmtT(c.time)} (${Math.round(100*c.solved/c.n)}%)`).join(' → ')}. Même jeu, plus vite à chaque passage.</div>`:''}`;
   h.insertAdjacentHTML('afterbegin', woodHtml);
   h.querySelectorAll('.card').forEach(el=>el.onclick=()=>startFault(+el.dataset.i));
-  $('#bWood').onclick=()=>{ WOOD={start:Date.now(),solved:0,n:L.length,tries:0}; startFault(0); };
+  $('#bWood').onclick=()=>woodStart();
+  const wr=$('#bWoodResume'); if(wr) wr.onclick=()=>woodResume();
 }
+function woodStart(n){ const L=allFaults(); let ids=L.map(x=>x.key); if(n&&n<ids.length) ids=ids.sort(()=>Math.random()-0.5).slice(0,n);
+  WOOD={start:Date.now(),elapsed:0,solved:0,n:ids.length,ids,i:0}; woodSave(); startFault(faultIndex(ids[0])); }
+function woodResume(){ const WC=P.woodCur; if(!WC) return; WOOD={start:Date.now(),elapsed:WC.elapsed,solved:WC.solved,n:WC.ids.length,ids:WC.ids,i:WC.i}; startFault(faultIndex(WC.ids[WC.i])); }
+function woodSave(){ if(!WOOD) return; P.woodCur={ids:WOOD.ids,i:WOOD.i,solved:WOOD.solved,elapsed:WOOD.elapsed+(Date.now()-WOOD.start)}; save(); }
+function woodPause(){ if(WOOD){ woodSave(); WOOD=null; } }
+function faultIndex(key){ return Math.max(0, allFaults().findIndex(x=>x.key===key)); }
+function woodNext(){ WOOD.i++; if(WOOD.i<WOOD.n){ woodSave(); startFault(faultIndex(WOOD.ids[WOOD.i])); } else woodEnd(); }
 let WOOD=null; const fmtT=ms=>{ const s=Math.round(ms/1000); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
-function woodTick(){ if(!WOOD||!cur||cur.kind!=='fault') return; $('#branchtag').textContent=`Woodpecker ${cur.i+1}/${WOOD.n} · ${fmtT(Date.now()-WOOD.start)}`; }
+function woodTick(){ if(!WOOD||!cur||cur.kind!=='fault') return; $('#branchtag').textContent=`Woodpecker ${WOOD.i+1}/${WOOD.n} · ${fmtT(WOOD.elapsed+Date.now()-WOOD.start)}`; }
 setInterval(woodTick,1000);
-function woodEnd(){ const c={date:Date.now(),time:Date.now()-WOOD.start,solved:WOOD.solved,n:WOOD.n}; P.wood=(P.wood||[]).concat([c]); save(); WOOD=null; mode='fault'; home(); }
+function woodEnd(){ const c={date:Date.now(),time:WOOD.elapsed+Date.now()-WOOD.start,solved:WOOD.solved,n:WOOD.n}; P.wood=(P.wood||[]).concat([c]); P.woodCur=null; save(); const W=P.wood; const prev=W[W.length-2]; WOOD=null;
+  $('#coach').innerHTML=`<div class="done"><div class="big">Cycle terminé · ${fmtT(c.time)}</div><div class="sub">${c.solved}/${c.n} du premier coup${prev?` · précédent : ${fmtT(prev.time)}, ${prev.solved}/${prev.n}`:''}</div></div>`;
+  $('#actions').innerHTML=`<button id="bWoodAgain" class="pri">Refaire un cycle</button><button id="bWoodTen">10 au hasard</button><button id="bWoodBack">Retour</button>`;
+  $('#bWoodAgain').onclick=()=>woodStart(); $('#bWoodTen').onclick=()=>woodStart(10); $('#bWoodBack').onclick=back; locked=true; }
 
 /* ---------- drill / explore ---------- */
 function pickNext(pool){
@@ -133,7 +117,7 @@ function startDrill(pool,label){ const id=pickNext(pool); startBranch(id,'drill'
 function startBranch(id,m,session,opts){
   opts=opts||{};
   const {br,sys,bloc}=BR[id];
-  mode='rep'; $('#home').classList.add('hidden'); $('#drill').classList.remove('hidden');
+  showBoard();
   cur={kind:'rep',id,br,sys,bloc,mode:m,ply:0,errs:0,steps:[],hintLevel:0,lastNote:null,wrongHere:0,session:session||null,fromGame:opts.fromGame||null};
   orient=bloc.side; game=new Chess(); selected=null;legal=[];lastMove=null;locked=false;
   buildBoard(); render(); paintHeader(); paintModes(); paintStepper(); paintMoves();
@@ -141,7 +125,7 @@ function startBranch(id,m,session,opts){
   else {
     $('#explnav').classList.add('hidden');
     if(opts.startPly){ playTo(Math.min(opts.startPly, br.moves.length)); }
-    if(cur.fromGame){ const g=cur.fromGame, a=g.a; paintCoach(); $('#coach').insertAdjacentHTML('afterbegin',`<div class="fromgame">${a.status==='dev'?`Contre <b>${g.opp}</b> tu as joué <b>${a.played}</b> ici.`:`Contre <b>${g.opp}</b> il a joué <b>${a.played}</b> ici — hors répertoire.`} Rejoue la ligne à partir de cette position.</div>`); }
+    if(cur.fromGame){ const g=cur.fromGame, a=g.a; paintCoach(); const alts=(a.branches||[]).filter(b=>b!==id); $('#coach').insertAdjacentHTML('afterbegin',`<div class="fromgame">${a.status==='dev'?`Contre <b>${g.opp}</b> tu as joué <b>${a.played}</b> ici.`:`Contre <b>${g.opp}</b> il a joué <b>${a.played}</b> ici — hors répertoire.`} Ligne de référence : <b>${br.titre}</b>.${alts.length?` <a href="#" id="bAltLine">Autre ligne (${alts.length})</a>`:''}</div>`); const al=$('#bAltLine'); if(al) al.onclick=ev=>{ ev.preventDefault(); pickBranch(a.branches,id,b=>{ P.pref[fenKey(a.fen)]=b; save(); startBranch(b,'drill',null,opts); }); }; }
     else paintCoach();
     if(game.turn()!==orient){locked=true;setTimeout(autoReply,500);}
   }
@@ -256,7 +240,7 @@ function paintActions(){
     $('#bHint').onclick=hint; $('#bSkip').onclick=skipToTheory; $('#bRestart').onclick=()=>startBranch(cur.id,'drill',cur.session);
   } else {
     a.innerHTML=`<button id="bHint" ${cur.solved?'disabled':''}>Indice</button><button id="bSol" ${cur.solved?'disabled':''}>Solution</button><button id="bNext" class="pri">Suivant ›</button>`;
-    $('#bHint').onclick=hint; $('#bSol').onclick=showSolution; $('#bNext').onclick=()=>{const n=cur.i+1; if(WOOD){ if(n<WOOD.n) startFault(n); else woodEnd(); return; } if(n<allFaults().length) startFault(n); else home();};
+    $('#bHint').onclick=hint; $('#bSol').onclick=showSolution; $('#bNext').onclick=()=>{const n=cur.i+1; if(WOOD){ woodNext(); return; } if(n<allFaults().length) startFault(n); else back();};
   }
 }
 function hint(){
@@ -298,6 +282,7 @@ function skipToTheory(){
 function finishRep(){
   if(cur.finished) return; cur.finished=true; locked=true;
   if(cur.readonly){ locked=true; return; }
+  if(cur.fromGame&&cur.errs===0){ P.fixed[cur.fromGame.id]=true; }
   const st=schedule(cur.id, cur.errs);
   const v=isValid(cur.id);
   const when = st.ivl===1?'demain':`dans ${st.ivl} jours`;
@@ -309,13 +294,13 @@ function finishRep(){
   $('#bSpar').onclick=()=>startSpar(game.fen(),orient,cur.br.titre);
   $('#bAgain').onclick=()=>startBranch(cur.id,'drill',cur.session);
   const nb=$('#bNextBr'); if(nb) nb.onclick=()=>startDrill(cur.session.pool,cur.session.label);
-  $('#bList').onclick=()=>{view={level:'br',bloc:cur.bloc.id,sys:cur.sys.id};home();};
+  $('#bList').onclick=()=>{ NAV.pop(); go({s:'br',bloc:cur.bloc.id,sys:cur.sys.id}); };
   paintStepper();
 }
 
 /* ---------- fautes ---------- */
 function startFault(i){
-  const L=allFaults(); const F=L[i].F; mode='fault'; $('#home').classList.add('hidden'); $('#drill').classList.remove('hidden');
+  const L=allFaults(); const F=L[i].F; showBoard();
   cur={kind:'fault',i,key:L[i].key,F,solved:false,tries:0,hintLevel:0}; boardEl.classList.remove('blind'); orient=F.side; game=new Chess(F.fen);
   selected=null;legal=[];lastMove=null;locked=false; $('#explnav').classList.add('hidden');
   buildBoard(); render(); paintHeader(); paintModes(); paintStepper(); paintCoach(); paintMoves(); woodTick(); window.scrollTo(0,0);
@@ -325,7 +310,7 @@ function faultMove(m){
   if(uci===F.best.uci){
     game.move(m); lastMove=m; flash(m.to,'good'); render(); paintMoves(); cur.solved=true; locked=true;
     P.fault[cur.key]={done:true,tries:cur.tries}; save(); if(WOOD&&cur.tries===1) WOOD.solved++;
-    if(WOOD){ setTimeout(()=>{ if(cur&&cur.kind==='fault'&&cur.solved&&WOOD){ const n=cur.i+1; if(n<WOOD.n) startFault(n); else woodEnd(); } },1400); }
+    if(WOOD){ setTimeout(()=>{ if(cur&&cur.kind==='fault'&&cur.solved&&WOOD) woodNext(); },1400); }
     let html=`<div class="lead ok">Bien joué : ${F.best.san}</div><p>${F.best.desc} Évaluation ${F.best.score}.</p>`;
     if(F.best.suite) html+=`<p class="pv">Suite : ${F.best.suite}</p>`;
     html+=`<p class="why">Dans la partie tu avais joué <b>${F.played.san}</b> : ${Math.round(F.played.wp_before)}% → ${Math.round(F.played.wp_after)}% (${F.played.score}).${F.played.refut?' Punition : '+F.played.san+' '+F.played.refut+'.':''}</p>`;
@@ -371,4 +356,13 @@ function renderSettings(h){
   $('#sRean').onclick=()=>{ reanalyseAll(); $('#sMsg').textContent='Parties réanalysées avec le répertoire actuel.'; };
   $('#sReset').onclick=()=>{ if(confirm('Effacer toute la progression et le cache des parties ?')){ resetProgress(); renderSettings(h); } };
 }
-home();
+navInit(); root('today');
+
+/* ---------- feuille de choix ---------- */
+function openSheet(title, html, bind){ $('#sheettitle').textContent=title; $('#sheetbody').innerHTML=html; $('#sheet').classList.remove('hidden'); if(bind) bind($('#sheetbody')); }
+function closeSheet(){ $('#sheet').classList.add('hidden'); }
+$('#sheetclose').onclick=closeSheet; $('#sheet').onclick=e=>{ if(e.target.id==='sheet') closeSheet(); };
+function pickBranch(ids, current, cb){
+  const html=ids.map(id=>{ const {br,sys,bloc}=BR[id]; const st=brState(id); return `<div class="card ${id===current?'sel':''}" data-id="${id}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${br.titre}</div><div class="s">${sys.titre} · ${sys.statut}${st.runs?` · ${st.runs} passage${st.runs>1?'s':''}`:''}${isValid(id)?' · validée':''}</div></div>${id===current?'<span class="badge ok">actuelle</span>':''}<div class="go">›</div></div>`; }).join('');
+  openSheet('Quelle ligne veux-tu jouer ici ?', html, box=>box.querySelectorAll('.card').forEach(el=>el.onclick=()=>{ closeSheet(); cb(el.dataset.id); }));
+}

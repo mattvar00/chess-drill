@@ -81,15 +81,14 @@ async function maiaThreats(onProgress){
 }
 function renderThreats(h){
   const M=P.maia;
-  const head=`<div class="crumb"><button data-l="blocs">Blocs</button><span class="sep">›</span><span>Menaces (Maia)</span></div>
-  <div class="intro"><b>Ce que tes adversaires (${+(P.settings.oppElo||1800)} Elo) joueront probablement</b> aux positions de ton répertoire, et que tes branches ne couvrent pas. Un trou à 30 % dans une ligne fréquente vaut plus qu'une sous-variante théorique.</div>
+  const head=`<div class="intro"><b>Ton répertoire prévoit des coups « théoriques ». Tes adversaires jouent des coups humains.</b> Maia est un modèle entraîné sur des millions de parties humaines : pour chaque position de ton répertoire, il donne ce qu'un joueur de ${+(P.settings.oppElo||1800)} Elo joue vraiment. Ci-dessous, les réponses fréquentes que <b>aucune de tes lignes ne couvre</b>, classées par probabilité × fréquence de la position. Touche une carte : la ligne s'ouvre à cet endroit, à toi de décider quoi jouer contre.</div>
+  <details class="help"><summary>Quoi en faire</summary>Un « Bh5 87 % » veut dire : dans cette position, 87 % des joueurs de ce niveau jouent Bh5, et ta ligne prévoit autre chose. Prépare une réponse (souvent évidente), puis ajoute-la comme branche dans <code>js/data.js</code>. Ce classement pondère aussi le drill : les lignes que tu rencontreras vraiment passent en premier.</details>
   <div class="sysbar"><button id="bThreat" ${MAIA.busy?'disabled':''}>${M?'Recalculer':'Calculer avec Maia'} · ${M?'dernier : '+new Date(M.ts).toLocaleDateString('fr-FR'):'~1 min, modèle 45 Mo la première fois'}</button></div><div id="mProg" class="prog2 hidden"><b></b><span></span></div>`;
   let body='';
   if(M){ body+=`<div class="stats"><div class="stat"><div class="n">${M.avgCovered}%</div><div class="l">des réponses adverses probables couvertes</div></div><div class="stat"><div class="n">${M.nPos}</div><div class="l">positions évaluées</div></div><div class="stat"><div class="n">${M.threats.length}</div><div class="l">trous ≥ 8 %</div></div></div>`;
     body+=M.threats.map((t,i)=>{ const br=t.branches.slice(0,2).map(id=>BR[id]?BR[id].br.titre:id).join(' · ');
       return `<div class="card" data-i="${i}"><div class="sw k ${t.side==='w'?'b':'w'}"></div><div class="body"><div class="t">${t.miss.map(m=>`<b>${m.san}</b> ${Math.round(100*m.p)}%`).join(' · ')}</div><div class="s">coup ${Math.floor(t.ply/2)+1} · position atteinte dans ${(100*(t.reach||0)).toFixed(t.reach>=0.1?0:1)}% de tes parties ${t.side==='w'?'blanches':'noires'} · couvert à ${Math.round(100*t.covered)}%<br><span class="dim">${br}</span></div></div><div class="go">›</div></div>`; }).join(''); }
   h.innerHTML=head+body;
-  h.querySelector('.crumb button').onclick=()=>{view={level:'blocs'};home();};
   $('#bThreat').onclick=async()=>{ const p=$('#mProg'); p.classList.remove('hidden'); $('#bThreat').disabled=true; MAIA.busy=true;
     MAIA.onStatus=(s,pr)=>{ p.querySelector('span').textContent=s==='downloading'?`téléchargement du modèle ${pr}%`:s==='loading'?'chargement…':''; p.querySelector('b').style.width=(s==='downloading'?pr:0)+'%'; };
     try{ await maiaThreats((i,n)=>{ p.querySelector('b').style.width=Math.round(100*i/n)+'%'; p.querySelector('span').textContent=`${i}/${n} positions`; }); MAIA.busy=false; renderThreats(h); }
@@ -100,14 +99,14 @@ function renderThreats(h){
 /* ---------- B. Sparring : continuer la position contre Maia ---------- */
 async function startSpar(fen, side, label){
   const elo=+(P.settings.maiaElo||1800), my=+(P.settings.myElo||1800);
-  mode='rep'; $('#home').classList.add('hidden'); $('#drill').classList.remove('hidden');
+  showBoard();
   cur={kind:'spar',id:'spar',br:{id:'spar',titre:'Sparring',moves:[],notes:{}},sys:{titre:label||'',resume:''},bloc:{titre:'Maia '+elo,side},mode:'drill',ply:0,steps:[],session:null,elo,my,log:[]};
   orient=side; game=new Chess(fen); selected=null;legal=[];lastMove=null;locked=false; boardEl.classList.remove('blind');
   buildBoard(); render(); $('#explnav').classList.add('hidden'); $('#modes').innerHTML=''; $('#stepper').innerHTML='';
   $('#ptitle').innerHTML=`Sparring contre Maia ${elo}<small>${label||''}</small>`; $('#ptag').textContent='humain'; $('#ptag').className='tag b'; $('#branchtag').textContent='';
   $('#topname span').textContent=`Maia ${elo}`; $('#botname span').textContent=side==='w'?'Toi (Blancs)':'Toi (Noirs)';
   $('#topname i').style.background=side==='w'?'#222':'#eee'; $('#botname i').style.background=side==='w'?'#eee':'#222';
-  $('#meta').innerHTML=`<span>Maia joue comme un humain de <b>${elo}</b>, pas comme un moteur. Ses erreurs sont réalistes : punis-les.</span>`;
+  $('#meta').innerHTML=`<span>Maia imite un joueur de <b>${elo}</b> : il fait les erreurs qu'un humain ferait ici. Chaque coup à toi est noté par Stockfish.</span>`;
   $('#actions').innerHTML=`<button id="bSparStop" class="pri">Terminer</button>`; $('#bSparStop').onclick=sparEnd;
   $('#coach').innerHTML=`<div class="lead you">À toi de jouer</div><p class="why">Chargement de Maia…</p>`;
   try{ await maiaInit(); }catch(e){ $('#coach').innerHTML=`<div class="lead bad">Maia indisponible</div><p class="why">${e.message}</p>`; return; }
@@ -142,7 +141,8 @@ async function sparReply(){
   if(game.game_over()) sparOver('');
 }
 function sparOver(fb){ locked=true; const res=game.in_checkmate()?(game.turn()===orient?'Tu es mat.':'Mat ! Bien joué.'):'Nulle.'; $('#coach').innerHTML=`<div class="done"><div class="big">${res}</div>${fb}</div>`; $('#actions').innerHTML=`<button id="bSparStop" class="pri">Retour</button>`; $('#bSparStop').onclick=sparEnd; }
-function sparEnd(){ const n=cur.log.length; const bad=Object.values(cur.log).filter(k=>k==='mistake'||k==='blunder').length; cur=null; $('#drill').classList.add('hidden'); mode='rep'; view={level:'blocs'}; home(); if(n) setTimeout(()=>alert(`Sparring terminé : ${n} coups, ${bad} erreur${bad>1?'s':''}/gaffe${bad>1?'s':''}.`),50); }
+function sparEnd(){ const n=Object.keys(cur.log).length; const bad=Object.values(cur.log).filter(k=>k==='mistake'||k==='blunder').length; locked=true;
+  $('#coach').innerHTML=`<div class="done"><div class="big">Sparring terminé</div><div class="sub">${n} coups joués · ${bad} erreur${bad>1?'s':''}/gaffe${bad>1?'s':''}</div></div>`; $('#actions').innerHTML=`<button id="bSparBack" class="pri">Retour</button>`; $('#bSparBack').onclick=back; }
 
 /* ---------- C. "Un humain joue ça ?" — proba Maia d'un coup, à la demande ---------- */
 async function maiaHumanNote(fenBefore, uci, elo){

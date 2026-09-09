@@ -1,12 +1,12 @@
 /* ---------- progression (localStorage) + répétition espacée + export/import ---------- */
 const KEY='drill_matt_v3';
 const OLD_KEY='drill_matt_v2';
-let P={br:{}, fault:{}, games:{}, gfaults:{}, ignored:{}, settings:{user:'matt_chess00',depth:12,movetime:350}};
+let P={br:{}, fault:{}, games:{}, gfaults:{}, ignored:{}, pref:{}, fixed:{}, settings:{user:'matt_chess00',depth:12,movetime:350}};
 (function load(){
   try{
     let raw=localStorage.getItem(KEY);
     if(!raw){ raw=localStorage.getItem(OLD_KEY); }           // migration v2 → v3
-    if(raw){ const o=JSON.parse(raw); P=Object.assign(P,o); P.br=P.br||{}; P.fault=P.fault||{}; P.games=P.games||{}; P.ignored=P.ignored||{}; P.gfaults=P.gfaults||{}; P.settings=Object.assign({user:'matt_chess00',depth:12,movetime:350},P.settings||{}); }
+    if(raw){ const o=JSON.parse(raw); P=Object.assign(P,o); P.br=P.br||{}; P.fault=P.fault||{}; P.games=P.games||{}; P.ignored=P.ignored||{}; P.gfaults=P.gfaults||{}; P.pref=P.pref||{}; P.fixed=P.fixed||{}; P.settings=Object.assign({user:'matt_chess00',depth:12,movetime:350},P.settings||{}); }
   }catch(e){}
 })();
 function save(){ try{ localStorage.setItem(KEY,JSON.stringify(P)); }catch(e){ console.warn('save failed',e); } }
@@ -72,10 +72,10 @@ function importProgress(file, cb){
     if(!d.br) throw new Error('format inconnu');
     // fusion : on garde la version la plus avancée par branche
     for(const id in d.br){ const a=P.br[id], b=d.br[id]; if(!a||(b.runs||0)>=(a.runs||0)) P.br[id]=b; }
-    Object.assign(P.fault, d.fault||{}); Object.assign(P.games, d.games||{}); Object.assign(P.ignored, d.ignored||{}); Object.assign(P.gfaults, d.gfaults||{});
+    Object.assign(P.fault, d.fault||{}); Object.assign(P.games, d.games||{}); Object.assign(P.ignored, d.ignored||{}); Object.assign(P.gfaults, d.gfaults||{}); Object.assign(P.pref, d.pref||{}); Object.assign(P.fixed, d.fixed||{}); if(d.wood) P.wood=d.wood;
     P.settings=Object.assign(P.settings, d.settings||{});
     save(); cb(null, Object.keys(d.br).length);
   }catch(e){ cb(e); } };
   r.readAsText(file);
 }
-function resetProgress(){ P={br:{}, fault:{}, games:{}, gfaults:{}, ignored:{}, settings:P.settings}; save(); }
+function resetProgress(){ P={br:{}, fault:{}, games:{}, gfaults:{}, ignored:{}, pref:{}, fixed:{}, settings:P.settings}; save(); }

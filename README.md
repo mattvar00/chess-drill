@@ -15,7 +15,8 @@ python -m http.server 8000
 3. L'app est en ligne à `https://<pseudo>.github.io/<repo>/`.
 
 ## Structure
-- `index.html` — coquille, onglets Répertoire / Fautes / Parties / ⚙
+- `index.html` — coquille : en-tête (retour, titre, ⚙) + barre du bas Aujourd'hui / Entraîner / Parties / Progrès
+- `js/nav.js` — pile d'écrans (bouton retour, geste retour du navigateur), écrans Aujourd'hui et Entraîner
 - `js/data.js` — répertoire (83 branches, 6 blocs) + 20 fautes. C'est le seul fichier à éditer pour ajouter une ligne.
 - `js/store.js` — progression localStorage, répétition espacée (SM-2 adapté), export/import JSON, pondération du drill
 - `js/games.js` — fetch chess.com, parsing PGN (+ `%clk`), livre FEN→coups, détection déviation / trou, onglet Parties
@@ -57,3 +58,10 @@ Le modèle (`js/maia/maia3_simplified.onnx`, Apache-2.0) est servi depuis le dé
 
 ## Scouting
 Onglet Parties → « Scouting » : pseudo adverse → ses 3 derniers mois (jusqu'à 120 parties), taux de victoire par couleur, ses 4 ouvertures les plus fréquentes par couleur, et pour chacune si ton répertoire a une réponse (branche citée) ou s'il faut préparer.
+
+## v4 — navigation
+- **Aujourd'hui** : ce qu'il y a à faire (révisions dues, déviations à corriger, fautes nouvelles), garde-fou, raccourcis.
+- **Entraîner** : Répertoire, drill mixte, adversaires réels (Maia), Fautes, Woodpecker (reprise d'un cycle interrompu), partie libre contre Maia.
+- **Parties** : synchro chess.com / PGN, filtre de cadence (s'applique aussi à Progrès), déviations avec choix de la ligne de référence (retenu par position), scouting.
+- **Progrès** : radar 6 axes + détail.
+Le bouton ‹ revient toujours à l'écran précédent ; le geste retour du téléphone aussi.

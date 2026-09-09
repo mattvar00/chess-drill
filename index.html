@@ -9,14 +9,9 @@
 </head>
 <body>
 <div class="top">
-  <div class="brand">Drill<small>matt_chess00</small></div>
-  <div class="tabs">
-    <button id="tab-rep" class="on">Répertoire</button>
-    <button id="tab-fault">Fautes</button>
-    <button id="tab-games">Parties</button>
-    <button id="tab-prof">Profil</button>
-    <button id="tab-settings" title="Réglages">⚙</button>
-  </div>
+  <button class="back hidden" id="back" aria-label="Retour">‹</button>
+  <div class="htitle" id="htitle">Aujourd'hui</div>
+  <button class="gear" id="gear" aria-label="Réglages">⚙</button>
 </div>
 <div class="wrap">
   <div id="home"></div>
@@ -27,7 +22,7 @@
       <div class="turnbar"><div class="who" id="botname"><i></i><span>Toi</span></div><div id="sidenote"></div></div>
     </div>
     <div class="panel">
-      <div class="ph"><button class="back" id="back">‹</button><div class="tt" id="ptitle"></div><span class="tag" id="ptag"></span></div>
+      <div class="ph"><div class="tt" id="ptitle"></div><span class="tag" id="ptag"></span></div>
       <div class="modes" id="modes"></div>
       <div class="stepper" id="stepper"></div>
       <div class="coach" id="coach"></div>
@@ -38,6 +33,13 @@
     </div>
   </div>
 </div>
+<nav class="bottom">
+  <button id="nav-today"><i>☀</i><span>Aujourd'hui</span></button>
+  <button id="nav-train"><i>♞</i><span>Entraîner</span></button>
+  <button id="nav-games"><i>⇅</i><span>Parties</span></button>
+  <button id="nav-prof"><i>◔</i><span>Progrès</span></button>
+</nav>
+<div id="sheet" class="sheet hidden"><div class="sheetbox"><div class="sheettitle" id="sheettitle"></div><div id="sheetbody"></div><button id="sheetclose" class="sec">Fermer</button></div></div>
 <script src="js/chess.js"></script>
 <script src="js/pieces.js"></script>
 <script src="js/data.js"></script>
@@ -47,6 +49,7 @@
 <script src="js/maia/moves.js"></script>
 <script src="js/maia.js"></script>
 <script src="js/profile.js"></script>
+<script src="js/nav.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
