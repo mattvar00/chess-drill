@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f1d1a">
+<title>Drill · matt_chess00</title>
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div class="top">
+  <div class="brand">Drill<small>matt_chess00</small></div>
+  <div class="tabs">
+    <button id="tab-rep" class="on">Répertoire</button>
+    <button id="tab-fault">Fautes</button>
+    <button id="tab-games">Parties</button>
+    <button id="tab-prof">Profil</button>
+    <button id="tab-settings" title="Réglages">⚙</button>
+  </div>
+</div>
+<div class="wrap">
+  <div id="home"></div>
+  <div id="drill" class="grid hidden">
+    <div>
+      <div class="turnbar"><div class="who" id="topname"><i></i><span>Adversaire</span></div><div id="branchtag" class="tag"></div></div>
+      <div class="board" id="board"></div>
+      <div class="turnbar"><div class="who" id="botname"><i></i><span>Toi</span></div><div id="sidenote"></div></div>
+    </div>
+    <div class="panel">
+      <div class="ph"><button class="back" id="back">‹</button><div class="tt" id="ptitle"></div><span class="tag" id="ptag"></span></div>
+      <div class="modes" id="modes"></div>
+      <div class="stepper" id="stepper"></div>
+      <div class="coach" id="coach"></div>
+      <div class="explnav hidden" id="explnav"><button id="eFirst">⏮</button><button id="ePrev">‹</button><button id="eNext">›</button><button id="eLast">⏭</button></div>
+      <div class="actions" id="actions"></div>
+      <div class="moves" id="moves"></div>
+      <div class="meta" id="meta"></div>
+    </div>
+  </div>
+</div>
+<script src="js/chess.js"></script>
+<script src="js/pieces.js"></script>
+<script src="js/data.js"></script>
+<script src="js/store.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/games.js"></script>
+<script src="js/maia/moves.js"></script>
+<script src="js/maia.js"></script>
+<script src="js/profile.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
