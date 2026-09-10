@@ -56,7 +56,7 @@ function renderToday(h){
   html+=`<h2 class="sec">Raccourcis</h2>`;
   html+=item('','⇅','Synchroniser mes parties',`chess.com · ${list.length} en cache`,()=>go({s:'games',sync:true}));
   html+=item('','▶',`Drill ${fresh.length?'· '+fresh.length+' lignes jamais vues':'mixte'}`,'Une ligne au hasard, pondérée',()=>startDrill(fresh.length?fresh:ids,fresh.length?'Nouvelles lignes':'Drill mixte'));
-  html+=item('','⚔',th?`${th} réponses adverses non couvertes`:'Que jouent vraiment tes adversaires ?','Maia prédit les coups humains contre ton répertoire',()=>go({s:'threats'}));
+  html+=item('','♜',th?`${th} réponses adverses non couvertes`:'Que jouent vraiment tes adversaires ?','Maia prédit les coups humains contre ton répertoire',()=>go({s:'threats'}));
   h.innerHTML=html;
 }
 /* ---------- Entraîner ---------- */
@@ -66,7 +66,7 @@ function renderTrain(h){
   h.innerHTML=`<h2 class="sec">Ouvertures</h2>`
     +item('♞','Répertoire',`${ids.length} lignes · ${v} validées`,()=>go({s:'blocs'}),Math.round(100*v/ids.length))
     +item('▶','Drill mixte','10 lignes pondérées, tous blocs',()=>startDrill(ids,'Drill mixte'))
-    +item('⚔','Adversaires réels (Maia)','Les réponses humaines que ton répertoire ne couvre pas',()=>go({s:'threats'}))
+    +item('♜','Adversaires réels (Maia)','Les réponses humaines que ton répertoire ne couvre pas',()=>go({s:'threats'}))
     +`<h2 class="sec">Tactique</h2>`
     +item('✕','Fautes',`${L.length} positions tirées de tes parties · ${done} trouvées`,()=>go({s:'faults'}),Math.round(100*done/Math.max(1,L.length)))
     +item('⏱','Cycle Woodpecker',last?`dernier : ${fmtT(last.time)}, ${Math.round(100*last.solved/last.n)}% du premier coup`:'Toutes les fautes, chrono, à refaire jusqu\'à l\'automatisme',()=>woodStart())

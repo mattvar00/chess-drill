@@ -196,3 +196,5 @@ body{padding-bottom:70px}
 .pillrow .pill.warn{border-color:var(--brass);color:var(--brass)}
 .help{color:var(--mute);font-size:13px;margin:0 0 10px}
 .help summary{cursor:pointer;color:var(--brass)}
+.wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
+.sheet{align-items:flex-end}
