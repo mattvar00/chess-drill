@@ -72,3 +72,5 @@ Trois statuts par système : **joué** (tes lignes réelles : seules elles gén�
 ## v6 — carte joueur et coups forcés
 - **Progrès** : carte joueur calculée à chaque synchronisation (≥ 20 parties analysées sur la période). Chaque note compare tes coups à ceux de tes adversaires dans les mêmes parties (75 = leur niveau) : rythme, préparation, conversion, tactique (attaque / défense), défense, mental, positionnel, activité, finale, pendule. Type de joueur selon le modèle Hansen (théoricien, réflecteur, pragmatique, activiste) à partir de l'écart positions calmes / positions forcées. Tableau détaillé toi vs pairs.
 - **Coups forcés** (Entraîner) : les positions où un échec ou une prise s'imposait et où tu as joué un coup calme, en série chronométrée (cycles séparés des fautes).
+
+À chaque déploiement, incrémenter `?v=N` sur les `<script>`/`<link>` d'index.html (sinon les navigateurs gardent l'ancien JS en cache jusqu'à 10 min).
