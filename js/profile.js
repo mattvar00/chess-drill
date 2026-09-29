@@ -77,15 +77,16 @@ function spark(points, w, h){
 const bar=(v,max,cls)=>`<div class="axisbar"><b class="${cls||''}" style="width:${v==null?0:Math.min(100,Math.round(100*v/max))}%"></b></div>`;
 
 function renderProfile(h){
-  const days=+(P.settings.profDays||30); const pr=computeProfile(days); const ts=tiltStatus();
-  const opts=[7,30,90].map(d=>`<button class="${d===days?'on':''}" data-d="${d}">${d} j</button>`).join('');
-  let html=`<div class="modes prof">${opts}</div>${tcChips()}`;
-  html+=`<div class="intro tilt ${ts.warn?'warn':''}"><b>Aujourd'hui : ${ts.n} partie${ts.n>1?'s':''}</b>${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}. ${ts.warn?'Stop. Tes chutes d\'Elo viennent des longues séries, pas des ouvertures.':`Limite ${ts.lim}/jour (réglable dans ⚙).`}</div>`;
-  if(!pr.n){ h.innerHTML=html+`<div class="intro">Aucune partie sur ${days} jours. Récupère un mois dans l'onglet Parties.</div>`; bindProf(h); return; }
-  const SG=Object.values(P.games).filter(g=>g.ev&&g.st&&!P.ignored[g.id]&&tcOk(g)&&g.t>=Date.now()/1000-days*86400).sort((a,b)=>b.t-a.t).slice(0,150);
-  if(SG.length>=STYLE_MIN){ try{ const st=computeStyle(SG); html+=renderStyleCard(st)+`<details class="help"><summary>Toi contre tes pairs, indicateur par indicateur</summary>${renderStyleTable(st)}</details>`; }catch(e){ console.warn(e); } }
-  else html+=`<div class="intro"><b>Carte joueur.</b> Il faut au moins ${STYLE_MIN} parties analysées au moteur sur la période (${SG.length} pour l'instant) : onglet Parties → Moteur.</div>`;
+  const days=periodDays(); const pr=computeProfile(days); const ts=tiltStatus();
+  let html=filterBar();
+  if(ts.warn) html+=`<div class="intro tilt warn"><b>Aujourd'hui : ${ts.n} parties</b>${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}. Stop : tes chutes d'Elo viennent des longues séries.</div>`;
+  if(!pr.n){ h.innerHTML=html+`<div class="intro">Aucune partie sur la période. Onglet Parties → Mettre à jour.</div>`; bindProf(h); return; }
+  const SG=Object.values(P.games).filter(g=>g.ev&&g.st&&!P.ignored[g.id]&&tcOk(g)&&inPeriod(g)).sort((a,b)=>b.t-a.t).slice(0,150);
+  if(SG.length>=STYLE_MIN){ try{ const st=computeStyle(SG); html+=renderStyleCard(st); }catch(e){ console.warn(e); } }
+  else html+=`<div class="intro"><b>Ta carte joueur apparaîtra ici</b> dès que ${STYLE_MIN} parties de la période seront analysées au moteur (${SG.length} pour l'instant).</div><button id="pUpd" class="pri big">Mettre à jour et analyser</button>`;
   html+=radar(pr);
+  html+=`<details class="grp"><summary>Détails : Elo, axes, toi contre tes pairs</summary>`;
+  if(SG.length>=STYLE_MIN){ try{ html+=`<h2 class="sec">Toi contre tes pairs</h2>`+renderStyleTable(computeStyle(SG)); }catch(e){} }
   html+=`<div class="stats"><div class="stat"><div class="n">${pr.n}</div><div class="l">parties · ${days} j</div></div><div class="stat"><div class="n">${pr.winRate}%</div><div class="l">victoires</div></div><div class="stat"><div class="n">${pr.nAn}</div><div class="l">analysées au moteur</div></div></div>`;
   for(const tc in pr.elo){ const pts=pr.elo[tc]; if(pts.length>=3) html+=`<div class="card static"><div class="body"><div class="t">${tc} <span class="dim">${pts[0].e} → ${pts[pts.length-1].e}</span></div>${spark(pts,300,40)}</div></div>`; }
   const o=pr.opening;
@@ -103,10 +104,11 @@ function renderProfile(h){
   const tiltBad=ti.wrAfterTwoL!=null&&ti.wrBase!=null&&ti.wrAfterTwoL<ti.wrBase-8;
   html+=axis('Tilt', ti.perDay+'/j', `parties par jour joué · pic ${ti.maxDay} · sessions de ${ti.avgSess} en moyenne`, bar(ti.maxDay,40,ti.maxDay>=20?'bad':ti.maxDay>=12?'':'ok'),
     `${ti.afterTwoL?`Après 2 défaites d'affilée : <b class="${tiltBad?'warn':''}">${ti.wrAfterTwoL}%</b> de victoires (${ti.afterTwoL} parties) contre ${ti.wrBase}% en général.`:'Pas encore de série de 2 défaites.'}${ti.longSessions?` · au-delà de la 10ᵉ partie d'une session : ${ti.wrLongTail==null?'–':ti.wrLongTail+'%'}`:''}`);
+  html+=`</details>`;
   h.innerHTML=html; bindProf(h);
 }
 function axis(title, big, label, barHtml, sub){ return `<div class="axis"><div class="axh"><span class="t">${title}</span><span class="big">${big}</span></div><div class="l">${label}</div>${barHtml}<div class="s">${sub}</div></div>`; }
-function bindProf(h){ h.querySelectorAll('.prof button').forEach(b=>b.onclick=()=>{ P.settings.profDays=+b.dataset.d; save(); renderProfile(h); }); bindTcChips(h,()=>renderProfile(h)); }
+function bindProf(h){ bindFilterBar(h,()=>renderProfile(h)); const u=h.querySelector('#pUpd'); if(u) u.onclick=()=>go({s:'games',sync:true}); }
 /* radar 0-100 par axe (échelles indicatives, pas des percentiles) */
 function axisScores(pr){
   const o=pr.opening||{}, t=pr.tactics, c=pr.clock||{}, ti=pr.tilt||{};

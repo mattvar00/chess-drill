@@ -333,21 +333,26 @@ function showSolution(){
 /* ---------- réglages ---------- */
 function renderSettings(h){
   const nb=Object.keys(P.br).length, ng=Object.keys(P.games).length;
-  h.innerHTML=`<div class="intro"><b>Sauvegarde.</b> La progression vit dans ce navigateur. Exporte un fichier JSON pour la garder ou la transférer sur un autre appareil ; l'import fusionne (la version la plus avancée de chaque branche gagne).</div>
+  h.innerHTML=`<div class="intro"><b>Pseudo chess.com.</b></div><div class="fetch"><input id="sUser" value="${P.settings.user||''}" placeholder="pseudo chess.com" autocapitalize="off" autocorrect="off"><button id="sUserSave" class="pri">OK</button></div>
+  ${syncSection()}
+  <div id="sMsg" class="why"></div>
+  <div class="intro"><b>Garde-fou.</b> Au-delà de ce nombre de parties par jour, l'app te dit d'arrêter.</div>
+  <div class="fetch"><select id="sLim">${[6,8,10,12,15,20].map(d=>`<option ${+(P.settings.dayLimit||12)===d?'selected':''} value="${d}">${d} parties / jour</option>`).join('')}</select><button id="sLimSave" class="pri">OK</button></div>
+  <details class="grp"><summary>Avancé : moteur, Maia, sauvegarde, proxy</summary>
+  <div class="intro"><b>Sauvegarde.</b> La progression vit dans ce navigateur. Exporte un fichier JSON pour la garder ou la transférer sur un autre appareil ; l'import fusionne (la version la plus avancée de chaque branche gagne).</div>
   <div class="stats"><div class="stat"><div class="n">${nb}</div><div class="l">branches avec historique</div></div><div class="stat"><div class="n">${ng}</div><div class="l">parties en cache</div></div><div class="stat"><div class="n">${Object.values(P.fault).filter(x=>x.done).length}</div><div class="l">fautes trouvées</div></div></div>
   <div class="sysbar"><button id="sExp">Exporter la progression</button><button id="sImp" class="sec">Importer un fichier</button></div>
   <input type="file" id="sFile" accept="application/json" class="hidden">
   <div class="sysbar"><button id="sRean" class="sec">Réanalyser les parties</button><button id="sReset" class="sec danger">Tout effacer</button></div>
-  <div id="sMsg" class="why"></div>
   <div class="intro"><b>Moteur.</b> Stockfish 18 lite tourne dans ton navigateur. Profondeur ${P.settings.depth} / ${P.settings.movetime} ms max par position (≈ 20-30 s par partie). Monte à 14-16 sur ordinateur, descends à 10 sur un vieux téléphone.</div>
   <div class="fetch"><select id="sDepth">${[8,10,12,14,16,18].map(d=>`<option ${+P.settings.depth===d?'selected':''} value="${d}">profondeur ${d}</option>`).join('')}</select><select id="sMt">${[200,350,600,1000,2000].map(d=>`<option ${+P.settings.movetime===d?'selected':''} value="${d}">${d} ms max</option>`).join('')}</select><button id="sEngSave" class="pri">Enregistrer</button></div>
   <div class="intro"><b>Maia.</b> Modèle humain (45 Mo, téléchargé une fois puis gardé dans le navigateur). Ton Elo sert à conditionner le modèle ; l'Elo adverse sert aux menaces ; l'Elo de sparring, à la force de Maia.</div>
   <div class="fetch"><input id="sMyElo" type="number" value="${P.settings.myElo||1800}" placeholder="ton Elo"><input id="sOppElo" type="number" value="${P.settings.oppElo||1800}" placeholder="Elo adverse"><input id="sMaiaElo" type="number" value="${P.settings.maiaElo||1800}" placeholder="Elo sparring"><button id="sMaiaSave" class="pri">OK</button></div>
-  <div class="intro"><b>Garde-fou.</b> Nombre de parties par jour au-delà duquel l'app te dit d'arrêter (ta chute d'août : jusqu'à 41 parties/jour).</div>
-  <div class="fetch"><select id="sLim">${[6,8,10,12,15,20].map(d=>`<option ${+(P.settings.dayLimit||12)===d?'selected':''} value="${d}">${d} parties / jour</option>`).join('')}</select><button id="sLimSave" class="pri">Enregistrer</button></div>
   <div class="intro"><b>Proxy chess.com (optionnel).</b> Si les fetch directs échouent (CORS/429), déploie <code>proxy/worker.js</code> sur Cloudflare Workers (gratuit) et colle son URL ici. L'app essaie d'abord en direct, puis via le proxy.</div>
   <div class="fetch"><input id="sProxy" value="${P.settings.proxy||''}" placeholder="https://chess-drill.xxx.workers.dev" autocapitalize="off"><button id="sProxySave" class="pri">Enregistrer</button></div>
-  <div class="intro"><b>Déploiement.</b> Ce dossier est un site statique : pousse-le tel quel sur GitHub Pages (index.html à la racine). L'API chess.com exige http(s) — en local, lance <code>python -m http.server</code> dans le dossier.</div>`;
+  <div class="intro"><b>Déploiement.</b> Ce dossier est un site statique : pousse-le tel quel sur GitHub Pages (index.html à la racine). L'API chess.com exige http(s) — en local, lance <code>python -m http.server</code> dans le dossier.</div></details>`;
+  $('#sUserSave').onclick=()=>{ P.settings.user=$('#sUser').value.trim(); save(); $('#sMsg').textContent='Pseudo enregistré.'; };
+  bindSync(h,()=>renderSettings(h));
   $('#sExp').onclick=exportProgress;
   $('#sImp').onclick=()=>$('#sFile').click();
   $('#sFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; importProgress(f,(err,n)=>{ $('#sMsg').textContent=err?'Import impossible : '+err.message:`Import réussi (${n} branches).`; renderSettings(h); $('#sMsg').textContent=err?'Import impossible : '+err.message:`Import réussi (${n} branches).`; }); };

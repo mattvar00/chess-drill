@@ -74,3 +74,12 @@ Trois statuts par système : **joué** (tes lignes réelles : seules elles gén�
 - **Coups forcés** (Entraîner) : les positions où un échec ou une prise s'imposait et où tu as joué un coup calme, en série chronométrée (cycles séparés des fautes).
 
 À chaque déploiement, incrémenter `?v=N` sur les `<script>`/`<link>` d'index.html (sinon les navigateurs gardent l'ancien JS en cache jusqu'à 10 min).
+
+## v7 — simplification
+- Une seule barre de filtres (période 7 j / 30 j / 3 mois + cadence), partagée par Parties et Progrès.
+- Un seul bouton **Mettre à jour** (Aujourd'hui, Parties, Progrès) : récupère tous les mois de la période sur chess.com puis analyse au moteur toutes les parties non analysées, avec progression, temps restant et Arrêter. La mise à jour continue si on change d'écran.
+- Aujourd'hui : mini-carte joueur (→ Progrès), Mettre à jour, 3 tâches maximum.
+- Parties : trous, écarts, toutes les parties, scouting et import PGN repliés.
+- Progrès : filtres, carte, radar ; le reste replié dans « Détails ».
+- Réglages : pseudo, synchronisation, garde-fou ; le reste dans « Avancé ».
+- **Synchronisation** (`js/sync.js`) : gist privé sur le compte GitHub (token fine-grained, permission compte *Gists : Read and write*). Réception à l'ouverture, envoi groupé 15 s après chaque modification et à la mise en arrière-plan. Fusion sans perte : on garde toujours la version analysée d'une partie, la progression la plus récente d'une branche, les fautes trouvées. Le token reste sur l'appareil (clé `drill_sync`), il n'est jamais synchronisé.

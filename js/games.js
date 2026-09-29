@@ -134,7 +134,7 @@ function recomputeBranchStats(){
 /* ---------- UI onglet Parties ---------- */
 const TC_LABEL={all:'Toutes',rapid:'Rapid',blitz:'Blitz',bullet:'Bullet'};
 function tcOk(g){ const f=P.settings.tcFilter||'all'; return f==='all'||g.tc===f; }
-function gamesList(){ return Object.values(P.games).filter(tcOk).sort((a,b)=>b.t-a.t); }
+function gamesList(){ return Object.values(P.games).filter(g=>tcOk(g)&&(typeof inPeriod!=='function'||inPeriod(g))).sort((a,b)=>b.t-a.t); }
 function tcChips(){ const f=P.settings.tcFilter||'all'; return `<div class="chips" id="tcChips">${Object.keys(TC_LABEL).map(k=>`<button data-tc="${k}" class="${f===k?'on':''}">${TC_LABEL[k]}</button>`).join('')}</div>`; }
 function bindTcChips(h,rerender){ h.querySelectorAll('#tcChips button').forEach(b=>b.onclick=()=>{ P.settings.tcFilter=b.dataset.tc; save(); recomputeBranchStats(); rerender(); }); }
 function coverage(list){
@@ -143,47 +143,31 @@ function coverage(list){
   return Math.round(100*inBook/rel.length);
 }
 function renderGames(h){
-  const now=new Date(); const list=gamesList();
-  const only=(navTop()&&navTop().filter)||null;
+  const list=gamesList(); const only=(navTop()&&navTop().filter)||null;
   const devs=list.filter(g=>g.a.status==='dev'&&!g.a.soft&&!P.ignored[g.id]&&!P.fixed[g.id]);
   const softs=list.filter(g=>g.a.status==='dev'&&g.a.soft&&!P.ignored[g.id]&&!P.fixed[g.id]);
   const gaps=list.filter(g=>g.a.status==='gap'&&!P.ignored[g.id]);
-  const cov=coverage(list); const notAn=list.filter(g=>!g.st&&!P.ignored[g.id]);
-  const months=[]; for(let i=0;i<6;i++){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({y:d.getFullYear(),m:d.getMonth()+1,label:d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}); }
-  const ts=tiltStatus();
+  const cov=coverage(list); const an=list.filter(g=>g.st).length; const ts=tiltStatus();
   h.innerHTML=`
-  ${ts.warn?`<div class="intro tilt warn"><b>Aujourd'hui : ${ts.n} parties${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}.</b> Stop pour aujourd'hui — drill ou fautes à la place.</div>`:''}
-  <div class="fetch">
-    <input id="gUser" value="${P.settings.user||''}" placeholder="pseudo chess.com" autocapitalize="off" autocorrect="off">
-    <select id="gMonth">${months.map((m,i)=>`<option value="${m.y}-${m.m}" ${i===0?'selected':''}>${m.label}</option>`).join('')}</select>
-    <button id="gGo" class="pri">Analyser</button>
-  </div>
-  <div id="gStatus" class="why"></div>
-  ${tcChips()}
-  <details class="help"><summary>Comment lire cette page</summary>Chaque partie est rejouée contre ton répertoire. <b>Déviation</b> : tu as quitté ta ligne (ouvre la ligne à cet endroit ; « Autre ligne » si tu préfères une autre variante). <b>Trou</b> : l'adversaire a joué un coup que le répertoire ne couvre pas. Le moteur (bouton ci-dessous) note ensuite chaque coup et extrait tes fautes. Le filtre de cadence s'applique partout (Profil compris).</details>
-  <details class="pgnbox"><summary>Scouting : préparer un adversaire</summary>
-    <div class="fetch"><input id="scUser" placeholder="pseudo de l'adversaire" autocapitalize="off"><button id="scGo" class="pri">Scouter</button></div>
-    <div id="scOut"></div>
-  </details>
-  <details class="pgnbox"><summary>Ou importer un PGN (fichier exporté de chess.com, ou texte collé)</summary>
-    <input type="file" id="gFile" accept=".pgn,text/plain">
-    <textarea id="gPgn" rows="4" placeholder="[Event &quot;Live Chess&quot;] …"></textarea>
-    <button id="gPgnGo" class="sec">Analyser ce PGN</button>
-  </details>
-  <div class="stats"><div class="stat"><div class="n">${list.length}</div><div class="l">parties en cache</div></div><div class="stat"><div class="n">${cov===null?'–':cov+'%'}</div><div class="l">restées en livre (coup 4+)</div></div><div class="stat"><div class="n">${devs.length}</div><div class="l">déviations à corriger</div></div></div>
-  ${list.length?`<div class="sysbar"><button id="gBatch" ${ENGINE.busy?'disabled':''}>${ENGINE.busy?'Analyse en cours…':`Moteur · analyser ${Math.min(10,notAn.length)} partie${Math.min(10,notAn.length)>1?'s':''} (${notAn.length} restantes)`}</button>${ENGINE.busy?'<button id="gCancel" class="sec">Stop</button>':''}</div><div id="gProg" class="prog2 hidden"><b></b><span></span></div>`:''}
-  ${list.length?'':'<div class="intro">Récupère un mois de parties : chaque partie est rejouée contre ton répertoire. <b>Déviation</b> = tu as quitté la ligne ; <b>Trou</b> = l\'adversaire a joué un coup que le répertoire ne couvre pas. Rien ne quitte ton navigateur.</div>'}
-  ${devs.length?`<h2 class="sec">Déviations — tu as quitté une ligne jouée</h2>${devs.map(gameCard).join('')}`:''}
-  ${softs.length&&!only?`<h2 class="sec">Lignes à apprendre / alternatives — écarts sans alerte</h2>${softs.slice(0,15).map(gameCard).join('')}`:''}
-  ${only==='dev'?'':`${gaps.length?`<h2 class="sec">Trous — l'adversaire sort du répertoire</h2>${gaps.slice(0,25).map(gameCard).join('')}`:''}
-  ${list.length?`<h2 class="sec">Toutes les parties</h2>${list.slice(0,60).map(gameCard).join('')}`:''}`}`;
-  bindTcChips(h,()=>renderGames(h));
-  $('#gGo').onclick=doFetch;
-  const gb=$('#gBatch'); if(gb) gb.onclick=()=>runBatch(notAn.slice(0,10).map(g=>g.id));
-  const gc=$('#gCancel'); if(gc) gc.onclick=()=>{ ENGINE.cancel=true; };
-  $('#gFile').onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ $('#gPgn').value=r.result; ingestPgnText(); }; r.readAsText(f); };
-  $('#gPgnGo').onclick=ingestPgnText;
-  $('#scGo').onclick=doScout;
+  ${ts.warn?`<div class="intro tilt warn"><b>Aujourd'hui : ${ts.n} parties${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}.</b> Stop pour aujourd'hui : drill ou fautes à la place.</div>`:''}
+  ${filterBar()}
+  ${updBox()}
+  <div class="stats"><div class="stat"><div class="n">${list.length}</div><div class="l">parties · ${an} analysées</div></div><div class="stat"><div class="n">${cov===null?'–':cov+'%'}</div><div class="l">restées dans ton répertoire</div></div><div class="stat"><div class="n">${devs.length}</div><div class="l">déviations à corriger</div></div></div>
+  ${devs.length?`<h2 class="sec">Déviations — tu as quitté ta ligne</h2>${devs.slice(0,8).map(gameCard).join('')}${devs.length>8?`<details class="grp"><summary>${devs.length-8} autres déviations</summary>${devs.slice(8).map(gameCard).join('')}</details>`:''}`:''}
+  ${only==='dev'?'':`
+  ${gaps.length?`<details class="grp"><summary>Trous — l'adversaire sort du répertoire (${gaps.length})</summary>${gaps.slice(0,30).map(gameCard).join('')}</details>`:''}
+  ${softs.length?`<details class="grp"><summary>Écarts sur des lignes à apprendre (${softs.length})</summary>${softs.slice(0,20).map(gameCard).join('')}</details>`:''}
+  ${list.length?`<details class="grp"><summary>Toutes les parties (${list.length})</summary>${list.slice(0,80).map(gameCard).join('')}</details>`:''}
+  <details class="grp"><summary>Plus : scouting, import PGN</summary>
+    <div class="why">Scouting : les ouvertures d'un adversaire et tes réponses.</div>
+    <div class="fetch"><input id="scUser" placeholder="pseudo de l'adversaire" autocapitalize="off"><button id="scGo" class="pri">Scouter</button></div><div id="scOut"></div>
+    <div class="why">Import : fichier PGN exporté de chess.com ou texte collé.</div>
+    <input type="file" id="gFile" accept=".pgn,text/plain"><textarea id="gPgn" rows="3" placeholder="[Event &quot;Live Chess&quot;] …"></textarea><button id="gPgnGo" class="sec">Importer ce PGN</button><div id="gStatus" class="why"></div>
+  </details>`}`;
+  bindFilterBar(h,()=>renderGames(h)); bindUpdBox();
+  const t=navTop(); if(t&&t.sync){ t.sync=false; if(!UPD.running) setTimeout(updateAll,50); }
+  const gf=$('#gFile'); if(gf) gf.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ $('#gPgn').value=r.result; ingestPgnText(); }; r.readAsText(f); };
+  const gp=$('#gPgnGo'); if(gp) gp.onclick=ingestPgnText; const sc=$('#scGo'); if(sc) sc.onclick=doScout;
   h.querySelectorAll('.card[data-g]').forEach(el=>el.onclick=ev=>{ if(ev.target.closest('.ign')) return; openGame(el.dataset.g); });
   h.querySelectorAll('.ign').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); const id=b.dataset.g; P.ignored[id]=!P.ignored[id]; recomputeBranchStats(); save(); renderGames(h); });
 }
@@ -216,7 +200,7 @@ async function doFetch(){
   }catch(e){ st.textContent='Erreur : '+e.message+(location.protocol==='file:'?' (ouvre l\'app via http, pas file://)':' — réessaie dans une minute, ou importe un PGN ci-dessous.'); btn.disabled=false; }
 }
 function ingestPgnText(){
-  const user=($('#gUser').value||P.settings.user||'').trim(); const txt=$('#gPgn').value; if(!txt.trim()||!user) return;
+  const user=(P.settings.user||'').trim(); const txt=$('#gPgn').value; if(!txt.trim()||!user) return;
   P.settings.user=user; const games=pgnToGames(txt,user); const added=ingestGames(games,user);
   renderGames($('#home')); $('#gStatus').textContent=`${games.length} partie${games.length>1?'s':''} lue${games.length>1?'s':''} dans le PGN, ${added} nouvelle${added>1?'s':''}.`;
 }

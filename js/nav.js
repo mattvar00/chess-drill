@@ -42,25 +42,26 @@ function navInit(){ ROOTS.forEach(r=>$('#nav-'+r).onclick=()=>root(r)); $('#back
 /* ---------- Aujourd'hui ---------- */
 function allBranchIds(){ return DATA.blocs.flatMap(b=>b.systemes.flatMap(s=>s.branches.map(x=>x.id))); }
 function renderToday(h){
-  const ids=allBranchIds(); const due=ids.filter(isDue); const fresh=ids.filter(id=>!brState(id).runs);
+  const ids=allBranchIds(); const due=ids.filter(isDue);
   const list=gamesList(); const devs=list.filter(g=>g.a.status==='dev'&&!g.a.soft&&!P.ignored[g.id]&&!P.fixed[g.id]);
-  const L=allFaults(); const newF=L.filter(x=>x.src==='game'&&!(P.fault[x.key]&&P.fault[x.key].done));
-  const ts=tiltStatus(); const last=P.settings.lastSync?new Date(P.settings.lastSync):null;
-  const th=P.maia?P.maia.threats.length:0;
-  let html=`<div class="hello">${ts.warn?`<div class="intro tilt warn"><b>${ts.n} parties aujourd'hui${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}.</b> Pas de nouvelle partie : entraîne-toi.</div>`:`<div class="why">${ts.n?`${ts.n} partie${ts.n>1?'s':''} aujourd'hui.`:'Pas encore de partie aujourd\'hui.'} ${last?`Parties synchronisées le ${last.toLocaleDateString('fr-FR')}.`:'Parties jamais synchronisées.'}</div>`}</div>`;
-  const item=(cls,icon,t,s,fn)=>{ const id='t'+Math.random().toString(36).slice(2,7); setTimeout(()=>{ const el=document.getElementById(id); if(el) el.onclick=fn; },0); return `<div class="card act ${cls}" id="${id}"><div class="ico">${icon}</div><div class="body"><div class="t">${t}</div><div class="s">${s}</div></div><div class="go">›</div></div>`; };
-  html+=`<h2 class="sec">À faire</h2>`;
-  if(due.length) html+=item('pri','↻',`Réviser ${due.length} ligne${due.length>1?'s':''}`,'Branches validées dont la révision est due',()=>startDrill(due,'Révision'));
-  if(devs.length) html+=item('pri','⚠',`Corriger ${devs.length} déviation${devs.length>1?'s':''}`,'Tu as quitté ton répertoire dans ces parties',()=>go({s:'games',filter:'dev'}));
   const FF=forcedFaults().filter(x=>!(P.fault[x.key]&&P.fault[x.key].done));
-  if(FF.length) html+=item('','⚡',`${FF.length} coup${FF.length>1?'s':''} forcé${FF.length>1?'s':''} à retrouver`,'Échecs et prises que tu n\'as pas joués',()=>go({s:'forced'}));
-  if(newF.length) html+=item('','✕',`${newF.length} faute${newF.length>1?'s':''} à retrouver`,'Extraites de tes parties par le moteur',()=>go({s:'faults'}));
-  if(!due.length&&!devs.length&&!newF.length) html+=item('pri','▶','Drill mixte · 10 lignes','Tirage pondéré : lignes neuves, fréquentes, où tu dévies',()=>startDrill(ids,'Drill mixte'));
-  html+=`<h2 class="sec">Raccourcis</h2>`;
-  html+=item('','⇅','Synchroniser mes parties',`chess.com · ${list.length} en cache`,()=>go({s:'games',sync:true}));
-  html+=item('','▶',`Drill ${fresh.length?'· '+fresh.length+' lignes jamais vues':'mixte'}`,'Une ligne au hasard, pondérée',()=>startDrill(fresh.length?fresh:ids,fresh.length?'Nouvelles lignes':'Drill mixte'));
-  html+=item('','♜',th?`${th} réponses adverses non couvertes`:'Que jouent vraiment tes adversaires ?','Maia prédit les coups humains contre ton répertoire',()=>go({s:'threats'}));
-  h.innerHTML=html;
+  const newF=allFaults().filter(x=>x.src==='game'&&!(P.fault[x.key]&&P.fault[x.key].done));
+  const ts=tiltStatus();
+  const item=(cls,icon,t,s2,fn)=>{ const id='t'+Math.random().toString(36).slice(2,7); setTimeout(()=>{ const el=document.getElementById(id); if(el) el.onclick=fn; },0); return `<div class="card act ${cls}" id="${id}"><div class="ico">${icon}</div><div class="body"><div class="t">${t}</div><div class="s">${s2}</div></div><div class="go">›</div></div>`; };
+  let html='';
+  if(ts.warn) html+=`<div class="intro tilt warn"><b>${ts.n} parties aujourd'hui${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}.</b> Pas de nouvelle partie : entraîne-toi.</div>`;
+  /* mini-carte */
+  const SG=Object.values(P.games).filter(g=>g.ev&&g.st&&!P.ignored[g.id]&&tcOk(g)&&inPeriod(g)).sort((a,b)=>b.t-a.t).slice(0,150);
+  if(SG.length>=STYLE_MIN){ try{ const c=styleCard(computeStyle(SG)); const id='mc'+Date.now(); setTimeout(()=>{ const el=document.getElementById(id); if(el) el.onclick=()=>root('prof'); },0);
+    html+=`<div class="minicard" id="${id}"><b>${c.ovr}</b><div><div class="t">${c.type}</div><div class="s">${[...c.good.slice(0,2).map(x=>'<span class="ok">'+x[0]+'</span>'),...c.bad.slice(0,2).map(x=>'<span class="bad">'+x[0]+'</span>')].join(' · ')}</div></div><div class="go">›</div></div>`; }catch(e){} }
+  html+=updBox();
+  html+=`<h2 class="sec">À faire</h2>`; let n=0;
+  if(due.length){ n++; html+=item('pri','↻',`Réviser ${due.length} ligne${due.length>1?'s':''}`,'Répétition espacée du répertoire',()=>startDrill(due,'Révision')); }
+  if(devs.length){ n++; html+=item('pri','⚠',`Corriger ${devs.length} déviation${devs.length>1?'s':''}`,'Tu as quitté ton répertoire',()=>go({s:'games',filter:'dev'})); }
+  if(FF.length){ n++; html+=item('','⚡',`${FF.length} coup${FF.length>1?'s':''} forcé${FF.length>1?'s':''} à retrouver`,'Échecs et prises que tu n\'as pas joués',()=>go({s:'forced'})); }
+  else if(newF.length){ n++; html+=item('','✕',`${newF.length} faute${newF.length>1?'s':''} à retrouver`,'Extraites de tes parties',()=>go({s:'faults'})); }
+  if(!n) html+=item('pri','▶','Drill mixte · 10 lignes','Rien d\'urgent : entretiens ton répertoire',()=>startDrill(ids,'Drill mixte'));
+  h.innerHTML=html; bindUpdBox();
 }
 /* ---------- Entraîner ---------- */
 function renderTrain(h){
