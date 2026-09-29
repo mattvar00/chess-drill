@@ -25,20 +25,29 @@ function updBox(){
 }
 function bindUpdBox(){ const g=document.getElementById('updGo'); if(g) g.onclick=()=>{ if(!P.settings.user){ go({s:'settings'}); return; } updateAll(); };
   const s=document.getElementById('updStop'); if(s) s.onclick=()=>{ UPD.stop=true; ENGINE.cancel=true; UPD.msg='Arrêt…'; updPaint(); }; }
-async function updateAll(){
-  if(UPD.running) return; Object.assign(UPD,{running:true,stop:false,done:0,tot:0,msg:'Récupération des parties…',sub:''}); updPaint();
+let _wake=null; async function wakeOn(){ try{ if('wakeLock' in navigator&&document.visibilityState==='visible') _wake=await navigator.wakeLock.request('screen'); }catch(e){} }
+function wakeOff(){ try{ if(_wake) _wake.release(); }catch(e){} _wake=null; }
+document.addEventListener('visibilitychange',()=>{ if(UPD.running&&document.visibilityState==='visible') wakeOn(); });
+window.addEventListener('beforeunload',e=>{ if(UPD.running){ e.preventDefault(); e.returnValue=''; } });
+const updMark=v=>{ try{ if(v) localStorage.setItem('drill_upd','1'); else localStorage.removeItem('drill_upd'); }catch(e){} };
+/* reprise automatique après un rechargement ou une fermeture en cours d'analyse */
+window.addEventListener('load',()=>{ let on=false; try{ on=localStorage.getItem('drill_upd')==='1'; }catch(e){}
+  if(on&&pendingAnalysis().length) setTimeout(()=>{ UPD.msg='Reprise de l\'analyse…'; updateAll(true); },1200); else updMark(false); });
+async function updateAll(skipFetch){
+  if(UPD.running) return; Object.assign(UPD,{running:true,stop:false,done:0,tot:0,msg:skipFetch?'Reprise de l\'analyse…':'Récupération des parties…',sub:''}); updMark(true); wakeOn(); updPaint();
   const user=P.settings.user; let added=0;
   try{
-    for(const [y,m] of monthsForPeriod(periodDays())){ if(UPD.stop) break; UPD.msg=`chess.com · ${String(m).padStart(2,'0')}/${y}…`; updPaint();
+    if(!skipFetch) for(const [y,m] of monthsForPeriod(periodDays())){ if(UPD.stop) break; UPD.msg=`chess.com · ${String(m).padStart(2,'0')}/${y}…`; updPaint();
       const games=await fetchMonth(user,y,m,n=>{ UPD.msg=`chess.com ne répond pas, nouvel essai (${n}/5)…`; updPaint(); }); added+=ingestGames(games,user); }
-    P.settings.lastSync=Date.now(); save();
+    if(!skipFetch){ P.settings.lastSync=Date.now(); save(); }
     const ids=pendingAnalysis().map(g=>g.id); UPD.tot=ids.length;
     if(ids.length&&!UPD.stop){ UPD.msg=`Chargement du moteur…`; updPaint(); const t0=Date.now();
-      await analyseBatch(ids,(done,tot,i,np)=>{ UPD.done=done+(np?i/np:0); const el=(Date.now()-t0)/1000; const eta=UPD.done>0.3?Math.round(el/UPD.done*(tot-UPD.done)/60):null;
-        UPD.msg=`Analyse ${Math.min(tot,done+1)}/${tot}`; UPD.sub=eta!=null?`environ ${eta<1?'moins d\'une':eta} minute${eta>1?'s':''} restante${eta>1?'s':''} · garde l'écran allumé`:'garde l\'écran allumé'; updPaint(); }); }
+      const lanes=Math.min(poolSize(),ids.length);
+      await analyseBatch(ids,(done,tot)=>{ UPD.done=done; const el=(Date.now()-t0)/1000; const eta=done>=lanes?Math.ceil(el/done*(tot-done)/60):null;
+        UPD.msg=`Analyse ${done}/${tot} · ${lanes} moteur${lanes>1?'s':''} en parallèle`; UPD.sub=`${eta!=null?`environ ${eta} min restante${eta>1?'s':''} · `:''}tu peux changer d'écran ; si tu recharges, l'analyse reprend toute seule`; updPaint(); }); }
     const left=pendingAnalysis().length;
-    UPD.msg=`${added} nouvelle${added>1?'s':''} partie${added>1?'s':''}${UPD.tot?` · ${UPD.tot-left} analysée${UPD.tot-left>1?'s':''}`:''}${left?` · ${left} restante${left>1?'s':''}`:''}`;
+    const an=UPD.tot-left; UPD.msg=skipFetch?`Analyse terminée : ${an} partie${an>1?'s':''}${left?` · ${left} restante${left>1?'s':''}`:''}`:`${added} nouvelle${added>1?'s':''} partie${added>1?'s':''}${UPD.tot?` · ${an} analysée${an>1?'s':''}`:''}${left?` · ${left} restante${left>1?'s':''}`:''}`;
   }catch(e){ UPD.msg='Erreur : '+e.message; }
-  UPD.running=false; UPD.sub=''; if(typeof syncPush==='function') syncPush();
+  UPD.running=false; UPD.sub=''; wakeOff(); if(!UPD.stop&&!pendingAnalysis().length) updMark(false); if(UPD.stop) updMark(false); if(typeof syncPush==='function') syncPush();
   if(navTop()&&navTop().s!=='board') renderNav(); else updPaint();
 }

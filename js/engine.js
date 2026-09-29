@@ -1,34 +1,43 @@
 /* ---------- Moteur : Stockfish 18 lite (WASM, Web Worker) — notation des parties ---------- */
-const ENGINE={w:null, ready:false, init:null, busy:false, cancel:false};
-function engineInit(){
-  if(ENGINE.init) return ENGINE.init;
-  ENGINE.init=new Promise((res,rej)=>{
-    try{ ENGINE.w=new Worker('js/engine/stockfish-18-lite-single.js'); }catch(e){ return rej(e); }
-    const w=ENGINE.w; const t=setTimeout(()=>rej(new Error('moteur : délai dépassé')),60000);
-    w.onerror=e=>rej(new Error('moteur : '+(e.message||'erreur de chargement')));
-    w.onmessage=e=>{ const s=String(e.data);
-      if(s==='uciok'){ w.postMessage('setoption name Hash value 32'); w.postMessage('isready'); }
-      else if(s==='readyok'){ clearTimeout(t); ENGINE.ready=true; res(w); } };
-    w.postMessage('uci');
+const ENGINE={w:null, ready:false, init:null, busy:false, cancel:false, pool:[]};
+/* un moteur = un Web Worker Stockfish mono-thread ; on en lance plusieurs en parallèle */
+function makeEngine(){
+  const E={w:null,ready:null,handler:null};
+  E.ready=new Promise((res,rej)=>{
+    try{ E.w=new Worker('js/engine/stockfish-18-lite-single.js'); }catch(e){ return rej(e); }
+    const t=setTimeout(()=>rej(new Error('moteur : délai dépassé')),60000);
+    E.w.onerror=e=>rej(new Error('moteur : '+(e.message||'erreur de chargement')));
+    E.w.onmessage=e=>{ const s=String(e.data);
+      if(s==='uciok'){ E.w.postMessage('setoption name Hash value 16'); E.w.postMessage('isready'); }
+      else if(s==='readyok'){ clearTimeout(t); E.w.onmessage=ev=>{ if(E.handler) E.handler(String(ev.data)); }; res(E); } };
+    E.w.postMessage('uci');
   });
-  return ENGINE.init;
-}
-/* évalue une position : renvoie {cp, mate, best, pv} du point de vue des Blancs */
-function engineEval(fen, depth, movetime){
-  return new Promise(res=>{
-    const w=ENGINE.w; let last=null; const stm=fen.split(' ')[1];
-    w.onmessage=e=>{ const s=String(e.data);
+  E.eval=(fen,depth,movetime)=>new Promise((res,rej)=>{
+    let last=null; const stm=fen.split(' ')[1];
+    const wd=setTimeout(()=>{ E.handler=null; rej(new Error('timeout')); }, movetime*8+8000);   // téléphone mis en veille, worker tué…
+    E.handler=s=>{
       if(s.startsWith('info ')&&s.includes(' score ')&&s.includes(' pv ')){
         const m=/ score (cp|mate) (-?\d+)/.exec(s); const pv=s.split(' pv ')[1].split(' ');
         let cp=null, mate=null; if(m[1]==='cp') cp=+m[2]; else mate=+m[2];
         if(stm==='b'){ if(cp!==null) cp=-cp; if(mate!==null) mate=-mate; }
         last={cp,mate,pv};
-      } else if(s.startsWith('bestmove')){
-        const best=s.split(' ')[1]; res({cp:last?last.cp:0, mate:last?last.mate:null, best:best==='(none)'?null:best, pv:last?last.pv.slice(0,6):[]});
-      } };
-    w.postMessage('position fen '+fen); w.postMessage(`go depth ${depth} movetime ${movetime}`);
+      } else if(s.startsWith('bestmove')){ clearTimeout(wd); E.handler=null;
+        const best=s.split(' ')[1]; res({cp:last?last.cp:0, mate:last?last.mate:null, best:best==='(none)'?null:best, pv:last?last.pv.slice(0,6):[]}); } };
+    E.w.postMessage('position fen '+fen); E.w.postMessage(`go depth ${depth} movetime ${movetime}`);
   });
+  E.kill=()=>{ try{ E.w.terminate(); }catch(e){} };
+  return E;
 }
+function engineInit(){
+  if(ENGINE.init) return ENGINE.init;
+  const E=makeEngine(); ENGINE.main=E;
+  ENGINE.init=E.ready.then(()=>{ ENGINE.ready=true; return E; }).catch(e=>{ ENGINE.init=null; throw e; });
+  return ENGINE.init;
+}
+/* évalue une position (moteur principal) : {cp, mate, best, pv} du point de vue des Blancs */
+async function engineEval(fen, depth, movetime){ await engineInit(); return ENGINE.main.eval(fen,depth,movetime); }
+function poolSize(){ const hc=navigator.hardwareConcurrency||2; const mobile=/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+  return Math.max(1, Math.min(mobile?2:4, hc-1)); }
 
 /* win% (formule Lichess) et perte */
 const WP=(cp,mate)=>{ if(mate!==null&&mate!==undefined) return mate>0?100:0; const c=Math.max(-1500,Math.min(1500,cp)); return 50+50*(2/(1+Math.exp(-0.00368208*c))-1); };
@@ -36,8 +45,8 @@ function classify(loss){ return loss<2?'best':loss<5?'good':loss<10?'inacc':loss
 const CLASS_LABEL={best:'précis',good:'bon',inacc:'imprécision',mistake:'erreur',blunder:'gaffe'};
 
 /* analyse d'une partie du cache : remplit g.ev (par position), g.st (stats) et extrait les fautes */
-async function analyseGameEngine(g, onProgress){
-  await engineInit();
+async function analyseGameEngine(g, onProgress, E){
+  if(!E){ await engineInit(); E=ENGINE.main; }
   const depth=+(P.settings.depth||12), mt=+(P.settings.movetime||350);
   const c=new Chess(); const fens=[c.fen()], moves=[];
   for(const s of g.sans){ const m=c.move(s); if(!m) break; moves.push(m); fens.push(c.fen()); }
@@ -45,7 +54,7 @@ async function analyseGameEngine(g, onProgress){
   for(let i=0;i<fens.length;i++){
     if(ENGINE.cancel) return false;
     const fen=fens[i]; const gameOver=(i===fens.length-1)&&(()=>{const t=new Chess(fen);return t.game_over();})();
-    ev.push(gameOver?{cp:0,mate:null,best:null,pv:[],end:true}:await engineEval(fen,depth,mt));
+    ev.push(gameOver?{cp:0,mate:null,best:null,pv:[],end:true}:await E.eval(fen,depth,mt));
     if(onProgress) onProgress(i+1,fens.length);
   }
   // notation de chaque coup
@@ -115,10 +124,18 @@ function describe(m){ const p=PIECE_FR[m.piece]; const art=p==='dame'||p==='tour
 
 /* lot : analyse les N parties les plus récentes non analysées */
 async function analyseBatch(ids, onProgress){
-  ENGINE.cancel=false; ENGINE.busy=true; let done=0;
-  try{ await engineInit(); }catch(e){ ENGINE.busy=false; throw e; }
-  for(const id of ids){ const g=P.games[id]; if(!g||ENGINE.cancel) break;
-    const ok=await analyseGameEngine(g,(i,n)=>onProgress&&onProgress(done,ids.length,i,n));
-    if(!ok) break; done++; }
-  ENGINE.busy=false; return done;
+  ENGINE.cancel=false; ENGINE.busy=true; let done=0, next=0; const n=Math.min(poolSize(), ids.length)||1; let lastErr=null;
+  const tick=()=>onProgress&&onProgress(done,ids.length,0,1);
+  const lane=async()=>{
+    let E=makeEngine(); try{ await E.ready; }catch(e){ lastErr=e; return; }
+    while(!ENGINE.cancel){ const k=next++; if(k>=ids.length) break; const g=P.games[ids[k]]; if(!g) continue;
+      let ok=false;
+      for(let attempt=0;attempt<2&&!ok&&!ENGINE.cancel;attempt++){
+        try{ ok=await analyseGameEngine(g,null,E); }
+        catch(e){ E.kill(); E=makeEngine(); try{ await E.ready; }catch(e2){ lastErr=e2; return; } } }
+      if(ok){ done++; tick(); } }
+    E.kill();
+  };
+  tick(); await Promise.all(Array.from({length:n},lane));
+  ENGINE.busy=false; if(!done&&lastErr) throw lastErr; return done;
 }

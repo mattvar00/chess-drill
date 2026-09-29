@@ -83,3 +83,9 @@ Trois statuts par système : **joué** (tes lignes réelles : seules elles gén�
 - Progrès : filtres, carte, radar ; le reste replié dans « Détails ».
 - Réglages : pseudo, synchronisation, garde-fou ; le reste dans « Avancé ».
 - **Synchronisation** (`js/sync.js`) : gist privé sur le compte GitHub (token fine-grained, permission compte *Gists : Read and write*). Réception à l'ouverture, envoi groupé 15 s après chaque modification et à la mise en arrière-plan. Fusion sans perte : on garde toujours la version analysée d'une partie, la progression la plus récente d'une branche, les fautes trouvées. Le token reste sur l'appareil (clé `drill_sync`), il n'est jamais synchronisé.
+
+## v8 — analyse robuste
+- Plusieurs moteurs Stockfish en parallèle (jusqu'à 4 sur ordinateur, 2 sur téléphone, selon le nombre de cœurs) : chaque moteur est un worker mono-thread indépendant.
+- Reprise automatique : si la page est rechargée ou fermée pendant l'analyse, elle repart toute seule à la réouverture (drapeau `drill_upd`). Chaque partie est sauvegardée dès qu'elle est finie.
+- Avertissement avant de quitter la page pendant une analyse ; écran maintenu allumé (Wake Lock) sur téléphone.
+- Chien de garde : si un moteur ne répond plus (téléphone mis en veille), il est relancé et la partie recommencée.
