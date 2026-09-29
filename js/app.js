@@ -76,7 +76,9 @@ function renderBranches(h,blId,syId){
   $('#bDrill').onclick=()=>startDrill(sy.branches.map(b=>b.id),sy.titre);
   $('#bExpl').onclick=()=>startBranch(sy.branches[0].id,'explore');
 }
+let FMODE='all';
 function allFaults(){
+  if(FMODE==='forced') return forcedFaults();
   const base=DATA.faults.map((F,i)=>({key:'d'+i,F,src:'base'}));
   const gen=[]; Object.values(P.games).sort((a,b)=>b.t-a.t).forEach(g=>{ (P.gfaults[g.id]||[]).forEach(F=>gen.push({key:F.id,F,src:'game'})); });
   return gen.concat(base);
@@ -85,24 +87,24 @@ function rebuildFaults(){ /* rien à recalculer : allFaults() lit P.gfaults à l
 function renderFaults(h){
   const L=allFaults(); const n=L.length, done=L.filter(x=>P.fault[x.key]&&P.fault[x.key].done).length;
   const nGen=L.filter(x=>x.src==='game').length;
-  const W=P.wood||[]; const last=W[W.length-1]; const WC=P.woodCur;
-  const woodHtml=`<div class="sysbar">${WC?`<button id="bWoodResume">Reprendre le cycle · ${WC.i}/${WC.ids.length} · ${fmtT(WC.elapsed)}</button><button id="bWood" class="sec">Nouveau</button>`:`<button id="bWood">Cycle Woodpecker · ${n} fautes${last?` · dernier ${fmtT(last.time)}`:''}</button>`}</div>${W.length?`<div class="why">Cycles : ${W.slice(-6).map(c=>`${fmtT(c.time)} (${Math.round(100*c.solved/c.n)}%)`).join(' → ')}. Même jeu, plus vite à chaque passage.</div>`:''}`;
+  const W=(P.wood||[]).filter(c=>(c.mode||'all')===FMODE); const last=W[W.length-1]; const WC=P.woodCur&&(P.woodCur.mode||'all')===FMODE?P.woodCur:null;
+  const woodHtml=`${FMODE==='forced'?`<div class="intro"><b>Coups forcés.</b> Les positions de tes parties où un échec ou une prise s'imposait et où tu as joué un coup calme. Ce ne sont pas des combinaisons : c'est presque toujours le coup qu'un joueur de ton niveau jouerait. Le but est de prendre le réflexe <b>échecs, prises, menaces</b> avant chaque coup.${n?'':' Analyse des parties au moteur (onglet Parties) pour en générer.'}</div>`:''}<div class="sysbar">${WC?`<button id="bWoodResume">Reprendre le cycle · ${WC.i}/${WC.ids.length} · ${fmtT(WC.elapsed)}</button><button id="bWood" class="sec">Nouveau</button>`:`<button id="bWood">${FMODE==='forced'?'Série chrono':'Cycle Woodpecker'} · ${n} position${n>1?'s':''}${last?` · dernier ${fmtT(last.time)}`:''}</button>${n>10?'<button id="bWood10" class="sec">10 au hasard</button>':''}`}</div>${W.length?`<div class="why">Cycles : ${W.slice(-6).map(c=>`${fmtT(c.time)} (${Math.round(100*c.solved/c.n)}%)`).join(' → ')}. Même jeu, plus vite à chaque passage.</div>`:''}`;
   h.insertAdjacentHTML('afterbegin', woodHtml);
   h.querySelectorAll('.card').forEach(el=>el.onclick=()=>startFault(+el.dataset.i));
-  $('#bWood').onclick=()=>woodStart();
+  $('#bWood').onclick=()=>woodStart(); const w10=$('#bWood10'); if(w10) w10.onclick=()=>woodStart(10);
   const wr=$('#bWoodResume'); if(wr) wr.onclick=()=>woodResume();
 }
 function woodStart(n){ const L=allFaults(); let ids=L.map(x=>x.key); if(n&&n<ids.length) ids=ids.sort(()=>Math.random()-0.5).slice(0,n);
-  WOOD={start:Date.now(),elapsed:0,solved:0,n:ids.length,ids,i:0}; woodSave(); startFault(faultIndex(ids[0])); }
-function woodResume(){ const WC=P.woodCur; if(!WC) return; WOOD={start:Date.now(),elapsed:WC.elapsed,solved:WC.solved,n:WC.ids.length,ids:WC.ids,i:WC.i}; startFault(faultIndex(WC.ids[WC.i])); }
-function woodSave(){ if(!WOOD) return; P.woodCur={ids:WOOD.ids,i:WOOD.i,solved:WOOD.solved,elapsed:WOOD.elapsed+(Date.now()-WOOD.start)}; save(); }
+  WOOD={start:Date.now(),elapsed:0,solved:0,n:ids.length,ids,i:0,mode:FMODE}; woodSave(); startFault(faultIndex(ids[0])); }
+function woodResume(){ const WC=P.woodCur; if(!WC) return; FMODE=WC.mode||'all'; WOOD={start:Date.now(),elapsed:WC.elapsed,solved:WC.solved,n:WC.ids.length,ids:WC.ids,i:WC.i,mode:FMODE}; startFault(faultIndex(WC.ids[WC.i])); }
+function woodSave(){ if(!WOOD) return; P.woodCur={ids:WOOD.ids,i:WOOD.i,solved:WOOD.solved,elapsed:WOOD.elapsed+(Date.now()-WOOD.start),mode:WOOD.mode||'all'}; save(); }
 function woodPause(){ if(WOOD){ woodSave(); WOOD=null; } }
 function faultIndex(key){ return Math.max(0, allFaults().findIndex(x=>x.key===key)); }
 function woodNext(){ WOOD.i++; if(WOOD.i<WOOD.n){ woodSave(); startFault(faultIndex(WOOD.ids[WOOD.i])); } else woodEnd(); }
 let WOOD=null; const fmtT=ms=>{ const s=Math.round(ms/1000); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
 function woodTick(){ if(!WOOD||!cur||cur.kind!=='fault') return; $('#branchtag').textContent=`Woodpecker ${WOOD.i+1}/${WOOD.n} · ${fmtT(WOOD.elapsed+Date.now()-WOOD.start)}`; }
 setInterval(woodTick,1000);
-function woodEnd(){ const c={date:Date.now(),time:WOOD.elapsed+Date.now()-WOOD.start,solved:WOOD.solved,n:WOOD.n}; P.wood=(P.wood||[]).concat([c]); P.woodCur=null; save(); const W=P.wood; const prev=W[W.length-2]; WOOD=null;
+function woodEnd(){ const c={date:Date.now(),time:WOOD.elapsed+Date.now()-WOOD.start,solved:WOOD.solved,n:WOOD.n,mode:WOOD.mode||'all'}; P.wood=(P.wood||[]).concat([c]); P.woodCur=null; save(); const W=P.wood.filter(x=>(x.mode||'all')===c.mode); const prev=W[W.length-2]; WOOD=null;
   $('#coach').innerHTML=`<div class="done"><div class="big">Cycle terminé · ${fmtT(c.time)}</div><div class="sub">${c.solved}/${c.n} du premier coup${prev?` · précédent : ${fmtT(prev.time)}, ${prev.solved}/${prev.n}`:''}</div></div>`;
   $('#actions').innerHTML=`<button id="bWoodAgain" class="pri">Refaire un cycle</button><button id="bWoodTen">10 au hasard</button><button id="bWoodBack">Retour</button>`;
   $('#bWoodAgain').onclick=()=>woodStart(); $('#bWoodTen').onclick=()=>woodStart(10); $('#bWoodBack').onclick=back; locked=true; }
@@ -232,7 +234,7 @@ function paintCoach(html){
   paintActions();
 }
 const matPhrase=m=>m>0?`tu as ${m} point${m>1?'s':''} de plus`:m<0?`tu as ${-m} point${-m>1?'s':''} de moins`:'matériel égal';
-function hintFor(t){return {'Échec gagnant raté':'Vérifie tous tes échecs avant de jouer calme.','Pièce à prendre':'Une pièce adverse traîne. Encaisse.','Capture gagnante ratée':'Une prise rapporte du matériel — compte bien avant de la rejeter.','Pièce en prise oubliée':'Une de tes pièces est attaquée. Sauve-la ou trouve plus fort.','Pièce déposée en prise':'La case où tu veux aller est-elle sûre ? Compte attaquants et défenseurs.','Pièce mise en prise':'Que défend la pièce que tu vas bouger ? Cherche ce qui reste en l\'air.','Échec adverse ignoré':'Liste d\'abord tous les échecs de l\'adversaire.','Coup calme':'Rien n\'est forcé. Que menace-t-il au coup suivant ?'}[t]||'';}
+function hintFor(t){return {'Échec à jouer':'Commence par lister tous tes échecs. L\'un d\'eux s\'impose.','Prise à jouer':'Regarde chaque prise possible avant de jouer calme.','Échec gagnant raté':'Vérifie tous tes échecs avant de jouer calme.','Pièce à prendre':'Une pièce adverse traîne. Encaisse.','Capture gagnante ratée':'Une prise rapporte du matériel — compte bien avant de la rejeter.','Pièce en prise oubliée':'Une de tes pièces est attaquée. Sauve-la ou trouve plus fort.','Pièce déposée en prise':'La case où tu veux aller est-elle sûre ? Compte attaquants et défenseurs.','Pièce mise en prise':'Que défend la pièce que tu vas bouger ? Cherche ce qui reste en l\'air.','Échec adverse ignoré':'Liste d\'abord tous les échecs de l\'adversaire.','Coup calme':'Rien n\'est forcé. Que menace-t-il au coup suivant ?'}[t]||'';}
 function paintActions(){
   const a=$('#actions');
   if(cur.kind==='rep'){

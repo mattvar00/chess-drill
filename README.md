@@ -68,3 +68,7 @@ Le bouton ‹ revient toujours à l'écran précédent ; le geste retour du tél
 
 ## v5 — répertoire vivant
 Trois statuts par système : **joué** (tes lignes réelles : seules elles génèrent des déviations à corriger), **à apprendre** (lignes ajoutées pour toi, drill sans alerte), **alternatif**. Un coup qui retombe dans le répertoire dans les 3 demi-coups est une transposition, pas une déviation. Quand `DATA.version` change, les parties en cache sont réanalysées au chargement.
+
+## v6 — carte joueur et coups forcés
+- **Progrès** : carte joueur calculée à chaque synchronisation (≥ 20 parties analysées sur la période). Chaque note compare tes coups à ceux de tes adversaires dans les mêmes parties (75 = leur niveau) : rythme, préparation, conversion, tactique (attaque / défense), défense, mental, positionnel, activité, finale, pendule. Type de joueur selon le modèle Hansen (théoricien, réflecteur, pragmatique, activiste) à partir de l'écart positions calmes / positions forcées. Tableau détaillé toi vs pairs.
+- **Coups forcés** (Entraîner) : les positions où un échec ou une prise s'imposait et où tu as joué un coup calme, en série chronométrée (cycles séparés des fautes).

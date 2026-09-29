@@ -82,6 +82,9 @@ function renderProfile(h){
   let html=`<div class="modes prof">${opts}</div>${tcChips()}`;
   html+=`<div class="intro tilt ${ts.warn?'warn':''}"><b>Aujourd'hui : ${ts.n} partie${ts.n>1?'s':''}</b>${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}. ${ts.warn?'Stop. Tes chutes d\'Elo viennent des longues séries, pas des ouvertures.':`Limite ${ts.lim}/jour (réglable dans ⚙).`}</div>`;
   if(!pr.n){ h.innerHTML=html+`<div class="intro">Aucune partie sur ${days} jours. Récupère un mois dans l'onglet Parties.</div>`; bindProf(h); return; }
+  const SG=Object.values(P.games).filter(g=>g.ev&&g.st&&!P.ignored[g.id]&&tcOk(g)&&g.t>=Date.now()/1000-days*86400).sort((a,b)=>b.t-a.t).slice(0,150);
+  if(SG.length>=STYLE_MIN){ try{ const st=computeStyle(SG); html+=renderStyleCard(st)+`<details class="help"><summary>Toi contre tes pairs, indicateur par indicateur</summary>${renderStyleTable(st)}</details>`; }catch(e){ console.warn(e); } }
+  else html+=`<div class="intro"><b>Carte joueur.</b> Il faut au moins ${STYLE_MIN} parties analysées au moteur sur la période (${SG.length} pour l'instant) : onglet Parties → Moteur.</div>`;
   html+=radar(pr);
   html+=`<div class="stats"><div class="stat"><div class="n">${pr.n}</div><div class="l">parties · ${days} j</div></div><div class="stat"><div class="n">${pr.winRate}%</div><div class="l">victoires</div></div><div class="stat"><div class="n">${pr.nAn}</div><div class="l">analysées au moteur</div></div></div>`;
   for(const tc in pr.elo){ const pts=pr.elo[tc]; if(pts.length>=3) html+=`<div class="card static"><div class="body"><div class="t">${tc} <span class="dim">${pts[0].e} → ${pts[pts.length-1].e}</span></div>${spark(pts,300,40)}</div></div>`; }

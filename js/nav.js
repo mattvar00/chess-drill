@@ -1,6 +1,6 @@
 /* ---------- navigation : pile d'écrans, bouton retour, barre du bas ---------- */
 const NAV=[]; const ROOTS=['today','train','games','prof'];
-const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
+const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
 function navTop(){ return NAV[NAV.length-1]; }
 function go(entry){ NAV.push(entry); try{ history.pushState({n:NAV.length},''); }catch(e){} renderNav(); }
 function replaceTop(entry){ NAV[NAV.length-1]=entry; renderNav(); }
@@ -29,7 +29,8 @@ function renderNav(){
     case 'sys': renderSys(h, DATA.blocs.find(b=>b.id===t.bloc)); break;
     case 'br': renderBranches(h, t.bloc, t.sys); break;
     case 'threats': renderThreats(h); break;
-    case 'faults': renderFaults(h); break;
+    case 'faults': FMODE='all'; renderFaults(h); break;
+    case 'forced': FMODE='forced'; renderFaults(h); break;
     case 'games': renderGames(h); break;
     case 'prof': renderProfile(h); break;
     case 'settings': renderSettings(h); break;
@@ -51,6 +52,8 @@ function renderToday(h){
   html+=`<h2 class="sec">À faire</h2>`;
   if(due.length) html+=item('pri','↻',`Réviser ${due.length} ligne${due.length>1?'s':''}`,'Branches validées dont la révision est due',()=>startDrill(due,'Révision'));
   if(devs.length) html+=item('pri','⚠',`Corriger ${devs.length} déviation${devs.length>1?'s':''}`,'Tu as quitté ton répertoire dans ces parties',()=>go({s:'games',filter:'dev'}));
+  const FF=forcedFaults().filter(x=>!(P.fault[x.key]&&P.fault[x.key].done));
+  if(FF.length) html+=item('','⚡',`${FF.length} coup${FF.length>1?'s':''} forcé${FF.length>1?'s':''} à retrouver`,'Échecs et prises que tu n\'as pas joués',()=>go({s:'forced'}));
   if(newF.length) html+=item('','✕',`${newF.length} faute${newF.length>1?'s':''} à retrouver`,'Extraites de tes parties par le moteur',()=>go({s:'faults'}));
   if(!due.length&&!devs.length&&!newF.length) html+=item('pri','▶','Drill mixte · 10 lignes','Tirage pondéré : lignes neuves, fréquentes, où tu dévies',()=>startDrill(ids,'Drill mixte'));
   html+=`<h2 class="sec">Raccourcis</h2>`;
@@ -69,6 +72,7 @@ function renderTrain(h){
     +item('♜','Adversaires réels (Maia)','Les réponses humaines que ton répertoire ne couvre pas',()=>go({s:'threats'}))
     +`<h2 class="sec">Tactique</h2>`
     +item('✕','Fautes',`${L.length} positions tirées de tes parties · ${done} trouvées`,()=>go({s:'faults'}),Math.round(100*done/Math.max(1,L.length)))
+    +item('⚡','Coups forcés',`${forcedFaults().length} positions où l'échec ou la prise s'imposait`,()=>go({s:'forced'}))
     +item('⏱','Cycle Woodpecker',last?`dernier : ${fmtT(last.time)}, ${Math.round(100*last.solved/last.n)}% du premier coup`:'Toutes les fautes, chrono, à refaire jusqu\'à l\'automatisme',()=>woodStart())
     +`<h2 class="sec">Jouer</h2>`
     +item('☺',`Partie contre un humain (Maia ${P.settings.maiaElo||1800})`,'Maia imite un joueur de ce niveau : erreurs réalistes à punir',()=>sparPick());
