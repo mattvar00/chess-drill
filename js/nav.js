@@ -80,4 +80,4 @@ function renderTrain(h){
 function sparPick(){ const c=confirm('Jouer avec les Blancs ? (Annuler = Noirs)'); startSpar('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', c?'w':'b', 'Partie libre'); }
 
 /* réanalyse automatique des parties en cache quand le répertoire change */
-(function(){ if(Object.keys(P.games).length && P.settings.dataVersion!==DATA.version){ try{ reanalyseAll(); }catch(e){} } P.settings.dataVersion=DATA.version; save(); })();
+setTimeout(function(){ if(P.settings.dataVersion===DATA.version) return; try{ if(Object.keys(P.games).length) reanalyseAll(); P.settings.dataVersion=DATA.version; save(); if(top()&&top().s!=='board') renderNav(); }catch(e){ console.warn('réanalyse',e); } },0);
