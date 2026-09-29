@@ -62,7 +62,7 @@ function renderBlocs(h){
 }
 function renderSys(h,bl){
   h.innerHTML=`<div class="sysbar"><button id="bAll">Drill · tout le bloc</button></div>`;
-  h.innerHTML+=bl.systemes.map(sy=>{ const th=threatCountFor(sy.branches.map(b=>b.id)); return `<div class="card" data-sys="${sy.id}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${sy.titre} <span class="badge ${sy.statut==='alternatif'?'alt':''}">${sy.statut}</span></div><div class="s">${sy.branches.length} lignes · ${sy.branches.filter(b=>isValid(b.id)).length} validées${th?` · <span class="warn">${th} trou${th>1?'s':''} probable${th>1?'s':''}</span>`:''}</div></div><div class="prog"><b style="width:${sysPct(sy)}%"></b></div><div class="go">›</div></div>`; }).join('');
+  h.innerHTML+=bl.systemes.map(sy=>{ const th=threatCountFor(sy.branches.map(b=>b.id)); return `<div class="card" data-sys="${sy.id}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${sy.titre} <span class="badge ${sy.statut==='alternatif'?'alt':sy.statut==='à apprendre'?'learn':'ok'}">${sy.statut}</span></div><div class="s">${sy.branches.length} lignes · ${sy.branches.filter(b=>isValid(b.id)).length} validées${th?` · <span class="warn">${th} trou${th>1?'s':''} probable${th>1?'s':''}</span>`:''}</div></div><div class="prog"><b style="width:${sysPct(sy)}%"></b></div><div class="go">›</div></div>`; }).join('');
   h.querySelectorAll('.card').forEach(el=>el.onclick=()=>go({s:'br',bloc:bl.id,sys:el.dataset.sys}));
   $('#bAll').onclick=()=>startDrill(bl.systemes.flatMap(s=>s.branches.map(b=>b.id)),bl.titre);
 }

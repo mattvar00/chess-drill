@@ -42,7 +42,7 @@ function navInit(){ ROOTS.forEach(r=>$('#nav-'+r).onclick=()=>root(r)); $('#back
 function allBranchIds(){ return DATA.blocs.flatMap(b=>b.systemes.flatMap(s=>s.branches.map(x=>x.id))); }
 function renderToday(h){
   const ids=allBranchIds(); const due=ids.filter(isDue); const fresh=ids.filter(id=>!brState(id).runs);
-  const list=gamesList(); const devs=list.filter(g=>g.a.status==='dev'&&!P.ignored[g.id]&&!P.fixed[g.id]);
+  const list=gamesList(); const devs=list.filter(g=>g.a.status==='dev'&&!g.a.soft&&!P.ignored[g.id]&&!P.fixed[g.id]);
   const L=allFaults(); const newF=L.filter(x=>x.src==='game'&&!(P.fault[x.key]&&P.fault[x.key].done));
   const ts=tiltStatus(); const last=P.settings.lastSync?new Date(P.settings.lastSync):null;
   const th=P.maia?P.maia.threats.length:0;
@@ -74,3 +74,6 @@ function renderTrain(h){
     +item('☺',`Partie contre un humain (Maia ${P.settings.maiaElo||1800})`,'Maia imite un joueur de ce niveau : erreurs réalistes à punir',()=>sparPick());
 }
 function sparPick(){ const c=confirm('Jouer avec les Blancs ? (Annuler = Noirs)'); startSpar('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', c?'w':'b', 'Partie libre'); }
+
+/* réanalyse automatique des parties en cache quand le répertoire change */
+(function(){ if(Object.keys(P.games).length && P.settings.dataVersion!==DATA.version){ try{ reanalyseAll(); }catch(e){} } P.settings.dataVersion=DATA.version; save(); })();

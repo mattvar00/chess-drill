@@ -37,22 +37,28 @@ function parsePgnMoves(pgn){
 
 /* analyse d'une partie contre le livre. Retourne un résumé compact. */
 function analyseGame(sans, color){
-  const map=BOOK[color]; const g=new Chess(); let depth=0, lastBranches=null;
+  const map=BOOK[color]; const g=new Chess(); let depth=0, lastBranches=null, transpo=0;
   for(let i=0;i<sans.length && i<MAX_BOOK_PLY;i++){
     const k=fenKey(g.fen()); const e=map[k];
-    if(!e){ return {status: depth?'out':'nobook', depth, branches:lastBranches}; }
-    if(e.end && !e.user.size && !e.opp.size) return {status:'ok', depth, branches:[...e.branches]};
-    const m=g.move(sans[i]); if(!m){ return {status:'err', depth}; }
+    if(!e){ return {status: depth?'out':'nobook', depth, branches:lastBranches, transpo}; }
+    if(e.end && !e.user.size && !e.opp.size) return {status:'ok', depth, branches:[...e.branches], transpo};
+    const m=g.move(sans[i]); if(!m){ return {status:'err', depth, transpo}; }
     const uci=m.from+m.to+(m.promotion||''); const userMove=(i%2===0)===(color==='w');
     const set=userMove?e.user:e.opp;
-    if(!set.size){ return {status:'ok', depth, branches:[...e.branches]}; }   // fin de ligne
+    if(!set.size){ return {status:'ok', depth, branches:[...e.branches], transpo}; }   // fin de ligne
     if(set.has(uci)){ depth=i+1; lastBranches=[...e.branches]; continue; }
+    // transposition ? si dans les 3 demi-coups suivants la partie retombe dans le livre, ce n'est pas une déviation
+    let back=-1; const t=new Chess(g.fen());
+    for(let j=1;j<=3 && i+j<sans.length; j++){ if(map[fenKey(t.fen())]){ back=j; break; } if(!t.move(sans[i+j])) break; }
+    if(back===-1 && map[fenKey(t.fen())]) back=Math.min(3,sans.length-i-1);
+    if(back>=1){ for(let j=1;j<back;j++) g.move(sans[i+j]); i+=back-1; depth=i+1; transpo++; const e2=map[fenKey(g.fen())]; if(e2) lastBranches=[...e2.branches]; continue; }
     g.undo();
     const fen=g.fen();
     const expected=[...set].map(u=>{ const mm=g.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]}); const san=mm?mm.san:u; g.undo(); return {uci:u,san}; });
-    return {status:userMove?'dev':'gap', ply:i, depth, fen, played:m.san, playedUci:uci, expected, branches:[...e.branches]};
+    const branches=[...e.branches]; const soft=!branches.some(b=>BR[b]&&BR[b].sys.statut==='joué');
+    return {status:userMove?'dev':'gap', ply:i, depth, fen, played:m.san, playedUci:uci, expected, branches, soft, transpo};
   }
-  return {status:'ok', depth, branches:lastBranches};
+  return {status:'ok', depth, branches:lastBranches, transpo};
 }
 
 /* fetch d'un mois chess.com */
@@ -139,7 +145,8 @@ function coverage(list){
 function renderGames(h){
   const now=new Date(); const list=gamesList();
   const only=(navTop()&&navTop().filter)||null;
-  const devs=list.filter(g=>g.a.status==='dev'&&!P.ignored[g.id]);
+  const devs=list.filter(g=>g.a.status==='dev'&&!g.a.soft&&!P.ignored[g.id]&&!P.fixed[g.id]);
+  const softs=list.filter(g=>g.a.status==='dev'&&g.a.soft&&!P.ignored[g.id]&&!P.fixed[g.id]);
   const gaps=list.filter(g=>g.a.status==='gap'&&!P.ignored[g.id]);
   const cov=coverage(list); const notAn=list.filter(g=>!g.st&&!P.ignored[g.id]);
   const months=[]; for(let i=0;i<6;i++){ const d=new Date(now.getFullYear(),now.getMonth()-i,1); months.push({y:d.getFullYear(),m:d.getMonth()+1,label:d.toLocaleDateString('fr-FR',{month:'long',year:'numeric'})}); }
@@ -166,7 +173,8 @@ function renderGames(h){
   <div class="stats"><div class="stat"><div class="n">${list.length}</div><div class="l">parties en cache</div></div><div class="stat"><div class="n">${cov===null?'–':cov+'%'}</div><div class="l">restées en livre (coup 4+)</div></div><div class="stat"><div class="n">${devs.length}</div><div class="l">déviations à corriger</div></div></div>
   ${list.length?`<div class="sysbar"><button id="gBatch" ${ENGINE.busy?'disabled':''}>${ENGINE.busy?'Analyse en cours…':`Moteur · analyser ${Math.min(10,notAn.length)} partie${Math.min(10,notAn.length)>1?'s':''} (${notAn.length} restantes)`}</button>${ENGINE.busy?'<button id="gCancel" class="sec">Stop</button>':''}</div><div id="gProg" class="prog2 hidden"><b></b><span></span></div>`:''}
   ${list.length?'':'<div class="intro">Récupère un mois de parties : chaque partie est rejouée contre ton répertoire. <b>Déviation</b> = tu as quitté la ligne ; <b>Trou</b> = l\'adversaire a joué un coup que le répertoire ne couvre pas. Rien ne quitte ton navigateur.</div>'}
-  ${devs.length?`<h2 class="sec">Déviations — tu as quitté la ligne</h2>${devs.map(gameCard).join('')}`:''}
+  ${devs.length?`<h2 class="sec">Déviations — tu as quitté une ligne jouée</h2>${devs.map(gameCard).join('')}`:''}
+  ${softs.length&&!only?`<h2 class="sec">Lignes à apprendre / alternatives — écarts sans alerte</h2>${softs.slice(0,15).map(gameCard).join('')}`:''}
   ${only==='dev'?'':`${gaps.length?`<h2 class="sec">Trous — l'adversaire sort du répertoire</h2>${gaps.slice(0,25).map(gameCard).join('')}`:''}
   ${list.length?`<h2 class="sec">Toutes les parties</h2>${list.slice(0,60).map(gameCard).join('')}`:''}`}`;
   bindTcChips(h,()=>renderGames(h));
@@ -186,7 +194,7 @@ function gameCard(g){
   let detail='';
   if(a.status==='dev') detail=`coup ${Math.floor(a.ply/2)+1}${a.ply%2?'…':'.'} tu as joué <b>${a.played}</b>, le répertoire dit <b>${a.expected.map(e=>e.san).join(' / ')}</b>`;
   else if(a.status==='gap') detail=`coup ${Math.floor(a.ply/2)+1}${a.ply%2?'…':'.'} il a joué <b>${a.played}</b> — ligne à ajouter`;
-  else if(a.status==='ok') detail=`${a.depth} demi-coups dans le livre`;
+  else if(a.status==='ok') detail=`${a.depth} demi-coups dans le livre${a.transpo?' (transposition)':''}`;
   else if(a.status==='out') detail=`sorti du livre après ${a.depth} demi-coups (transposition)`;
   else detail=`${g.sans.slice(0,6).join(' ')}…`;
   const br=(a.branches||[]).slice(0,2).map(id=>BR[id]?BR[id].br.titre:id).join(' · ');

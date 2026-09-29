@@ -65,3 +65,6 @@ Onglet Parties → « Scouting » : pseudo adverse → ses 3 derniers mois (jusq
 - **Parties** : synchro chess.com / PGN, filtre de cadence (s'applique aussi à Progrès), déviations avec choix de la ligne de référence (retenu par position), scouting.
 - **Progrès** : radar 6 axes + détail.
 Le bouton ‹ revient toujours à l'écran précédent ; le geste retour du téléphone aussi.
+
+## v5 — répertoire vivant
+Trois statuts par système : **joué** (tes lignes réelles : seules elles génèrent des déviations à corriger), **à apprendre** (lignes ajoutées pour toi, drill sans alerte), **alternatif**. Un coup qui retombe dans le répertoire dans les 3 demi-coups est une transposition, pas une déviation. Quand `DATA.version` change, les parties en cache sont réanalysées au chargement.

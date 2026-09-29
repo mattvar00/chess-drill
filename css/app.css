@@ -198,3 +198,5 @@ body{padding-bottom:70px}
 .help summary{cursor:pointer;color:var(--brass)}
 .wrap{padding-bottom:calc(84px + env(safe-area-inset-bottom))}
 .sheet{align-items:flex-end}
+.badge.learn{border-color:var(--brass);color:var(--brass)}
+.badge.ok{border-color:var(--ok);color:var(--ok)}
