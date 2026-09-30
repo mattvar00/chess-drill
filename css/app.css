@@ -232,3 +232,13 @@ details.grp input[type=file],details.grp textarea{display:block;width:100%;margi
 .minicard>b{font-size:34px;color:var(--brass);line-height:1}.minicard .t{font-weight:600}.minicard .s{font-size:12.5px;color:var(--mute)}
 .minicard .ok{color:var(--ok)}.minicard .bad{color:var(--bad)}.minicard .go{margin-left:auto;color:var(--dim)}
 .card .s .oname{color:var(--ink);font-weight:500}
+.plb{position:relative;width:100%;max-width:420px;margin:6px auto 0;aspect-ratio:1;border-radius:4px;overflow:hidden}
+.plgrid{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:100%;height:100%}
+.plarr{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5}
+.sq.plh::after{content:"";position:absolute;inset:0;background:rgba(80,190,150,.45);z-index:1}
+.plco{position:absolute;left:3px;top:1px;font-size:10px;color:rgba(0,0,0,.45);z-index:4}.plcf{position:absolute;right:3px;bottom:0;font-size:10px;color:rgba(0,0,0,.45);z-index:4}
+.plctl{display:flex;gap:8px;justify-content:center;align-items:center;margin:10px 0 4px}
+.plctl button{min-width:52px;min-height:42px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);color:var(--ink);font-size:18px}
+.plctl span{color:var(--mute);font-size:13px;min-width:44px;text-align:center}
+.plmv{font-family:var(--mono);font-size:12.5px;color:var(--dim);text-align:center;margin:2px 0 8px}
+.plcap{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:15px;line-height:1.55;min-height:5.5em}

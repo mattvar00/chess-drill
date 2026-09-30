@@ -89,3 +89,6 @@ Trois statuts par système : **joué** (tes lignes réelles : seules elles gén�
 - Reprise automatique : si la page est rechargée ou fermée pendant l'analyse, elle repart toute seule à la réouverture (drapeau `drill_upd`). Chaque partie est sauvegardée dès qu'elle est finie.
 - Avertissement avant de quitter la page pendant une analyse ; écran maintenu allumé (Wake Lock) sur téléphone.
 - Chien de garde : si un moteur ne répond plus (téléphone mis en veille), il est relancé et la partie recommencée.
+
+## Plans animés
+`js/plans-data.js` : 14 animations (Sveshnikov ×4, Alapin pion isolé, Meran, Anti-Meran, contre le Londres, Slave 3.Nc3 ×3, contre 1…e6, Nimzo 4.Qc2 ×2). Chaque plan = une ligne (SAN, vérifiée au moteur, aucune perte > ~0,5 pion) + des étapes `{p: demi-coups joués, a: flèches, h: cases clés, c: explication}`. Idées paraphrasées des sources listées dans chaque plan. Accès : Entraîner → Plans animés, bouton « Voir les plans » d'un système, bouton « Voir le plan » en fin de ligne. « Jouer contre Maia » lance le sparring depuis l'étape affichée.

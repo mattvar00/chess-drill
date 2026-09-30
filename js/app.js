@@ -69,12 +69,13 @@ function renderSys(h,bl){
 function renderBranches(h,blId,syId){
   const bl=DATA.blocs.find(b=>b.id===blId), sy=bl.systemes.find(s=>s.id===syId);
   h.innerHTML=`<div class="intro">${sy.resume}</div>
-  <div class="sysbar"><button id="bDrill">Drill · ce système</button><button id="bExpl" class="sec">Explorer la 1ʳᵉ</button></div>`;
+  <div class="sysbar"><button id="bDrill">Drill · ce système</button><button id="bExpl" class="sec">Explorer la 1ʳᵉ</button>${plansFor(sy.id).length?`<button id="bPlans" class="sec">Voir les plans (${plansFor(sy.id).length})</button>`:''}</div>`;
   h.innerHTML+=sy.branches.map(br=>{const st=brState(br.id); const v=isValid(br.id); const th=P.maia?P.maia.threats.filter(t=>t.branches.includes(br.id)):[];
     return `<div class="card" data-br="${br.id}"><div class="sw"><i></i><i></i><i></i><i></i></div><div class="body"><div class="t">${br.titre}</div><div class="s">${br.moves.length} demi-coups · ${Object.keys(br.notes).length} plans${st.runs?` · ${st.runs} passage${st.runs>1?'s':''}`:''}${v?` · révision ${isDue(br.id)?'due':'dans '+daysUntil(st.due)+' j'}`:''}${st.devs?` · <span class="warn">${st.devs} déviation${st.devs>1?'s':''}</span>`:''}${th.length?` · <span class="warn">humains : ${th[0].miss[0].san} ${Math.round(100*th[0].miss[0].p)}%</span>`:''}</div></div>${v?'<span class="badge ok">validée</span>':st.clean>=1?'<span class="badge">1/2</span>':''}<div class="go">›</div></div>`;}).join('');
   h.querySelectorAll('.card').forEach(el=>el.onclick=()=>startBranch(el.dataset.br,'explore'));
   $('#bDrill').onclick=()=>startDrill(sy.branches.map(b=>b.id),sy.titre);
   $('#bExpl').onclick=()=>startBranch(sy.branches[0].id,'explore');
+  const bp=$('#bPlans'); if(bp) bp.onclick=()=>{ const L=plansFor(sy.id); if(L.length===1) go({s:'plan',id:L[0].id,i:0}); else go({s:'plans',sys:sy.id}); };
 }
 let FMODE='all';
 function allFaults(){
@@ -291,9 +292,11 @@ function finishRep(){
   $('#coach').innerHTML=`<div class="done"><div class="big">${cur.errs===0?'Ligne sans faute':cur.errs+' erreur'+(cur.errs>1?'s':'')}</div><div class="sub">${cur.errs===0?(v?`Branche validée. Prochaine révision ${when}.`:'Encore une fois sans faute et elle est validée.'):cur.errs===1?`Presque. Elle revient ${when}.`:'Le compteur repart à zéro : deux passages propres d\'affilée pour valider.'}</div></div>`;
   let btns=`<button id="bAgain" ${cur.errs===0?'':'class="pri"'}>Refaire</button>`;
   if(cur.session){ btns+=`<button id="bNextBr" class="pri">Branche suivante ›</button>`; }
-  btns+=`<button id="bSpar">Sparring Maia</button><button id="bList">Liste</button>`;
+  const pls=cur&&cur.sys?plansFor(cur.sys.id):[];
+  btns+=`${pls.length?'<button id="bPlan">Voir le plan</button>':''}<button id="bSpar">Sparring Maia</button><button id="bList">Liste</button>`;
   $('#actions').innerHTML=btns;
   $('#bSpar').onclick=()=>startSpar(game.fen(),orient,cur.br.titre);
+  const bpl=$('#bPlan'); if(bpl) bpl.onclick=()=>{ const L=plansFor(cur.sys.id); NAV.pop(); if(L.length===1) go({s:'plan',id:L[0].id,i:0}); else go({s:'plans',sys:cur.sys.id}); };
   $('#bAgain').onclick=()=>startBranch(cur.id,'drill',cur.session);
   const nb=$('#bNextBr'); if(nb) nb.onclick=()=>startDrill(cur.session.pool,cur.session.label);
   $('#bList').onclick=()=>{ NAV.pop(); go({s:'br',bloc:cur.bloc.id,sys:cur.sys.id}); };

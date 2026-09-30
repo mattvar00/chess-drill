@@ -1,6 +1,6 @@
 /* ---------- navigation : pile d'écrans, bouton retour, barre du bas ---------- */
 const NAV=[]; const ROOTS=['today','train','games','prof'];
-const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
+const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',plans:'Plans animés',plan:'',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
 function navTop(){ return NAV[NAV.length-1]; }
 function go(entry){ NAV.push(entry); try{ history.pushState({n:NAV.length},''); }catch(e){} renderNav(); }
 function replaceTop(entry){ NAV[NAV.length-1]=entry; renderNav(); }
@@ -31,6 +31,8 @@ function renderNav(){
     case 'threats': renderThreats(h); break;
     case 'faults': FMODE='all'; renderFaults(h); break;
     case 'forced': FMODE='forced'; renderFaults(h); break;
+    case 'plans': renderPlans(h); break;
+    case 'plan': renderPlan(h,t); break;
     case 'games': renderGames(h); break;
     case 'prof': renderProfile(h); break;
     case 'settings': renderSettings(h); break;
@@ -73,6 +75,7 @@ function renderTrain(h){
     +item('♜','Adversaires réels (Maia)','Les réponses humaines que ton répertoire ne couvre pas',()=>go({s:'threats'}))
     +`<h2 class="sec">Tactique</h2>`
     +item('✕','Fautes',`${L.length} positions tirées de tes parties · ${done} trouvées`,()=>go({s:'faults'}),Math.round(100*done/Math.max(1,L.length)))
+    +item('▦','Plans animés',`${(window.PLANS||[]).length} animations : ruptures, cases clés, pièces à échanger`,()=>go({s:'plans'}))
     +item('⚡','Coups forcés',`${forcedFaults().length} positions où l'échec ou la prise s'imposait`,()=>go({s:'forced'}))
     +item('⏱','Cycle Woodpecker',last?`dernier : ${fmtT(last.time)}, ${Math.round(100*last.solved/last.n)}% du premier coup`:'Toutes les fautes, chrono, à refaire jusqu\'à l\'automatisme',()=>woodStart())
     +`<h2 class="sec">Jouer</h2>`
