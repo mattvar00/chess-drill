@@ -171,6 +171,12 @@ function renderGames(h){
   h.querySelectorAll('.card[data-g]').forEach(el=>el.onclick=ev=>{ if(ev.target.closest('.ign')) return; openGame(el.dataset.g); });
   h.querySelectorAll('.ign').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); const id=b.dataset.g; P.ignored[id]=!P.ignored[id]; recomputeBranchStats(); save(); renderGames(h); });
 }
+/* nom d'ouverture lisible, depuis l'URL ECO de chess.com */
+const ECO_FR=[[/Sicilian Defense/,'Sicilienne'],[/Queens Gambit Declined/,'Gambit Dame refusé'],[/Queens Gambit Accepted/,'Gambit Dame accepté'],[/Queens Gambit/,'Gambit Dame'],[/Semi Slav Defense/,'Semi-Slave'],[/Slav Defense/,'Slave'],
+ [/Dutch Defense/,'Hollandaise'],[/Kings Indian Defense/,'Est-indienne'],[/Nimzo Indian Defense/,'Nimzo-indienne'],[/Queens Indian Defense/,'Ouest-indienne'],[/Grunfeld Defense/,'Grünfeld'],[/Caro Kann Defense/,'Caro-Kann'],[/French Defense/,'Française'],
+ [/Queens Pawn Opening/,'Début du pion dame'],[/Kings Pawn Opening/,'Début du pion roi'],[/English Opening/,'Anglaise'],[/Bird Opening/,'Bird'],[/Modern Defense/,'Moderne'],[/Pirc Defense/,'Pirc'],[/Indian Game/,'Partie indienne'],[/Ruy Lopez Opening/,'Espagnole'],[/Italian Game/,'Italienne'],
+ [/Scandinavian Defense/,'Scandinave'],[/Alekhines Defense/,'Alekhine'],[/Benoni Defense/,'Benoni'],[/Catalan Opening/,'Catalane'],[/London System/,'Système de Londres'],[/Variation/g,''],[/Attack/g,'attaque'],[/Gambit/g,'gambit'],[/Defense/g,'défense'],[/Opening/g,''],[/System/g,'système']];
+function ecoName(g){ if(!g.eco) return ''; let t=decodeURIComponent(g.eco).split('-'); const cut=t.findIndex(w=>/\d\./.test(w)); if(cut>0) t=t.slice(0,cut); let n=t.join(' ').replace(/\s+/g,' ').trim(); for(const [re,fr] of ECO_FR) n=n.replace(re,fr); return n.replace(/\s+/g,' ').replace(/ ,/g,',').trim(); }
 const STATUS_LABEL={ok:'en livre',dev:'déviation',gap:'trou',out:'hors livre',nobook:'hors répertoire',err:'illisible'};
 function gameCard(g){
   const a=g.a; const d=new Date(g.t*1000).toLocaleDateString('fr-FR',{day:'2-digit',month:'2-digit'});
@@ -181,9 +187,9 @@ function gameCard(g){
   else if(a.status==='ok') detail=`${a.depth} demi-coups dans le livre${a.transpo?' (transposition)':''}`;
   else if(a.status==='out') detail=`sorti du livre après ${a.depth} demi-coups (transposition)`;
   else detail=`${g.sans.slice(0,6).join(' ')}…`;
-  const br=(a.branches||[]).slice(0,2).map(id=>BR[id]?BR[id].br.titre:id).join(' · ');
+  const br=(a.branches||[]).slice(0,2).map(id=>BR[id]?BR[id].br.titre:id).join(' · '); const on=ecoName(g);
   const st=g.st?` <span class="acc ${g.st.acc>=80?'hi':g.st.acc>=65?'mid':'lo'}">${g.st.acc}%</span>${g.st.blunder?` <span class="dim">${g.st.blunder} gaffe${g.st.blunder>1?'s':''}</span>`:''}`:'';
-  return `<div class="card g ${a.status} ${ign?'ign':''}" data-g="${g.id}"><div class="sw k ${g.color}"></div><div class="body"><div class="t"><span class="res ${g.res}">${g.res}</span> vs ${g.opp} <span class="dim">(${g.oppElo}) · ${d} · ${g.tc}</span>${st}</div><div class="s">${detail}${br?`<br><span class="dim">${br}</span>`:''}</div></div>${a.status==='dev'||a.status==='gap'?`<button class="ign" data-g="${g.id}" title="ignorer">${ign?'↺':'✕'}</button>`:''}<span class="badge ${fixed&&a.status==='dev'?'ok':a.status}">${fixed&&a.status==='dev'?'corrigée':STATUS_LABEL[a.status]}</span></div>`;
+  return `<div class="card g ${a.status} ${ign?'ign':''}" data-g="${g.id}"><div class="sw k ${g.color}"></div><div class="body"><div class="t"><span class="res ${g.res}">${g.res}</span> vs ${g.opp} <span class="dim">(${g.oppElo}) · ${d} · ${g.tc}</span>${st}</div><div class="s">${on?`<span class="oname">${on}</span><br>`:''}${detail}${br?`<br><span class="dim">${br}</span>`:''}</div></div>${a.status==='dev'||a.status==='gap'?`<button class="ign" data-g="${g.id}" title="ignorer">${ign?'↺':'✕'}</button>`:''}<span class="badge ${fixed&&a.status==='dev'?'ok':a.status}">${fixed&&a.status==='dev'?'corrigée':STATUS_LABEL[a.status]}</span></div>`;
 }
 async function doFetch(){
   const user=$('#gUser').value.trim(); if(!user) return;
