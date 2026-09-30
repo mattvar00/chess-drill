@@ -242,3 +242,5 @@ details.grp input[type=file],details.grp textarea{display:block;width:100%;margi
 .plctl span{color:var(--mute);font-size:13px;min-width:44px;text-align:center}
 .plmv{font-family:var(--mono);font-size:12.5px;color:var(--dim);text-align:center;margin:2px 0 8px}
 .plcap{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:15px;line-height:1.55;min-height:5.5em}
+.plintro{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:8px 0 10px}
+.plintro .t{font-weight:600;font-size:17px}.plintro .s{color:var(--mute);font-size:13px;margin-top:2px}.plintro p{margin:10px 0 0;line-height:1.5}

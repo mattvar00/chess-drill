@@ -1,5 +1,13 @@
 /* ---------- Plans animés : les idées de chaque ouverture, pas à pas ---------- */
 let PL_T=null;
+function planDoneOf(id){ return (P.planDone||{})[id]; }
+/* d'abord jouer la ligne : on réutilise le drill avec une branche temporaire */
+function planPlay(id){
+  const P=PLANS.find(x=>x.id===id); if(!P) return; const last=P.steps[P.steps.length-1].p;
+  const g=new Chess(); const moves=P.sans.slice(0,last).map(s2=>{ const m=g.move(s2); return {san:m.san,uci:m.from+m.to+(m.promotion||'')}; });
+  const key='plan:'+id; BR[key]={br:{id:key,titre:P.title,moves,notes:{}},sys:{id:'plan',titre:'Plan',resume:P.sub},bloc:{side:P.side,titre:P.cat}};
+  startBranch(key,'drill',null,{planId:id});
+}
 function plansFor(sysId){ return (window.PLANS||[]).filter(p=>p.sys.includes(sysId)); }
 function renderPlans(h){
   const t=navTop()||{}; const list=t.sys?plansFor(t.sys):PLANS; const cats=[...new Set(list.map(p=>p.cat))];
@@ -12,11 +20,18 @@ function planMoves(P,p){ const out=[]; for(let i=Math.max(0,p-6);i<p;i++){ out.p
 function renderPlan(h,t){
   const P=PLANS.find(x=>x.id===t.id); if(!P){ h.innerHTML='<div class="why">Plan introuvable.</div>'; return; }
   $('#htitle').textContent=P.title;
+  const done=planDoneOf(P.id);
+  if(!t.played&&!t.skip){ const last=P.steps[P.steps.length-1].p; const my=Math.ceil((P.side==='w'?last:last-1)/2);
+    h.innerHTML=`<div class="plintro"><div class="t">${P.title}</div><div class="s">${P.sub}</div>
+      <p>Avant de voir le plan, <b>rejoue la ligne</b> avec les ${P.side==='w'?'Blancs':'Noirs'} : ${my} coup${my>1?'s':''} jusqu'à la position clé. L'adversaire joue tout seul ; en cas d'erreur, l'app te corrige.</p>
+      ${done?`<p class="why">Déjà jouée${done.errs?` (${done.errs} erreur${done.errs>1?'s':''} la dernière fois)`:' sans faute'}.</p>`:''}</div>
+      <div class="sysbar"><button id="plGoPlay" class="pri">Jouer la ligne</button><button id="plSkip" class="sec">Voir directement le plan</button></div>`;
+    $('#plGoPlay').onclick=()=>planPlay(P.id); $('#plSkip').onclick=()=>{ t.skip=true; renderPlan(h,t); }; return; }
   h.innerHTML=`<div class="why" style="text-align:center">${P.sub}</div>
   <div class="plb"><div class="plgrid" id="plG"></div><svg class="plarr" viewBox="0 0 800 800"><defs><marker id="plah" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e0703c"/></marker></defs><g id="plA"></g></svg></div>
   <div class="plctl"><button id="plP" aria-label="Étape précédente">‹</button><button id="plPlay" aria-label="Lecture">▶</button><button id="plN" aria-label="Étape suivante">›</button><span id="plC"></span></div>
   <div class="plmv" id="plM"></div><div class="plcap" id="plCap"></div>
-  <div class="sysbar"><button id="plSpar">Jouer cette position contre Maia</button></div>
+  <div class="sysbar"><button id="plSpar">Jouer cette position contre Maia</button><button id="plReplay" class="sec">Rejouer la ligne</button></div>
   <details class="grp"><summary>Toute la ligne et les sources</summary><div class="plmv" style="text-align:left">${P.sans.map((s,i)=>(i%2===0?(i/2+1)+'.':'')+s).join(' ')}</div><div class="why">Idées tirées de : ${P.src.map(u=>`<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\/(www\.)?/,'').split('/')[0]}</a>`).join(', ')}. Chaque coup est vérifié au moteur.</div></details>`;
   const draw=()=>{
     const S=P.steps[t.i], flip=P.side==='b'; const {fen,last}=planFen(P,S.p); const board={};
@@ -36,6 +51,7 @@ function renderPlan(h,t){
   $('#plN').onclick=()=>{ stop(); t.i=Math.min(P.steps.length-1,t.i+1); draw(); };
   $('#plPlay').onclick=()=>{ if(PL_T){ stop(); return; } if(t.i>=P.steps.length-1) t.i=0; draw(); $('#plPlay').textContent='❚❚';
     PL_T=setInterval(()=>{ if(!$('#plG')){ stop(); return; } if(t.i<P.steps.length-1){ t.i++; draw(); } else stop(); },4500); };
+  $('#plReplay').onclick=()=>{ stop(); planPlay(P.id); };
   $('#plSpar').onclick=()=>{ stop(); const {fen}=planFen(P,P.steps[t.i].p); startSpar(fen,P.side,P.title); };
   draw();
 }

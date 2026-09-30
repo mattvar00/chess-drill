@@ -121,7 +121,7 @@ function startBranch(id,m,session,opts){
   opts=opts||{};
   const {br,sys,bloc}=BR[id];
   showBoard();
-  cur={kind:'rep',id,br,sys,bloc,mode:m,ply:0,errs:0,steps:[],hintLevel:0,lastNote:null,wrongHere:0,session:session||null,fromGame:opts.fromGame||null};
+  cur={kind:'rep',id,br,sys,bloc,mode:m,ply:0,errs:0,steps:[],hintLevel:0,lastNote:null,wrongHere:0,session:session||null,fromGame:opts.fromGame||null,planId:opts.planId||null};
   orient=bloc.side; game=new Chess(); selected=null;legal=[];lastMove=null;locked=false;
   buildBoard(); render(); paintHeader(); paintModes(); paintStepper(); paintMoves();
   if(m==='explore'){ $('#explnav').classList.remove('hidden'); $('#actions').innerHTML=''; explTo(opts.explPly||0); }
@@ -149,7 +149,8 @@ function paintHeader(){
     $('#ptag').textContent=cur.br.id; $('#ptag').className='tag';
     $('#branchtag').textContent= cur.session? cur.session.label : '';
     const st=brState(cur.id);
-    if(!cur.readonly) $('#meta').innerHTML=`<span>Passages <b>${st.runs}</b></span><span>Sans faute <b>${st.clean}/2</b></span><span>Erreurs ici <b id="errn">0</b></span>`;
+    if(cur.planId) $('#meta').innerHTML=`<span>Rejoue la ligne jusqu'à la position clé : le plan animé suit.</span><span>Erreurs <b id="errn">0</b></span>`;
+    else if(!cur.readonly) $('#meta').innerHTML=`<span>Passages <b>${st.runs}</b></span><span>Sans faute <b>${st.clean}/2</b></span><span>Erreurs ici <b id="errn">0</b></span>`;
   } else {
     $('#ptitle').innerHTML=`${F.theme}<small>${F.opening} · coup ${F.move_no}</small>`; $('#ptag').textContent=F.phase; $('#ptag').className='tag b'; $('#branchtag').textContent='';
     $('#meta').innerHTML=`<span>vs <b>${F.opp}</b> · ${F.date}</span><span>Matériel <b>${F.mat>0?'+'+F.mat:F.mat}</b></span><span>Dans la partie <b>${Math.round(F.played.wp_before)}% → ${Math.round(F.played.wp_after)}%</b></span>`;
@@ -285,6 +286,12 @@ function skipToTheory(){
 function finishRep(){
   if(cur.finished) return; cur.finished=true; locked=true;
   if(cur.readonly){ locked=true; return; }
+  if(cur.planId){ const pid=cur.planId, e=cur.errs; P.planDone=P.planDone||{}; P.planDone[pid]={t:Date.now(),errs:e}; save();
+    $('#coach').innerHTML=`<div class="done"><div class="big">${e===0?'Ligne jouée sans faute':e+' erreur'+(e>1?'s':'')+' sur la ligne'}</div><div class="sub">Tu es arrivé à la position clé. Voyons maintenant le plan, étape par étape.</div></div>`;
+    $('#actions').innerHTML=`<button id="bPlanGo" class="pri">Voir le plan animé</button><button id="bPlanAgain">Rejouer la ligne</button>`;
+    $('#bPlanGo').onclick=()=>{ NAV.pop(); const tp=navTop(); if(tp&&tp.s==='plan'&&tp.id===pid) replaceTop({s:'plan',id:pid,i:0,played:true}); else go({s:'plan',id:pid,i:0,played:true}); };
+    $('#bPlanAgain').onclick=()=>{ NAV.pop(); planPlay(pid); };
+    return; }
   if(cur.fromGame&&cur.errs===0){ P.fixed[cur.fromGame.id]=true; }
   const st=schedule(cur.id, cur.errs);
   const v=isValid(cur.id);
