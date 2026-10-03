@@ -315,3 +315,10 @@ a.lnk{color:var(--brass);align-self:center;margin-left:auto}
 .solinfo{margin-top:6px;font-size:13px;color:var(--mute)}.solinfo b{color:var(--ink)}
 .freeinfo{margin-top:8px;font-size:14px;line-height:1.5}
 #actions button.pri2{border-color:var(--brass);color:var(--brass)}
+
+/* ---------- v15 : structures ---------- */
+.stplan{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:8px 0}
+.stplan.mine{border-color:var(--brass)}.stplan .t{font-weight:600;margin-bottom:4px}.stplan ol{margin:4px 0 0 18px;padding:0;line-height:1.55}
+.qopt{display:block;width:100%;text-align:left;margin:6px 0;padding:12px 14px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--ink);font:inherit;line-height:1.4}
+.qopt.right{border-color:var(--ok);color:var(--ok)}.qopt.wrong{border-color:var(--bad);color:var(--bad)}
+.okc{color:var(--ok)}.stchip{display:block;margin:0 0 6px;text-decoration:none}

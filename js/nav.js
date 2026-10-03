@@ -1,6 +1,6 @@
 /* ---------- navigation : pile d'écrans, bouton retour, barre du bas ---------- */
 const NAV=[]; const ROOTS=['today','train','games','prof'];
-const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',review:'',plans:'Plans animés',plan:'',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
+const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',structs:'Plans par structure',struct:'',squiz:'',review:'',plans:'Plans animés',plan:'',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
 function navTop(){ return NAV[NAV.length-1]; }
 function go(entry){ NAV.push(entry); try{ history.pushState({n:NAV.length},''); }catch(e){} renderNav(); }
 function replaceTop(entry){ NAV[NAV.length-1]=entry; renderNav(); }
@@ -33,6 +33,9 @@ function renderNav(){
     case 'forced': FMODE='forced'; renderFaults(h); break;
     case 'plans': renderPlans(h); break;
     case 'review': renderReview(h,t); break;
+    case 'structs': renderStructs(h); break;
+    case 'struct': renderStruct(h,t); break;
+    case 'squiz': renderSQuiz(h,t); break;
     case 'plan': renderPlan(h,t); break;
     case 'games': renderGames(h); break;
     case 'prof': renderProfile(h); break;
@@ -64,6 +67,8 @@ function renderToday(h){
   if(devs.length){ n++; const dn=Math.min(devs.length,QN_); html+=item('pri','⚠',`Corriger ${dn} déviation${dn>1?'s':''}`,devs.length>QN_?`Les ${QN_} plus récentes (sur ${devs.length})`:'Tu as quitté ton répertoire',()=>go({s:'games',filter:'dev'})); }
   if(ffDue){ n++; html+=item('','⚡',`${ffDue} coup${ffDue>1?'s':''} forcé${ffDue>1?'s':''} à revoir`,'Les plus utiles d\'abord : échecs et prises que tu n\'as pas joués',()=>go({s:'forced'})); }
   if(fDue){ n++; html+=item('','✕',`${fDue} faute${fDue>1?'s':''} à revoir`,'Tes erreurs les plus coûteuses et les plus récentes',()=>go({s:'faults'})); }
+  try{ const S=structureStats(); const w=Object.entries(S).filter(([k,o])=>o.n>=5&&o.errMe-o.errOp>2).sort((a,b)=>(b[1].errMe-b[1].errOp)*b[1].n-(a[1].errMe-a[1].errOp)*a[1].n)[0];
+    if(w){ n++; html+=item('','♟',`Structure à travailler : ${STRUCT[w[0]].name}`,`${w[1].n} parties · ${(w[1].errMe-w[1].errOp).toFixed(0)} pts d'erreurs de plus que tes adversaires`,()=>go({s:'struct',id:w[0]})); } }catch(e){}
   if(!n) html+=item('pri','▶','Drill mixte · 10 lignes','Rien d\'urgent : entretiens ton répertoire',()=>startDrill(ids,'Drill mixte'));
   h.innerHTML=html; bindUpdBox();
 }
@@ -77,6 +82,7 @@ function renderTrain(h){
     +item('♜','Adversaires réels (Maia)','Les réponses humaines que ton répertoire ne couvre pas',()=>go({s:'threats'}))
     +`<h2 class="sec">Tactique</h2>`
     +item('✕','Fautes',`${L.length} positions tirées de tes parties · ${done} trouvées`,()=>go({s:'faults'}),Math.round(100*done/Math.max(1,L.length)))
+    +item('♟','Plans par structure','Tes structures de pions, leurs plans, et un quiz sur tes positions',()=>go({s:'structs'}))
     +item('▦','Plans animés',`${(window.PLANS||[]).length} animations : ruptures, cases clés, pièces à échanger`,()=>go({s:'plans'}))
     +item('⚡','Coups forcés',`${forcedFaults().length} positions où l'échec ou la prise s'imposait`,()=>go({s:'forced'}))
     +item('⏱','Cycle Woodpecker',last?`dernier : ${fmtT(last.time)}, ${Math.round(100*last.solved/last.n)}% du premier coup`:'Toutes les fautes, chrono, à refaire jusqu\'à l\'automatisme',()=>woodStart())

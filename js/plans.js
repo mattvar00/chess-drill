@@ -10,7 +10,7 @@ function planPlay(id){
 }
 function plansFor(sysId){ return (window.PLANS||[]).filter(p=>p.sys.includes(sysId)); }
 function renderPlans(h){
-  const t=navTop()||{}; const list=t.sys?plansFor(t.sys):PLANS; const cats=[...new Set(list.map(p=>p.cat))];
+  const t=navTop()||{}; const list=t.sys?plansFor(t.sys):t.ids?PLANS.filter(p=>t.ids.includes(p.id)):PLANS; const cats=[...new Set(list.map(p=>p.cat))];
   h.innerHTML=`<div class="why">Chaque animation montre le plan type d'une ouverture : les ruptures, les cases clés, les pièces à échanger. À la fin, tu peux jouer la position contre Maia.</div>`+
     cats.map(c=>`<h2 class="sec">${c}</h2>`+list.filter(p=>p.cat===c).map(p=>`<div class="card" data-pl="${p.id}"><div class="sw k ${p.side}"></div><div class="body"><div class="t">${p.title}</div><div class="s">${p.sub} · ${p.steps.length} étapes</div></div><div class="go">›</div></div>`).join('')).join('');
   h.querySelectorAll('.card[data-pl]').forEach(el=>el.onclick=()=>go({s:'plan',id:el.dataset.pl,i:0}));

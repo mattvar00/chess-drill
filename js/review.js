@@ -125,6 +125,7 @@ function renderReview(h,t){
   $('#htitle').textContent=`${g.res==='W'?'Victoire':g.res==='D'?'Nulle':'Défaite'} contre ${g.opp}`;
   const cnt=k=>A.counts[k]||0;
   h.innerHTML=`<div class="rvhead"><div><b>${A.acc[me]??'–'}</b><span>ta précision</span></div><div><b>${A.acc[me==='w'?'b':'w']??'–'}</b><span>${g.opp} (${g.oppElo})</span></div><div class="rvon">${ecoName(g)||''}<br><span class="dim">${new Date(g.t*1000).toLocaleDateString('fr-FR')} · ${g.tc}</span></div></div>
+  ${(()=>{ const st=gameStructure(g); return st&&STRUCT[st.id]?`<button class="lnk stchip" id="rvSt">Structure : ${STRUCT[st.id].name} ›</button>`:''; })()}
   <div class="why" id="rvStatus"></div>
   <div class="rvcnt">${['brilliant','great','best','excellent','good','inacc','mistake','miss','blunder'].map(k=>cnt(k)?`<span class="rvk ${k}" title="${RV_CLASS[k][0]}">${RV_CLASS[k][1]} ${cnt(k)} <small>${RV_CLASS[k][0].toLowerCase()}</small></span>`:'').join('')}</div>
   <div class="rvmain"><div class="rvleft"><div class="rvboardwrap"><div class="rvbar"><b id="rvBar"></b></div><div class="plb rvb"><div class="plgrid" id="rvG"></div><svg class="plarr" viewBox="0 0 800 800"><defs><marker id="rvah" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs><g id="rvA"></g></svg></div></div>
@@ -149,6 +150,7 @@ function renderReview(h,t){
   $('#rvF').onclick=()=>{ t.i=0; draw(); }; $('#rvP').onclick=()=>go2(-1); $('#rvN').onclick=()=>go2(1); $('#rvL').onclick=()=>{ t.i=n; draw(); };
   const kb=e=>{ if(!document.getElementById('rvG')){ document.removeEventListener('keydown',kb); return; } if(e.key==='ArrowRight') go2(1); if(e.key==='ArrowLeft') go2(-1); }; document.addEventListener('keydown',kb);
   const dv=$('#rvDev'); if(dv) dv.onclick=()=>openGame(g.id);
+  const rs=$('#rvSt'); if(rs) rs.onclick=()=>go({s:'struct',id:gameStructure(g).id});
   $('#rvSpar').onclick=()=>startSpar(A.F[t.i],me,`${g.opp} · coup ${Math.floor(t.i/2)+1}`);
   function draw(){
     const fen=A.F[t.i]; const B=rvBoard(fen); const flip=me==='b'; const r=t.i>0?A.R[t.i-1]:null; const nx=A.R[t.i];
