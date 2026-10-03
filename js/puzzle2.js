@@ -48,7 +48,7 @@ function solved(viaSolution,altHead){
   paintActions();
 }
 window.startFault=function(i){ _startFault(i); if(cur&&cur.kind==='fault'){ const F=cur.F; evbar(F.played.wp_before,F.best.score); puzzleDifficulty(cur.key,F).then(p=>{ if(p==null||!cur||cur.F!==F||cur.solved) return; $('#coach').insertAdjacentHTML('beforeend',`<p class="why diff">${diffLabel(p)}</p>`); }); } };
-async function equivalent(F,m){ try{ await engineInit(); const c=new Chess(F.fen); c.move(m); const e=await ENGINE.main.eval(c.fen(),12,500,1); const w=WP(e.cp,e.mate); const mine=F.side==='w'?w:100-w; return mine>=(F.played.wp_before||50)-4?mine:null; }catch(e){ return null; } }
+async function equivalent_unused(F,m){ try{ await engineInit(); const c=new Chess(F.fen); c.move(m); const e=await ENGINE.main.eval(c.fen(),12,500,1); const w=WP(e.cp,e.mate); const mine=F.side==='w'?w:100-w; return mine>=(F.played.wp_before||50)-4?mine:null; }catch(e){ return null; } }
 window.diffLabel=p=>{ const pc=Math.round(100*p); const lvl=p>=0.3?'facile':p>=0.1?'moyenne':'difficile'; return `Difficulté pour ton niveau : <b>${lvl}</b> (environ ${pc} % des joueurs de ton niveau trouvent ce coup).`; };
 window.puzzleDifficulty=async function(key,F){ const s=P.fault[key]; if(s&&s.pm!=null) return s.pm; if(typeof MAIA==='undefined'||!MAIA.ready) return null;
   try{ const elo=+(P.settings.myElo||1800); const [r]=await maiaEval([F.fen],elo,elo); const p=r.policy[F.best.uci]||0; P.fault[key]=Object.assign(P.fault[key]||{}, {pm:p}); save(); return p; }catch(e){ return null; } };
@@ -57,19 +57,25 @@ window.faultMove=function(m){
   if(uci===F.best.uci){ game.move(m); lastMove=m; flash(m.to,'good'); render(); paintMoves();
     schedulePos(cur.key,cur.tries===1?'good':'ok',cur.tries); if(WOOD&&cur.tries===1) WOOD.solved++;
     solved(false); return; }
-  if(uci!==F.played.uci&&!cur.checking){ /* un autre coup peut être aussi bon : on demande au moteur */
-    cur.checking=true; locked=true; paintCoach(`<div class="lead">${m.san}…</div><p class="why">Vérification au moteur.</p>`);
-    equivalent(F,m).then(w=>{ cur.checking=false; if(!cur||cur.F!==F) return;
-      if(w!=null){ game.move(m); lastMove=m; flash(m.to,'good'); render(); paintMoves(); schedulePos(cur.key,cur.tries===1?'good':'ok',cur.tries); if(WOOD&&cur.tries===1) WOOD.solved++;
-        solved(false,`<div class="lead ok">Aussi bon : ${m.san}</div><p class="why">Ton coup garde tes chances à ${Math.round(w)} %. Le moteur préférait ${F.best.san}, voici pourquoi :</p>`); return; }
-      locked=false; render(); flash(m.to,'bad'); paintCoach(`<div class="lead bad">${m.san} : non</div><p class="why">${hintFor(F.theme)}</p>`); paintActions(); });
-    return; }
-  render(); flash(m.to,'bad');
-  if(uci===F.played.uci) paintCoach(`<div class="lead bad">${F.played.san} : c'est le coup de ta partie</div><p>Il faisait passer tes chances de ${Math.round(F.played.wp_before)} % à ${Math.round(F.played.wp_after)} %.${F.played.refut?' L\'adversaire répond '+F.played.refut+'.':''}</p><p class="why">Cherche mieux.</p>`);
-  else if(F.second&&uci===F.second.uci) paintCoach(`<div class="lead bad">${F.second.san} : pas le meilleur</div><p class="why">Il existe plus fort. Réessaie.</p>`);
-  else paintCoach(`<div class="lead bad">${m.san} : non</div><p class="why">${hintFor(F.theme)}</p>`);
-  paintActions();
+  /* mauvais coup (ou coup à vérifier) : on le JOUE sur l'échiquier, on explique, puis on revient à la position */
+  if(cur.checking) return;
+  cur.checking=true; locked=true; const mv=game.move(m); lastMove=mv; selected=null; legal=[]; render(); paintMoves();
+  paintCoach(`<div class="lead">${m.san}…</div><p class="why">Le moteur vérifie ton coup.</p>`);
+  judge(F,m).then(j=>{ if(!cur||cur.F!==F){ return; } cur.checking=false;
+    if(j&&j.ok){ flash(m.to,'good'); schedulePos(cur.key,cur.tries===1?'good':'ok',cur.tries); if(WOOD&&cur.tries===1) WOOD.solved++;
+      solved(false,`<div class="lead ok">Aussi bon : ${m.san}</div><p class="why">Ton coup garde tes chances à ${Math.round(j.w)} %. Le moteur préférait ${F.best.san}, voici pourquoi :</p>`); return; }
+    flash(m.to,'bad');
+    const isGame=uci===F.played.uci;
+    const why=j?`Tes chances tomberaient à ${Math.round(j.w)} % (contre ${Math.round(F.played.wp_before)} % avec le bon coup)${j.reply?`, car l'adversaire répondrait <b>${j.reply}</b>${j.cap?' et prendrait '+j.cap:''}`:''}.`:'Ce n\'est pas le bon coup.';
+    paintCoach(`<div class="lead bad">✗ ${m.san}${isGame?' : c\'est le coup de ta partie':' : pas le bon coup'}</div><p>${why}</p><p class="why">${hintFor(F.theme)} La position revient, réessaie.</p>`);
+    evbar(j?j.w:F.played.wp_after, '');
+    setTimeout(()=>{ if(!cur||cur.F!==F||cur.solved) return; game=new Chess(F.fen); lastMove=null; locked=false; render(); paintMoves(); evbar(F.played.wp_before,F.best.score); },1700);
+    paintActions(); });
 };
+/* évalue la position après le coup du joueur : accepté s'il garde les chances à 4 points près */
+async function judge(F,m){ try{ await engineInit(); const c=new Chess(F.fen); c.move(m); const e=await ENGINE.main.eval(c.fen(),12,500,1); const w=WP(e.cp,e.mate); const mine=F.side==='w'?w:100-w;
+  let reply=null, cap=null; if(e.best){ const t=new Chess(c.fen()); const r=t.move({from:e.best.slice(0,2),to:e.best.slice(2,4),promotion:e.best[4]}); if(r){ reply=r.san; if(r.captured&&typeof rvLe==='function') cap=rvLe(r.captured)+' en '+r.to; } }
+  return {w:mine, ok:m.from+m.to+(m.promotion||'')!==F.played.uci&&mine>=(F.played.wp_before||50)-4, reply, cap}; }catch(e){ return null; } }
 window.showSolution=function(){ const F=cur.F; if(cur.solved) return; schedulePos(cur.key,'fail',cur.tries); solved(true); };
 /* boutons : on n'enchaîne plus tout seul, « Suivant » reste explicite */
 const _paintActions=window.paintActions;
