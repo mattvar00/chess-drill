@@ -65,12 +65,14 @@ function solved(viaSolution,altHead){
   if(!viaSolution&&window.SFX) SFX.good();
   paintActions();
 }
+window._solved=(a,b)=>solved(a,b);
 window.startFault=function(i){ _startFault(i); if(cur&&cur.kind==='fault'){ const F=cur.F; evbar(F.played.wp_before,F.best.score); puzzleDifficulty(cur.key,F).then(p=>{ if(p==null||!cur||cur.F!==F||cur.solved) return; $('#coach').insertAdjacentHTML('beforeend',`<p class="why diff">${diffLabel(p)}</p>`); }); } };
 async function equivalent_unused(F,m){ try{ await engineInit(); const c=new Chess(F.fen); c.move(m); const e=await ENGINE.main.eval(c.fen(),12,500,1); const w=WP(e.cp,e.mate); const mine=F.side==='w'?w:100-w; return mine>=(F.played.wp_before||50)-4?mine:null; }catch(e){ return null; } }
 window.diffLabel=p=>{ const pc=Math.round(100*p); const lvl=p>=0.3?'facile':p>=0.1?'moyenne':'difficile'; return `Difficulté pour ton niveau : <b>${lvl}</b> (environ ${pc} % des joueurs de ton niveau trouvent ce coup).`; };
 window.puzzleDifficulty=async function(key,F){ const s=P.fault[key]; if(s&&s.pm!=null) return s.pm; if(typeof MAIA==='undefined'||!MAIA.ready) return null;
   try{ const elo=+(P.settings.myElo||1800); const [r]=await maiaEval([F.fen],elo,elo); const p=r.policy[F.best.uci]||0; P.fault[key]=Object.assign(P.fault[key]||{}, {pm:p}); save(); return p; }catch(e){ return null; } };
 window.faultMove=function(m){
+  if(cur.free){ freeMove(m); return; }
   const F=cur.F; const uci=m.from+m.to+(m.promotion||''); cur.tries++;
   if(uci===F.best.uci){ game.move(m); lastMove=m; flash(m.to,'good'); render(); paintMoves();
     schedulePos(cur.key,cur.tries===1?'good':'ok',cur.tries); if(WOOD&&cur.tries===1) WOOD.solved++;
@@ -98,7 +100,9 @@ window.showSolution=function(){ const F=cur.F; if(cur.solved) return; schedulePo
 /* boutons : on n'enchaîne plus tout seul, « Suivant » reste explicite */
 const _paintActions=window.paintActions;
 window.paintActions=function(){ if(!cur||cur.kind!=='fault'){ _paintActions(); return; }
-  const a=$('#actions'); a.innerHTML=cur.solved?`<button id="bPlayOn">Jouer la suite contre Maia</button><button id="bNext" class="pri">Suivant ›</button>`:`<button id="bHint">Indice</button><button id="bSol">Solution</button><button id="bNext" class="pri">Suivant ›</button>`;
+  if(cur.free){ paintFreeActions(); return; }
+  const a=$('#actions'); a.innerHTML=cur.solved?`<button id="bFree" class="pri2">Explorer librement</button><button id="bPlayOn">Jouer contre Maia</button><button id="bNext" class="pri">Suivant ›</button>`:`<button id="bHint">Indice</button><button id="bSol">Solution</button><button id="bNext" class="pri">Suivant ›</button>`;
+  const bf=$('#bFree'); if(bf) bf.onclick=()=>startFree();
   const po=$('#bPlayOn'); if(po) po.onclick=()=>{ const c=new Chess(cur.F.fen); c.move({from:cur.F.best.uci.slice(0,2),to:cur.F.best.uci.slice(2,4),promotion:cur.F.best.uci[4]}); startSpar(c.fen(),cur.F.side,'Suite de l\'exercice'); };
   const bh=$('#bHint'); if(bh) bh.onclick=hint; const bs=$('#bSol'); if(bs) bs.onclick=showSolution;
   $('#bNext').onclick=()=>{ const n=cur.i+1; if(WOOD){ woodNext(); return; } if(queueNext()) return; if(cur.key&&cur.key.startsWith('R:')){ back(); return; } if(n<allFaults().length) startFault(n); else back(); };
@@ -107,3 +111,32 @@ window.paintActions=function(){ if(!cur||cur.kind!=='fault'){ _paintActions(); r
 const _startBranch=window.startBranch; window.startBranch=function(){ evbar(null); return _startBranch.apply(this,arguments); };
 if(window.startSpar){ const _ss=window.startSpar; window.startSpar=function(){ evbar(null); return _ss.apply(this,arguments); }; }
 })();
+
+/* ---------- Exploration libre après l'exercice (à la Lichess) ----------
+   Tu joues les coups des deux camps ; chaque position est évaluée et le meilleur coup est montré. */
+function startFree(){ const v=cur.view; cur.free={start:game.fen(), hist:[], i:0, ev:{}}; locked=false; selected=null; legal=[];
+  paintCoach(`<div class="lead">Exploration libre</div><p class="why">Joue les coups que tu veux, pour les deux camps. Le moteur évalue chaque position et montre son meilleur coup.</p><div id="freeInfo" class="freeinfo"></div><div id="freeLine" class="solline"></div>`);
+  paintActions(); freeEval(); }
+function freeFen(){ const c=new Chess(cur.free.start); for(let k=0;k<cur.free.i;k++) c.move(cur.free.hist[k]); return c; }
+function freeShow(){ const c=freeFen(); game=c; const h=cur.free.hist; lastMove=cur.free.i?(()=>{ const t=new Chess(cur.free.start); let m=null; for(let k=0;k<cur.free.i;k++) m=t.move(h[k]); return m; })():null; selected=null; legal=[]; render(); freePaint(); freeEval(); }
+function freeMove(m){ const F=cur.F; const f=cur.free; f.hist=f.hist.slice(0,f.i); const mv=game.move(m); f.hist.push(mv.san); f.i=f.hist.length; lastMove=mv; render(); freePaint(); freeEval(); }
+function freePaint(){ const f=cur.free; const el=$('#freeLine'); if(!el) return; const c=new Chess(f.start); const n0=parseInt(f.start.split(' ')[5]); let w=f.start.split(' ')[1]==='w', n=n0;
+  el.innerHTML=f.hist.length?f.hist.map((san,k)=>{ const lab=(w?n+'.':(k===0?n+'…':''))+san; if(!w) n++; w=!w; return `<span class="sm done ${k===f.i-1?'cur':''}" data-k="${k+1}">${lab}</span>`; }).join(' '):'<span class="dim">Joue un coup sur l\'échiquier.</span>';
+  el.querySelectorAll('.sm').forEach(x=>x.onclick=()=>{ f.i=+x.dataset.k; freeShow(); }); }
+let freeTok=0;
+async function freeEval(){ const f=cur.free; if(!f) return; const fen=game.fen(); const tok=++freeTok; const info=$('#freeInfo'); if(info) info.innerHTML='<span class="dim">Le moteur réfléchit…</span>';
+  document.querySelectorAll('#board .sq.hint').forEach(e=>e.classList.remove('hint'));
+  const g2=new Chess(fen); if(g2.game_over()){ if(info) info.innerHTML=g2.in_checkmate()?'<b>Échec et mat.</b>':'<b>Partie nulle.</b>'; return; }
+  try{ await engineInit(); const e=await ENGINE.main.eval(fen,13,600,1); if(tok!==freeTok||!cur||!cur.free) return;
+    const w=WP(e.cp,e.mate); const mine=cur.F.side==='w'?w:100-w; evbar(mine,''); const t=new Chess(fen); const bm=e.best?t.move({from:e.best.slice(0,2),to:e.best.slice(2,4),promotion:e.best[4]}):null;
+    const sg=cur.F.side==='w'?1:-1; const sc=e.mate!=null?(e.mate*sg>0?`tu mates en ${Math.abs(e.mate)}`:`mat contre toi en ${Math.abs(e.mate)}`):(((e.cp*sg)>=0?'+':'')+((e.cp*sg)/100).toFixed(1)+' pour toi');
+    const pv=[]; if(bm){ const t2=new Chess(fen); for(const u of (e.full||e.pv).slice(0,6)){ const mm=t2.move({from:u.slice(0,2),to:u.slice(2,4),promotion:u[4]}); if(!mm) break; pv.push(mm.san); } }
+    if(info) info.innerHTML=`Tes chances : <b>${Math.round(mine)} %</b> <span class="dim">(${sc})</span>${bm?`<br>Meilleur coup ${t.turn()==='w'?'des Noirs':'des Blancs'} ici : <b>${bm.san}</b> <span class="dim">${pv.slice(1).join(' ')}</span>`:''}`;
+    if(bm){ [bm.from,bm.to].forEach(s=>{ const el=sqEl(s); if(el) el.classList.add('hint'); }); }
+  }catch(err){ if(info) info.innerHTML='<span class="dim">Moteur indisponible.</span>'; } }
+function paintFreeActions(){ const a=$('#actions'); a.innerHTML=`<button id="fBack">↩ Annuler</button><button id="fFwd">↪</button><button id="fReset">⟲ Position de départ</button><button id="fQuit">Fin de l'exploration</button><button id="bNext" class="pri">Suivant ›</button>`;
+  $('#fBack').onclick=()=>{ if(cur.free.i>0){ cur.free.i--; freeShow(); } };
+  $('#fFwd').onclick=()=>{ if(cur.free.i<cur.free.hist.length){ cur.free.i++; freeShow(); } };
+  $('#fReset').onclick=()=>{ cur.free.i=0; cur.free.hist=[]; game=new Chess(cur.F.fen); cur.free.start=cur.F.fen; lastMove=null; render(); freePaint(); freeEval(); };
+  $('#fQuit').onclick=()=>{ cur.free=null; freeTok++; locked=true; document.querySelectorAll('#board .sq.hint').forEach(e=>e.classList.remove('hint')); _solved(false,`<div class="lead">${cur.F.best.san}</div>`); };
+  $('#bNext').onclick=()=>{ cur.free=null; freeTok++; const n=cur.i+1; if(WOOD){ woodNext(); return; } if(queueNext()) return; if(cur.key&&cur.key.startsWith('R:')){ back(); return; } if(n<allFaults().length) startFault(n); else back(); }; }

@@ -313,3 +313,5 @@ a.lnk{color:var(--brass);align-self:center;margin-left:auto}
 .solline .sm{padding:2px 5px;border-radius:5px;cursor:pointer;color:var(--mute)}
 .solline .sm.done{color:var(--ink)}.solline .sm.me.done{color:var(--brass)}.solline .sm.cur{background:var(--panel2);outline:1px solid var(--brass)}
 .solinfo{margin-top:6px;font-size:13px;color:var(--mute)}.solinfo b{color:var(--ink)}
+.freeinfo{margin-top:8px;font-size:14px;line-height:1.5}
+#actions button.pri2{border-color:var(--brass);color:var(--brass)}

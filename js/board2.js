@@ -61,7 +61,8 @@ function animate(from,to){
 }
 window.flash=function(sq,cls){ const el=sqEl(sq); if(!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); if(cls==='bad') SFX.bad(); };
 
-function canMove(){ return !(locked||!game||!cur||cur.mode==='explore'||game.turn()!==orient); }
+const mover=()=>(cur&&cur.free)?game.turn():orient;
+function canMove(){ if(cur&&cur.free) return !(locked||!game); return !(locked||!game||!cur||cur.mode==='explore'||game.turn()!==orient); }
 function select(sq){ selected=sq; legal=game.moves({square:sq,verbose:true}); }
 function tryMove(to){ const m=legal.find(x=>x.to===to); if(!m) return false;
   let mv=m; if(m.flags.includes('p')){ mv=legal.find(x=>x.to===to&&x.promotion==='q')||m; } /* promotion : dame par défaut */
@@ -69,7 +70,7 @@ function tryMove(to){ const m=legal.find(x=>x.to===to); if(!m) return false;
 window.tap=function(sq){
   if(!canMove()) return; const p=game.get(sq);
   if(selected&&selected!==sq&&tryMove(sq)) return;
-  if(p&&p.color===orient&&selected!==sq) select(sq); else { selected=null; legal=[]; }
+  if(p&&p.color===mover()&&selected!==sq) select(sq); else { selected=null; legal=[]; }
   render();
 };
 function onDown(ev,sq){
@@ -78,7 +79,7 @@ function onDown(ev,sq){
   if(!canMove()) return;
   const p=game.get(sq);
   if(selected&&selected!==sq&&legal.some(x=>x.to===sq)){ ev.preventDefault(); tryMove(sq); return; }
-  if(!p||p.color!==orient){ selected=null; legal=[]; render(); return; }
+  if(!p||p.color!==mover()){ selected=null; legal=[]; render(); return; }
   ev.preventDefault();
   const wasSel=selected===sq; select(sq); render();
   const el=sqEl(sq); const img=el.querySelector('img'); if(!img) return;
