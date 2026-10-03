@@ -308,3 +308,8 @@ a.lnk{color:var(--brass);align-self:center;margin-left:auto}
 .rvhum{margin-top:8px;font-size:13px;color:var(--mute)}.rvhum b{color:var(--ink)}
 .diffchip{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);margin-left:6px;font-weight:500}.diffchip.e{color:var(--ok);border-color:var(--ok)}.diffchip.m{color:#d9b84a;border-color:#d9b84a}.diffchip.h{color:#e08a3c;border-color:#e08a3c}
 .coach .diff{margin-top:6px}
+.solbtn{display:flex;gap:6px;flex-wrap:wrap}
+.solline{margin-top:8px;font-family:var(--mono);font-size:13.5px;line-height:1.9}
+.solline .sm{padding:2px 5px;border-radius:5px;cursor:pointer;color:var(--mute)}
+.solline .sm.done{color:var(--ink)}.solline .sm.me.done{color:var(--brass)}.solline .sm.cur{background:var(--panel2);outline:1px solid var(--brass)}
+.solinfo{margin-top:6px;font-size:13px;color:var(--mute)}.solinfo b{color:var(--ink)}

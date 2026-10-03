@@ -26,7 +26,7 @@ function makeEngine(){
         if(stm==='b'){ if(cp!==null) cp=-cp; if(mate!==null) mate=-mate; }
         lines[k]={cp,mate,pv}; if(k===1) last=lines[1];
       } else if(s.startsWith('bestmove')){ clearTimeout(wd); E.handler=null;
-        const best=s.split(' ')[1]; const a=lines[2]; res({cp:last?last.cp:0, mate:last?last.mate:null, best:best==='(none)'?null:best, pv:last?last.pv.slice(0,6):[], alt:a?{uci:a.pv[0],cp:a.cp,mate:a.mate}:null}); } };
+        const best=s.split(' ')[1]; const a=lines[2]; res({cp:last?last.cp:0, mate:last?last.mate:null, best:best==='(none)'?null:best, pv:last?last.pv.slice(0,6):[], full:last?last.pv:[], alt:a?{uci:a.pv[0],cp:a.cp,mate:a.mate}:null}); } };
     E.lastFen=fen; E.fail=err=>{ clearTimeout(wd); E.handler=null; rej(err); };
     E.w.postMessage('position fen '+cleanFen(fen)); E.w.postMessage(`go depth ${depth} movetime ${movetime}`);
   });
