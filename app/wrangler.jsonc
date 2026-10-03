@@ -1,0 +1,12 @@
+{
+  // Site statique servi par Cloudflare Workers (assets) : pas de code serveur pour l'instant.
+  // Le fichier dist/_headers (copié depuis public/) ajoute COOP/COEP → Stockfish multicœur.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "chess-drill",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  },
+  "observability": { "enabled": true }
+}
