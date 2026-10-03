@@ -4,7 +4,7 @@ const RV_NAME={p:'pion',n:'cavalier',b:'fou',r:'tour',q:'dame',k:'roi'};
 const RV_FEM={r:1,q:1};
 const rvLe=t=>(RV_FEM[t]?'la ':'le ')+RV_NAME[t], rvUn=t=>(RV_FEM[t]?'une ':'un ')+RV_NAME[t];
 const RV_CLASS={brilliant:['Brillant','!!'],great:['Très fort','!'],best:['Meilleur coup','★'],excellent:['Excellent','✓'],good:['Bon','✓'],book:['Théorie','📖'],inacc:['Imprécision','?!'],mistake:['Erreur','?'],miss:['Occasion manquée','✕'],blunder:['Gaffe','??'],forced:['Forcé','□']};
-function rvMat(n){ n=Math.round(n); if(n<=0) return ''; return n===1?'un pion':n===2?'deux pions':n===3?'une pièce':n===4?'une pièce et un pion':n===5?'une tour (ou la qualité et plus)':n>=9?'la dame ou plus':n+' points de matériel'; }
+function rvMat(n){ n=Math.round(n); if(n<=0) return ''; return n===1?'un pion':n===2?'deux pions':n===3?'une pièce':n===4?'une pièce et un pion':n===5?'une tour':n>=9?'la dame ou plus':n+' points de matériel'; }
 
 /* --- géométrie : cases attaquées (sans tenir compte des clouages) --- */
 function rvBoard(fen){ const B={}; fen.split(' ')[0].split('/').forEach((row,ri)=>{ let f=0; for(const ch of row){ if(/\d/.test(ch)){ f+=+ch; continue; } B['abcdefgh'[f]+(8-ri)]={c:ch===ch.toUpperCase()?'w':'b',t:ch.toLowerCase()}; f++; } }); return B; }
