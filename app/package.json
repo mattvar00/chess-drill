@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "vitest run && tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:fast": "vite build"
   },
   "dependencies": {
     "chess.js": "^1.0.0"
@@ -18,5 +19,8 @@
     "vite": "^6.0.0",
     "vitest": "^2.1.0",
     "fake-indexeddb": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
