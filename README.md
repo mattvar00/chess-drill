@@ -92,3 +92,9 @@ Trois statuts par système : **joué** (tes lignes réelles : seules elles gén�
 
 ## Plans animés
 `js/plans-data.js` : 14 animations (Sveshnikov ×4, Alapin pion isolé, Meran, Anti-Meran, contre le Londres, Slave 3.Nc3 ×3, contre 1…e6, Nimzo 4.Qc2 ×2). Chaque plan = une ligne (SAN, vérifiée au moteur, aucune perte > ~0,5 pion) + des étapes `{p: demi-coups joués, a: flèches, h: cases clés, c: explication}`. Idées paraphrasées des sources listées dans chaque plan. Accès : Entraîner → Plans animés, bouton « Voir les plans » d'un système, bouton « Voir le plan » en fin de ligne. « Jouer contre Maia » lance le sparring depuis l'étape affichée.
+
+## Itération 1 (v9) — fondations et fluidité
+- `js/board2.js` remplace le plateau : glisser-déposer (souris et tactile) en plus du clic-clic, animation des coups (roque compris), sons synthétisés (coup, prise, échec, roque, erreur, réussite ; réglable dans ⚙), promotion en dame par défaut.
+- L'échiquier tient toujours dans la hauteur de l'écran ; listes centrées (860 px) sur ordinateur.
+- Drill : retour positif après chaque bon coup (« ✓ coup · réponse »), son de fin de ligne.
+- Cohérence : textes de systèmes périmés corrigés, références aux anciennes parties retirées ; les déviations ne sont plus comptées sur toutes les lignes d'un système mais sur la ligne concernée ; la carte joueur se calcule sur les 100 dernières parties analysées (stable quelle que soit la période) ; invitation à activer la synchro.

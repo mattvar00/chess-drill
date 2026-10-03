@@ -81,9 +81,9 @@ function renderProfile(h){
   let html=filterBar();
   if(ts.warn) html+=`<div class="intro tilt warn"><b>Aujourd'hui : ${ts.n} parties</b>${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}. Stop : tes chutes d'Elo viennent des longues séries.</div>`;
   if(!pr.n){ h.innerHTML=html+`<div class="intro">Aucune partie sur la période. Onglet Parties → Mettre à jour.</div>`; bindProf(h); return; }
-  const SG=Object.values(P.games).filter(g=>g.ev&&g.st&&!P.ignored[g.id]&&tcOk(g)&&inPeriod(g)).sort((a,b)=>b.t-a.t).slice(0,150);
+  const SG=Object.values(P.games).filter(g=>g.ev&&g.st&&!P.ignored[g.id]&&tcOk(g)).sort((a,b)=>b.t-a.t).slice(0,100);
   if(SG.length>=STYLE_MIN){ try{ const st=computeStyle(SG); html+=renderStyleCard(st); }catch(e){ console.warn(e); } }
-  else html+=`<div class="intro"><b>Ta carte joueur apparaîtra ici</b> dès que ${STYLE_MIN} parties de la période seront analysées au moteur (${SG.length} pour l'instant).</div><button id="pUpd" class="pri big">Mettre à jour et analyser</button>`;
+  else html+=`<div class="intro"><b>Ta carte joueur apparaîtra ici</b> dès que ${STYLE_MIN} parties seront analysées au moteur (${SG.length} pour l'instant).</div><button id="pUpd" class="pri big">Mettre à jour et analyser</button>`;
   html+=radar(pr);
   html+=`<details class="grp"><summary>Détails : Elo, axes, toi contre tes pairs</summary>`;
   if(SG.length>=STYLE_MIN){ try{ html+=`<h2 class="sec">Toi contre tes pairs</h2>`+renderStyleTable(computeStyle(SG)); }catch(e){} }

@@ -228,7 +228,8 @@ function paintCoach(html){
     const br=cur.br; if(cur.ply>=br.moves.length){finishRep();return;}
     const note=br.notes[cur.ply]; const prev=cur.lastNote?`<p class="why">${cur.lastNote}</p>`:'';
     if(cur.ply<=1) c.innerHTML=`<div class="lead you">À toi de jouer</div><p class="why">${cur.sys.resume}</p>`;
-    else c.innerHTML=`<div class="lead you">À toi de jouer${note?' <span class="tag b">coup clé</span>':''}</div>${prev||'<p class="why">Continue la ligne.</p>'}`;
+    else { const mine=cur.br.moves[cur.ply-2]; const ok=mine&&cur.steps[cur.ply-2]==='ok';
+      c.innerHTML=`<div class="lead you">À toi de jouer${note?' <span class="tag b">coup clé</span>':''}</div>${ok?`<p class="okline">✓ ${mine.san} · ${cur.br.moves[cur.ply-1].san} répond</p>`:''}${prev||(ok?'':'<p class="why">Continue la ligne.</p>')}`; }
   } else {
     const F=cur.F; if(cur.solved) return;
     c.innerHTML=`<div class="lead you">${F.side==='w'?'Les Blancs jouent':'Les Noirs jouent'} — trouve le coup</div><p class="why">${F.phase.charAt(0).toUpperCase()+F.phase.slice(1)}, ${matPhrase(F.mat)}. Thème : ${F.theme.toLowerCase()}. ${hintFor(F.theme)}</p>`;
@@ -260,7 +261,8 @@ function repMove(m){
   if(uci===want.uci){
     game.move(m); lastMove=m; if(!cur.steps[cur.ply]) cur.steps[cur.ply]='ok'; flash(m.to,'good');
     cur.lastNote=br.notes[cur.ply]||null; cur.wrongHere=0; cur.hintLevel=0;
-    if(cur.lastNote) paintCoach(`<div class="lead ok">${want.san}</div><p>${cur.lastNote}</p>`);
+    if(cur.lastNote) paintCoach(`<div class="lead ok">✓ ${want.san}</div><p>${cur.lastNote}</p>`);
+    else if(cur.ply+1<br.moves.length) paintCoach(`<div class="lead ok">✓ ${want.san}</div><p class="why">${['Exact.','Bien joué.','C\'est la ligne.','Juste.','Parfait.'][cur.ply%5]}</p>`);
     cur.ply++; render(); paintMoves(); paintStepper();
     if(cur.ply>=br.moves.length){finishRep();return;}
     locked=true; setTimeout(autoReply,450);
@@ -286,6 +288,7 @@ function skipToTheory(){
 function finishRep(){
   if(cur.finished) return; cur.finished=true; locked=true;
   if(cur.readonly){ locked=true; return; }
+  if(window.SFX) SFX.done();
   if(cur.planId){ const pid=cur.planId, e=cur.errs; P.planDone=P.planDone||{}; P.planDone[pid]={t:Date.now(),errs:e}; save();
     $('#coach').innerHTML=`<div class="done"><div class="big">${e===0?'Ligne jouée sans faute':e+' erreur'+(e>1?'s':'')+' sur la ligne'}</div><div class="sub">Tu es arrivé à la position clé. Voyons maintenant le plan, étape par étape.</div></div>`;
     $('#actions').innerHTML=`<button id="bPlanGo" class="pri">Voir le plan animé</button><button id="bPlanAgain">Rejouer la ligne</button>`;
@@ -346,6 +349,7 @@ function renderSettings(h){
   h.innerHTML=`<div class="intro"><b>Pseudo chess.com.</b></div><div class="fetch"><input id="sUser" value="${P.settings.user||''}" placeholder="pseudo chess.com" autocapitalize="off" autocorrect="off"><button id="sUserSave" class="pri">OK</button></div>
   ${syncSection()}
   <div id="sMsg" class="why"></div>
+  <div class="intro"><b>Sons.</b> Bruit des coups, des prises et des erreurs.</div><div class="sysbar"><button id="sSound" class="${P.settings.sound===false?'sec':''}">${P.settings.sound===false?'Sons coupés · activer':'Sons activés · couper'}</button></div>
   <div class="intro"><b>Garde-fou.</b> Au-delà de ce nombre de parties par jour, l'app te dit d'arrêter.</div>
   <div class="fetch"><select id="sLim">${[6,8,10,12,15,20].map(d=>`<option ${+(P.settings.dayLimit||12)===d?'selected':''} value="${d}">${d} parties / jour</option>`).join('')}</select><button id="sLimSave" class="pri">OK</button></div>
   <details class="grp"><summary>Avancé : moteur, Maia, sauvegarde, proxy</summary>
@@ -361,6 +365,7 @@ function renderSettings(h){
   <div class="intro"><b>Proxy chess.com (optionnel).</b> Si les fetch directs échouent (CORS/429), déploie <code>proxy/worker.js</code> sur Cloudflare Workers (gratuit) et colle son URL ici. L'app essaie d'abord en direct, puis via le proxy.</div>
   <div class="fetch"><input id="sProxy" value="${P.settings.proxy||''}" placeholder="https://chess-drill.xxx.workers.dev" autocapitalize="off"><button id="sProxySave" class="pri">Enregistrer</button></div>
   <div class="intro"><b>Déploiement.</b> Ce dossier est un site statique : pousse-le tel quel sur GitHub Pages (index.html à la racine). L'API chess.com exige http(s) — en local, lance <code>python -m http.server</code> dans le dossier.</div></details>`;
+  $('#sSound').onclick=()=>{ P.settings.sound=P.settings.sound===false; save(); renderSettings(h); if(P.settings.sound!==false&&window.SFX) SFX.move(); };
   $('#sUserSave').onclick=()=>{ P.settings.user=$('#sUser').value.trim(); save(); $('#sMsg').textContent='Pseudo enregistré.'; };
   bindSync(h,()=>renderSettings(h));
   $('#sExp').onclick=exportProgress;

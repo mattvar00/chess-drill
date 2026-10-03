@@ -101,7 +101,7 @@ function renderStyleCard(st){
   const c=styleCard(st); const cl=v=>v>=80?'hi':v<=68?'lo':'';
   const A=[['RYT','rythme',c.att.RYT],['TAC','tactique',c.att.TAC],['PRÉ','préparation',c.att.PRE],['DÉF','défense',c.att.DEF],['CON','conversion',c.att.CON],['MEN','mental',c.att.MEN]];
   const S=[['Attaque tactique',c.sub.TATT],['Défense tactique',c.sub.TDEF],['Positionnel',c.sub.POS],['Activité',c.sub.ATQ],['Finale',c.sub.FIN],['Pendule',c.sub.PEN]];
-  return `<div class="pcard"><div class="pc-top"><div class="pc-ovr"><b>${c.ovr}</b><span>${c.code}</span><small>${P.settings.user||''}</small></div><div class="pc-id"><div class="pc-type">${c.type}</div><div class="pc-sub">${st.n} parties · 75 = tes adversaires (${st.oppElo})</div></div></div>
+  return `<div class="pcard"><div class="pc-top"><div class="pc-ovr"><b>${c.ovr}</b><span>${c.code}</span><small>${P.settings.user||''}</small></div><div class="pc-id"><div class="pc-type">${c.type}</div><div class="pc-sub">Tes ${st.n} dernières parties analysées · 75 = le niveau de tes adversaires (${st.oppElo})</div></div></div>
   <div class="pc-att">${A.map(([k,l,v])=>`<div><span>${k} <i>${l}</i></span><b class="${cl(v)}">${v}</b></div>`).join('')}</div>
   <div class="pc-subs">${S.map(([l,v])=>`<span>${l} <b class="${cl(v)}">${v}</b></span>`).join('')}</div>
   <div class="pc-traits">${c.good.map(([t,d])=>`<span class="tr good" title="${d}">${t}</span>`).join('')}${c.bad.map(([t,d])=>`<span class="tr bad" title="${d}">${t}</span>`).join('')}</div>

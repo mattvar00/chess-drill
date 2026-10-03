@@ -53,9 +53,11 @@ function renderToday(h){
   let html='';
   if(ts.warn) html+=`<div class="intro tilt warn"><b>${ts.n} parties aujourd'hui${ts.streak>=2?`, ${ts.streak} défaites d'affilée`:''}.</b> Pas de nouvelle partie : entraîne-toi.</div>`;
   /* mini-carte */
-  const SG=Object.values(P.games).filter(g=>g.ev&&g.st&&!P.ignored[g.id]&&tcOk(g)&&inPeriod(g)).sort((a,b)=>b.t-a.t).slice(0,150);
+  const SG=Object.values(P.games).filter(g=>g.ev&&g.st&&!P.ignored[g.id]&&tcOk(g)).sort((a,b)=>b.t-a.t).slice(0,100);
   if(SG.length>=STYLE_MIN){ try{ const c=styleCard(computeStyle(SG)); const id='mc'+Date.now(); setTimeout(()=>{ const el=document.getElementById(id); if(el) el.onclick=()=>root('prof'); },0);
     html+=`<div class="minicard" id="${id}"><b>${c.ovr}</b><div><div class="t">${c.type}</div><div class="s">${[...c.good.slice(0,2).map(x=>'<span class="ok">'+x[0]+'</span>'),...c.bad.slice(0,2).map(x=>'<span class="bad">'+x[0]+'</span>')].join(' · ')}</div></div><div class="go">›</div></div>`; }catch(e){} }
+  if(typeof syncOn==='function'&&!syncOn()&&!P.settings.syncHide){ const id='sy'+Date.now(); setTimeout(()=>{ const el=document.getElementById(id); if(!el) return; el.querySelector('.go2').onclick=()=>go({s:'settings'}); el.querySelector('.x').onclick=()=>{ P.settings.syncHide=true; save(); el.remove(); }; },0);
+    html+=`<div class="intro syncinv" id="${id}"><b>Tes données restent sur cet appareil.</b> Active la synchro pour retrouver tes analyses sur ton téléphone et ton ordi. <button class="lnk go2">Activer</button><button class="lnk x" aria-label="Masquer">✕</button></div>`; }
   html+=updBox();
   html+=`<h2 class="sec">À faire</h2>`; let n=0;
   if(due.length){ n++; html+=item('pri','↻',`Réviser ${due.length} ligne${due.length>1?'s':''}`,'Répétition espacée du répertoire',()=>startDrill(due,'Révision')); }

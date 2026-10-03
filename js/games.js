@@ -127,7 +127,8 @@ function recomputeBranchStats(){
   const cut=Date.now()-60*864e5; // 60 derniers jours
   for(const id in P.games){ const g=P.games[id]; if(g.t*1000<cut||P.ignored[id]||!tcOk(g)) continue;
     const br=g.a.branches||[]; br.forEach(b=>{ const s=brState(b); s.freq=(s.freq||0)+1; P.br[b]=s; });
-    if(g.a.status==='dev') br.forEach(b=>{ const s=brState(b); s.devs=(s.devs||0)+1; P.br[b]=s; });
+    if(g.a.status==='dev'){ const exp=new Set((g.a.expected||[]).map(e=>e.uci)); let tgt=br.filter(b=>BR[b]&&BR[b].br.moves[g.a.ply]&&exp.has(BR[b].br.moves[g.a.ply].uci)); if(!tgt.length) tgt=br.slice(0,1);
+      tgt.forEach(b=>{ const s=brState(b); s.devs=(s.devs||0)+1; P.br[b]=s; }); }
   }
 }
 
