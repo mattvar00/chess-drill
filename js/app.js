@@ -99,14 +99,16 @@ function renderFaults(h){
 function woodStart(n){ const L=allFaults(); let ids=L.map(x=>x.key); if(n&&n<ids.length) ids=ids.sort(()=>Math.random()-0.5).slice(0,n);
   WOOD={start:Date.now(),elapsed:0,solved:0,n:ids.length,ids,i:0,mode:FMODE}; woodSave(); startFault(faultIndex(ids[0])); }
 function woodResume(){ const WC=P.woodCur; if(!WC) return; FMODE=WC.mode||'all'; WOOD={start:Date.now(),elapsed:WC.elapsed,solved:WC.solved,n:WC.ids.length,ids:WC.ids,i:WC.i,mode:FMODE}; startFault(faultIndex(WC.ids[WC.i])); }
-function woodSave(){ if(!WOOD) return; P.woodCur={ids:WOOD.ids,i:WOOD.i,solved:WOOD.solved,elapsed:WOOD.elapsed+(Date.now()-WOOD.start),mode:WOOD.mode||'all'}; save(); }
+const woodEl=()=>WOOD?WOOD.elapsed+(WOOD.start?Date.now()-WOOD.start:0):0;
+function woodHold(){ if(WOOD&&WOOD.start){ WOOD.elapsed+=Date.now()-WOOD.start; WOOD.start=null; } }
+function woodSave(){ if(!WOOD) return; P.woodCur={ids:WOOD.ids,i:WOOD.i,solved:WOOD.solved,elapsed:woodEl(),mode:WOOD.mode||'all'}; save(); }
 function woodPause(){ if(WOOD){ woodSave(); WOOD=null; } }
 function faultIndex(key){ return Math.max(0, allFaults().findIndex(x=>x.key===key)); }
-function woodNext(){ WOOD.i++; if(WOOD.i<WOOD.n){ woodSave(); startFault(faultIndex(WOOD.ids[WOOD.i])); } else woodEnd(); }
+function woodNext(){ if(!WOOD.start) WOOD.start=Date.now(); WOOD.i++; if(WOOD.i<WOOD.n){ woodSave(); startFault(faultIndex(WOOD.ids[WOOD.i])); } else woodEnd(); }
 let WOOD=null; const fmtT=ms=>{ const s=Math.round(ms/1000); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; };
-function woodTick(){ if(!WOOD||!cur||cur.kind!=='fault') return; $('#branchtag').textContent=`Woodpecker ${WOOD.i+1}/${WOOD.n} · ${fmtT(WOOD.elapsed+Date.now()-WOOD.start)}`; }
+function woodTick(){ if(!WOOD||!cur||cur.kind!=='fault') return; $('#branchtag').textContent=`Woodpecker ${WOOD.i+1}/${WOOD.n} · ${fmtT(woodEl())}${WOOD.start?'':' · pause'}`; }
 setInterval(woodTick,1000);
-function woodEnd(){ const c={date:Date.now(),time:WOOD.elapsed+Date.now()-WOOD.start,solved:WOOD.solved,n:WOOD.n,mode:WOOD.mode||'all'}; P.wood=(P.wood||[]).concat([c]); P.woodCur=null; save(); const W=P.wood.filter(x=>(x.mode||'all')===c.mode); const prev=W[W.length-2]; WOOD=null;
+function woodEnd(){ const c={date:Date.now(),time:woodEl(),solved:WOOD.solved,n:WOOD.n,mode:WOOD.mode||'all'}; P.wood=(P.wood||[]).concat([c]); P.woodCur=null; save(); const W=P.wood.filter(x=>(x.mode||'all')===c.mode); const prev=W[W.length-2]; WOOD=null;
   $('#coach').innerHTML=`<div class="done"><div class="big">Cycle terminé · ${fmtT(c.time)}</div><div class="sub">${c.solved}/${c.n} du premier coup${prev?` · précédent : ${fmtT(prev.time)}, ${prev.solved}/${prev.n}`:''}</div></div>`;
   $('#actions').innerHTML=`<button id="bWoodAgain" class="pri">Refaire un cycle</button><button id="bWoodTen">10 au hasard</button><button id="bWoodBack">Retour</button>`;
   $('#bWoodAgain').onclick=()=>woodStart(); $('#bWoodTen').onclick=()=>woodStart(10); $('#bWoodBack').onclick=back; locked=true; }

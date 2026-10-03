@@ -290,3 +290,17 @@ button.lnk{background:none;border:0;color:var(--brass);padding:2px 4px;font:inhe
 .rvm sup{font-size:9px;margin-left:1px}.rvm.blunder{color:var(--bad)}.rvm.mistake,.rvm.miss{color:#e08a3c}.rvm.inacc{color:#d9b84a}.rvm.brilliant,.rvm.great{color:#4fc3d9}
 a.lnk{color:var(--brass);align-self:center;margin-left:auto}
 .rvk small{opacity:.8;font-size:11px}
+
+/* ---------- v11 : exercices avec barre d'évaluation et solution navigable ---------- */
+#drill .bwrap{display:flex;gap:6px;align-items:stretch;width:min(100%,calc(100dvh - 210px));margin:0 auto}
+@media(max-width:899px){#drill .bwrap{width:min(100%,calc(100dvh - 250px))}}
+#drill .bwrap .board{width:auto;flex:1;min-width:0;margin:0}
+.evbar{width:14px;flex:none;border-radius:4px;background:#2a2a2a;position:relative;overflow:hidden}
+.evbar b{position:absolute;left:0;right:0;bottom:0;background:#f2efe6;transition:height .3s}
+.evbar span{position:absolute;left:0;right:0;bottom:2px;text-align:center;font-size:8px;color:#333;font-weight:700;z-index:2;writing-mode:vertical-rl;transform:rotate(180deg)}
+.evbar.hidden{display:none}
+.solnav{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.solnav button{min-height:36px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);color:var(--ink);padding:4px 12px}
+.solnav button.on{border-color:var(--brass);color:var(--brass)}
+.solnav .pos{font-family:var(--mono);font-size:12.5px;color:var(--mute)}
+.coach .why2{margin:6px 0 0;line-height:1.5}
