@@ -98,3 +98,11 @@ Trois statuts par système : **joué** (tes lignes réelles : seules elles gén�
 - L'échiquier tient toujours dans la hauteur de l'écran ; listes centrées (860 px) sur ordinateur.
 - Drill : retour positif après chaque bon coup (« ✓ coup · réponse »), son de fin de ligne.
 - Cohérence : textes de systèmes périmés corrigés, références aux anciennes parties retirées ; les déviations ne sont plus comptées sur toutes les lignes d'un système mais sur la ligne concernée ; la carte joueur se calcule sur les 100 dernières parties analysées (stable quelle que soit la période) ; invitation à activer la synchro.
+
+## Itération 2 (v10) — revue de partie et commentaires
+`js/review.js`. Onglet Parties → toucher une partie ouvre sa revue :
+- précision des deux joueurs (formule Lichess), décompte des coups par classe, précision par phase ;
+- classification en 11 classes : théorie, forcé, brillant (sacrifice juste), très fort (seul coup qui garde l'avantage), meilleur, excellent, bon, imprécision, erreur, occasion manquée (après une gaffe adverse non punie), gaffe ; une « gaffe » qui laisse encore nettement gagnant est rétrogradée ;
+- échiquier avec barre d'évaluation, badge de classe sur la case d'arrivée, flèche verte du coup qu'il fallait jouer, graphique cliquable, moments clés, liste de coups cliquable, flèches du clavier ;
+- **commentaires en français générés par règles** (aucune IA) : ce que fait le coup (prise, échec, fourchette, clouage, attaque d'une pièce non défendue, développement, centre, colonne ouverte, pion passé, pion avancé devant le roi), la réfutation quand le coup est mauvais (mat, pièce laissée en prise, matériel perdu sur la ligne du moteur), le coup qu'il fallait jouer et pourquoi (prise, menace, gain de matériel, mat), et le temps de réflexion d'une gaffe jouée vite ;
+- « Retrouver le bon coup » transforme la position en exercice ; « Rejouer d'ici contre Maia » ; « Corriger la déviation » pour les parties sorties du répertoire.

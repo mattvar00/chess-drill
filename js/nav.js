@@ -1,6 +1,6 @@
 /* ---------- navigation : pile d'écrans, bouton retour, barre du bas ---------- */
 const NAV=[]; const ROOTS=['today','train','games','prof'];
-const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',plans:'Plans animés',plan:'',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
+const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',review:'',plans:'Plans animés',plan:'',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
 function navTop(){ return NAV[NAV.length-1]; }
 function go(entry){ NAV.push(entry); try{ history.pushState({n:NAV.length},''); }catch(e){} renderNav(); }
 function replaceTop(entry){ NAV[NAV.length-1]=entry; renderNav(); }
@@ -32,6 +32,7 @@ function renderNav(){
     case 'faults': FMODE='all'; renderFaults(h); break;
     case 'forced': FMODE='forced'; renderFaults(h); break;
     case 'plans': renderPlans(h); break;
+    case 'review': renderReview(h,t); break;
     case 'plan': renderPlan(h,t); break;
     case 'games': renderGames(h); break;
     case 'prof': renderProfile(h); break;

@@ -79,6 +79,7 @@ function renderBranches(h,blId,syId){
 }
 let FMODE='all';
 function allFaults(){
+  if(FMODE==='retry') return RETRY;
   if(FMODE==='forced') return forcedFaults();
   const base=DATA.faults.map((F,i)=>({key:'d'+i,F,src:'base'}));
   const gen=[]; Object.values(P.games).sort((a,b)=>b.t-a.t).forEach(g=>{ (P.gfaults[g.id]||[]).forEach(F=>gen.push({key:F.id,F,src:'game'})); });

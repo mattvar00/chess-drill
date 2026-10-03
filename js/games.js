@@ -169,7 +169,7 @@ function renderGames(h){
   const t=navTop(); if(t&&t.sync){ t.sync=false; if(!UPD.running) setTimeout(updateAll,50); }
   const gf=$('#gFile'); if(gf) gf.onchange=e=>{ const f=e.target.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ $('#gPgn').value=r.result; ingestPgnText(); }; r.readAsText(f); };
   const gp=$('#gPgnGo'); if(gp) gp.onclick=ingestPgnText; const sc=$('#scGo'); if(sc) sc.onclick=doScout;
-  h.querySelectorAll('.card[data-g]').forEach(el=>el.onclick=ev=>{ if(ev.target.closest('.ign')) return; openGame(el.dataset.g); });
+  h.querySelectorAll('.card[data-g]').forEach(el=>el.onclick=ev=>{ if(ev.target.closest('.ign')) return; go({s:'review',id:el.dataset.g}); });
   h.querySelectorAll('.ign').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); const id=b.dataset.g; P.ignored[id]=!P.ignored[id]; recomputeBranchStats(); save(); renderGames(h); });
 }
 /* nom d'ouverture lisible, depuis l'URL ECO de chess.com */
