@@ -69,8 +69,11 @@ function rvAnalyse(g){
     let k = legalN===1?'forced' : i<book?'book' : loss<0.5&&isBest?'best' : loss<2?'excellent' : loss<5?'good' : loss<10?'inacc' : loss<20?'mistake' : 'blunder';
     if(k==='blunder'&&wa>=60) k=wa>=70?'inacc':'mistake'; else if(k==='mistake'&&wa>=70) k='inacc';
     const prevOppBl=i>0&&R[i-1]&&R[i-1].loss>=20; if(prevOppBl&&loss>=10&&k!=='blunder') k='miss'; else if(prevOppBl&&loss>=20) k='blunder';
-    if((k==='best'||k==='excellent')&&i>=book){ /* sacrifice juste ? */ const after=ev[i+1]; const ml=rvLineMat(F[i+1],after.p&&after.p.length?after.p:[after.b],me,2); if(ml<=-2&&wa>=45&&wb<92) k='brilliant'; else if(k==='best'&&wb<60&&wa>=60) k='great'; }
-    R.push({i,m,me,wb,wa,loss,k,t:oppT[i]});
+    let only=false; if(ev[i].b2&&isBest){ const w2=WP(ev[i].c2,ev[i].m2); const s2=me==='w'?w2:100-w2; only=(wb-s2)>=15; }
+    if((k==='best'||k==='excellent')&&i>=book){ /* sacrifice juste et difficile à trouver ? seul coup ? */ const after=ev[i+1]; const ml=rvLineMat(F[i+1],after.p&&after.p.length?after.p:[after.b],me,2);
+      const mp=g._mp&&g._mp[i]; const hard=mp==null||mp<0.12;
+      if(ml<=-2&&wa>=45&&wb<92&&hard) k='brilliant'; else if(isBest&&only&&wb<97) k='great'; }
+    R.push({i,m,me,wb,wa,loss,k,t:oppT[i],only});
   }
   const acc=c2=>{ const L=R.filter(r=>r.me===c2&&r.k!=='book'&&r.k!=='forced'); if(!L.length) return null; const a=L.reduce((s,r)=>s+r.loss,0)/L.length; return Math.round(Math.max(0,Math.min(100,103.1668*Math.exp(-0.04354*a)-3.1669))); };
   const npcs=f=>f.split(' ')[0].replace(/[^nbrqNBRQ]/g,'').length;
@@ -89,7 +92,8 @@ function rvComment(g,r){
   if(r.k==='book') { out.push('Coup de théorie.'); return out.join(' '); }
   if(r.k==='forced') { out.push('Le seul coup légal.'); return out.join(' '); }
   if(r.k==='brilliant') out.push('Un sacrifice juste : le matériel donné revient avec intérêt.');
-  if(r.k==='great') out.push('Le seul coup qui garde l\'avantage.');
+  if(r.k==='great') out.push('C\'était le seul bon coup : tous les autres perdaient nettement.');
+  if(g._mp&&g._mp[i]!=null&&(r.k==='brilliant'||r.k==='great')) out.push(`Seuls ${Math.round(100*g._mp[i])} % des joueurs de ton niveau le trouvent.`);
   if(r.loss>=10){
     out.push(`${your} chances passent de ${Math.round(r.wb)} % à ${Math.round(r.wa)} %.`);
     const after=ev[i+1]; const pv=after.p&&after.p.length?after.p:[after.b]; const rep=rvPvSan(A.F[i+1],pv,4);
@@ -121,6 +125,7 @@ function renderReview(h,t){
   $('#htitle').textContent=`${g.res==='W'?'Victoire':g.res==='D'?'Nulle':'Défaite'} contre ${g.opp}`;
   const cnt=k=>A.counts[k]||0;
   h.innerHTML=`<div class="rvhead"><div><b>${A.acc[me]??'–'}</b><span>ta précision</span></div><div><b>${A.acc[me==='w'?'b':'w']??'–'}</b><span>${g.opp} (${g.oppElo})</span></div><div class="rvon">${ecoName(g)||''}<br><span class="dim">${new Date(g.t*1000).toLocaleDateString('fr-FR')} · ${g.tc}</span></div></div>
+  <div class="why" id="rvStatus"></div>
   <div class="rvcnt">${['brilliant','great','best','excellent','good','inacc','mistake','miss','blunder'].map(k=>cnt(k)?`<span class="rvk ${k}" title="${RV_CLASS[k][0]}">${RV_CLASS[k][1]} ${cnt(k)} <small>${RV_CLASS[k][0].toLowerCase()}</small></span>`:'').join('')}</div>
   <div class="rvmain"><div class="rvleft"><div class="rvboardwrap"><div class="rvbar"><b id="rvBar"></b></div><div class="plb rvb"><div class="plgrid" id="rvG"></div><svg class="plarr" viewBox="0 0 800 800"><defs><marker id="rvah" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="context-stroke"/></marker></defs><g id="rvA"></g></svg></div></div>
     <div class="plctl"><button id="rvF">⏮</button><button id="rvP">‹</button><button id="rvN">›</button><button id="rvL">⏭</button></div>
@@ -162,13 +167,35 @@ function renderReview(h,t){
     const e=g.ev[t.i]; const evTxt=e?(e.m!=null?'M'+Math.abs(e.m):((e.c>=0?'+':'')+(e.c/100).toFixed(1))):'';
     if(!r){ $('#rvC').innerHTML=`<div class="lead">Position de départ</div><p class="why">Avance avec › ou touche un moment clé. Les flèches vertes montrent le coup qu'il fallait jouer.</p>`; $('#rvAct').innerHTML=''; return; }
     const lab=RV_CLASS[r.k];
-    $('#rvC').innerHTML=`<div class="rvlab ${r.k}"><span>${lab[1]}</span>${Math.floor(r.i/2)+1}${r.i%2?'…':'.'} ${r.m.san} · ${lab[0]}<i>${evTxt}</i></div><p>${rvComment(g,r)}</p>${nx&&r.me!==g.color&&false?'':''}`;
+    $('#rvC').innerHTML=`<div class="rvlab ${r.k}"><span>${lab[1]}</span>${Math.floor(r.i/2)+1}${r.i%2?'…':'.'} ${r.m.san} · ${lab[0]}<i>${evTxt}</i></div><p>${rvComment(g,r)}</p><div class="rvhum" id="rvHum"></div>`;
+    rvHuman(g,t.i);
     const mine=r.me===g.color;
     $('#rvAct').innerHTML=mine&&r.loss>=10&&g.ev[r.i].b?`<button id="rvRetry" class="pri">Retrouver le bon coup</button>`:'';
     const rb=$('#rvRetry'); if(rb) rb.onclick=()=>rvRetry(g,r);
   }
   draw();
+  if(!g.deepDone) rvDeep(g,()=>{ if(document.getElementById('rvG')&&navTop()&&navTop().id===g.id) renderReview(h,t); });
+  else $('#rvStatus').textContent=g.deepN?`Moments clés vérifiés en profondeur (${g.deepN}).`:'';
 }
+/* vérifie en profondeur les moments clés (erreurs, gaffes, coups brillants) puis recalcule la revue */
+async function rvDeep(g,cb){
+  const A=rvAnalyse(g); const L=A.R.filter(r=>r.loss>=10||r.k==='brilliant'||r.k==='great').sort((a,b)=>b.loss-a.loss).slice(0,6);
+  const idx=[...new Set(L.flatMap(r=>[r.i,r.i+1]))].filter(j=>g.ev[j]&&!g.ev[j].deep&&g.ev[j].b);
+  const st=$('#rvStatus'); if(!idx.length){ g.deepDone=true; return; }
+  try{ for(let k=0;k<idx.length;k++){ if(st) st.textContent=`Vérification en profondeur des moments clés… ${k+1}/${idx.length}`; const j=idx[k]; const d=await deepEval(A.F[j]); if(d) g.ev[j]=d; else g.ev[j].deep=1; } }
+  catch(e){ if(st) st.textContent=''; return; }
+  g.deepDone=true; g.deepN=idx.length; g._rv=null; save();
+  if(typeof MAIA!=='undefined'&&MAIA.ready) await rvMaiaProbs(g);
+  cb&&cb();
+}
+/* probabilité (Maia, à ton niveau) de trouver les coups brillants ou « seuls coups » */
+async function rvMaiaProbs(g){ try{ const A=rvAnalyse(g); const C=A.R.filter(r=>r.me===g.color&&(r.k==='brilliant'||r.k==='great')); if(!C.length) return;
+  const elo=+(P.settings.myElo||1800); const ev=await maiaEval(C.map(r=>A.F[r.i]),elo,elo); g._mp=g._mp||{}; C.forEach((r,k)=>{ g._mp[r.i]=ev[k].policy[r.m.from+r.m.to+(r.m.promotion||'')]||0; }); g._rv=null; }catch(e){} }
+/* chances entre humains de ton niveau (tête de valeur de Maia) */
+async function rvHuman(g,i){ const el=document.getElementById('rvHum'); if(!el) return;
+  if(typeof MAIA==='undefined'||!MAIA.ready){ el.innerHTML=`<button class="lnk" id="rvHumGo">Voir tes chances entre humains (Maia)</button>`; $('#rvHumGo').onclick=async()=>{ el.textContent='Chargement de Maia (45 Mo la première fois)…'; try{ await maiaInit(); await rvMaiaProbs(g); rvHuman(g,i); }catch(e){ el.textContent='Maia indisponible.'; } }; return; }
+  g._hw=g._hw||{}; if(g._hw[i]==null){ try{ const A=rvAnalyse(g); const fen=A.F[i]; const elo=+(P.settings.myElo||1800); const [r]=await maiaEval([fen],elo,elo); const stm=fen.split(' ')[1]; g._hw[i]=Math.round(100*(stm===g.color?r.win:1-r.win)); }catch(e){ return; } }
+  if(document.getElementById('rvHum')) document.getElementById('rvHum').innerHTML=`Entre deux joueurs de ton niveau, tu gagnerais cette position environ <b>${g._hw[i]} %</b> du temps (Maia).`; }
 /* « Retrouver le bon coup » : la position devient un exercice (même écran que les fautes) */
 let RETRY=[];
 function rvRetry(g,r){

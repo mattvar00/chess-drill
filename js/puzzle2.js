@@ -39,20 +39,31 @@ function paintSolNav(){ const v=cur.view; if(!v) return; const L=v.L[v.which]; c
   $('#snP').onclick=()=>{ v.k=Math.max(0,v.k-1); showLine(); }; $('#snN').onclick=()=>{ v.k=Math.min(L.length,v.k+1); showLine(); };
   $('#snB').onclick=()=>{ v.which='best'; v.k=1; showLine(); }; $('#snG').onclick=()=>{ v.which='played'; v.k=Math.min(2,v.L.played.length); showLine(); };
 }
-function solved(viaSolution){
+function solved(viaSolution,altHead){
   const F=cur.F; cur.solved=true; locked=true; if(typeof woodHold==='function') woodHold();
   cur.view={L:lines(F),which:'best',k:1};
-  const head=viaSolution?`<div class="lead">Solution : ${F.best.san}</div>`:`<div class="lead ok">Bien joué : ${F.best.san}</div>`;
+  const head=altHead||(viaSolution?`<div class="lead">Solution : ${F.best.san}</div>`:`<div class="lead ok">Bien joué : ${F.best.san}</div>`);
   paintCoach(head+why(F)+`<div class="solnav" id="solnav"></div>`); paintSolNav(); showLine();
   if(!viaSolution&&window.SFX) SFX.good();
   paintActions();
 }
-window.startFault=function(i){ _startFault(i); if(cur&&cur.kind==='fault'){ const F=cur.F; evbar(F.played.wp_before,F.best.score); } };
+window.startFault=function(i){ _startFault(i); if(cur&&cur.kind==='fault'){ const F=cur.F; evbar(F.played.wp_before,F.best.score); puzzleDifficulty(cur.key,F).then(p=>{ if(p==null||!cur||cur.F!==F||cur.solved) return; $('#coach').insertAdjacentHTML('beforeend',`<p class="why diff">${diffLabel(p)}</p>`); }); } };
+async function equivalent(F,m){ try{ await engineInit(); const c=new Chess(F.fen); c.move(m); const e=await ENGINE.main.eval(c.fen(),12,500,1); const w=WP(e.cp,e.mate); const mine=F.side==='w'?w:100-w; return mine>=(F.played.wp_before||50)-4?mine:null; }catch(e){ return null; } }
+window.diffLabel=p=>{ const pc=Math.round(100*p); const lvl=p>=0.3?'facile':p>=0.1?'moyenne':'difficile'; return `Difficulté pour ton niveau : <b>${lvl}</b> (environ ${pc} % des joueurs de ton niveau trouvent ce coup).`; };
+window.puzzleDifficulty=async function(key,F){ const s=P.fault[key]; if(s&&s.pm!=null) return s.pm; if(typeof MAIA==='undefined'||!MAIA.ready) return null;
+  try{ const elo=+(P.settings.myElo||1800); const [r]=await maiaEval([F.fen],elo,elo); const p=r.policy[F.best.uci]||0; P.fault[key]=Object.assign(P.fault[key]||{}, {pm:p}); save(); return p; }catch(e){ return null; } };
 window.faultMove=function(m){
   const F=cur.F; const uci=m.from+m.to+(m.promotion||''); cur.tries++;
   if(uci===F.best.uci){ game.move(m); lastMove=m; flash(m.to,'good'); render(); paintMoves();
     schedulePos(cur.key,cur.tries===1?'good':'ok',cur.tries); if(WOOD&&cur.tries===1) WOOD.solved++;
     solved(false); return; }
+  if(uci!==F.played.uci&&!cur.checking){ /* un autre coup peut être aussi bon : on demande au moteur */
+    cur.checking=true; locked=true; paintCoach(`<div class="lead">${m.san}…</div><p class="why">Vérification au moteur.</p>`);
+    equivalent(F,m).then(w=>{ cur.checking=false; if(!cur||cur.F!==F) return;
+      if(w!=null){ game.move(m); lastMove=m; flash(m.to,'good'); render(); paintMoves(); schedulePos(cur.key,cur.tries===1?'good':'ok',cur.tries); if(WOOD&&cur.tries===1) WOOD.solved++;
+        solved(false,`<div class="lead ok">Aussi bon : ${m.san}</div><p class="why">Ton coup garde tes chances à ${Math.round(w)} %. Le moteur préférait ${F.best.san}, voici pourquoi :</p>`); return; }
+      locked=false; render(); flash(m.to,'bad'); paintCoach(`<div class="lead bad">${m.san} : non</div><p class="why">${hintFor(F.theme)}</p>`); paintActions(); });
+    return; }
   render(); flash(m.to,'bad');
   if(uci===F.played.uci) paintCoach(`<div class="lead bad">${F.played.san} : c'est le coup de ta partie</div><p>Il faisait passer tes chances de ${Math.round(F.played.wp_before)} % à ${Math.round(F.played.wp_after)} %.${F.played.refut?' L\'adversaire répond '+F.played.refut+'.':''}</p><p class="why">Cherche mieux.</p>`);
   else if(F.second&&uci===F.second.uci) paintCoach(`<div class="lead bad">${F.second.san} : pas le meilleur</div><p class="why">Il existe plus fort. Réessaie.</p>`);

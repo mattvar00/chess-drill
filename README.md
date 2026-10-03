@@ -112,3 +112,12 @@ Trois statuts par système : **joué** (tes lignes réelles : seules elles gén�
 
 ## Itération 3 (v12) — files intelligentes
 `js/queue.js`. Fini les compteurs qui s'accumulent : chaque mode (Fautes, Coups forcés) montre « À revoir maintenant », les 10 positions les plus utiles, triées par priorité (position due, chances perdues, récence de la partie, jamais vue, ratée plusieurs fois). Répétition espacée par position : trouvée du premier coup → revient dans 3 jours puis de plus en plus tard ; trouvée après erreur → demain ; solution affichée → demain, facilité réduite. « Commencer » enchaîne la file puis revient à la liste ; Woodpecker en cycle complet ou sur les 10 prioritaires ; toutes les positions restent consultables, avec leur échéance. Aujourd'hui et Parties affichent au plus 10 éléments par tâche.
+
+## Itération 4 (v13) — moteurs
+- **Stockfish 19 lite** (1,8 Mo au lieu de 7,3 Mo) avec **MultiPV 2** : chaque position garde aussi le 2ᵉ meilleur coup (`b2`, `c2`, `m2`).
+- **File de recherche par moteur** : les appels simultanés au même worker sont sérialisés. C'était la cause des plantages « unreachable » (deux revues ouvertes à la suite lançaient deux recherches en parallèle sur le même moteur).
+- **Seul coup** → classe « Très fort » quand le meilleur coup a 15 points de chances d'avance sur le 2ᵉ.
+- **Vérification en profondeur** à l'ouverture d'une revue : les moments clés (erreurs, gaffes, coups forts, jusqu'à 6) sont réévalués à profondeur +6 ; en cas d'échec, nouvel essai moins profond. Corrige les faux « gaffe » des analyses rapides.
+- **Exercices** : un coup différent de la solution est vérifié au moteur ; s'il garde les chances à 4 points près, il est accepté (« Aussi bon »).
+- **Maia** : difficulté de chaque exercice pour ton niveau (probabilité qu'un joueur de ton Elo trouve le coup : facile ≥ 30 %, moyenne ≥ 10 %, difficile), affichée et utilisée dans la priorité (les positions faciles ratées remontent) ; « Brillant » exige un sacrifice que moins de 12 % des joueurs de ton niveau trouveraient ; dans la revue, tes chances entre humains de ton niveau (tête de valeur de Maia). Maia ne se charge que si tu le demandes.
+- Hébergement : pour le Stockfish multicœur, il faudra des en-têtes COOP/COEP — Cloudflare Pages ou Netlify (fichier `_headers`) plutôt que GitHub Pages.

@@ -4,30 +4,39 @@ const ENGINE={w:null, ready:false, init:null, busy:false, cancel:false, pool:[]}
 function makeEngine(){
   const E={w:null,ready:null,handler:null};
   E.ready=new Promise((res,rej)=>{
-    try{ E.w=new Worker('js/engine/stockfish-18-lite-single.js'); }catch(e){ return rej(e); }
+    try{ E.w=new Worker('js/engine/stockfish-19-lite-single.js'); }catch(e){ return rej(e); }
     const t=setTimeout(()=>rej(new Error('moteur : délai dépassé')),60000);
     E.w.onerror=e=>rej(new Error('moteur : '+(e.message||'erreur de chargement')));
     E.w.onmessage=e=>{ const s=String(e.data);
       if(s==='uciok'){ E.w.postMessage('setoption name Hash value 16'); E.w.postMessage('isready'); }
-      else if(s==='readyok'){ clearTimeout(t); E.w.onmessage=ev=>{ if(E.handler) E.handler(String(ev.data)); }; res(E); } };
+      else if(s==='readyok'){ clearTimeout(t); E.w.onmessage=ev=>{ if(E.handler) E.handler(String(ev.data)); }; E.w.onerror=ev=>{ ev.preventDefault&&ev.preventDefault(); E.dead=true; console.warn('Stockfish a planté sur',E.lastFen,ev.message); if(E.fail) E.fail(new Error('crash')); }; res(E); } };
     E.w.postMessage('uci');
   });
-  E.eval=(fen,depth,movetime)=>new Promise((res,rej)=>{
-    let last=null; const stm=fen.split(' ')[1];
+  E.mpv=1; E.q=Promise.resolve();
+  /* une seule recherche à la fois par moteur : les appels concurrents sont mis en file */
+  E.eval=(fen,depth,movetime,multipv)=>{ const run=()=>E._eval(fen,depth,movetime,multipv); const p=E.q.then(run,run); E.q=p.catch(()=>{}); return p; };
+  E._eval=(fen,depth,movetime,multipv)=>new Promise((res,rej)=>{
+    const mpv=multipv||1; if(mpv!==E.mpv){ E.w.postMessage('setoption name MultiPV value '+mpv); E.mpv=mpv; }
+    const lines={}; let last=null; const stm=fen.split(' ')[1];
     const wd=setTimeout(()=>{ E.handler=null; rej(new Error('timeout')); }, movetime*8+8000);   // téléphone mis en veille, worker tué…
     E.handler=s=>{
       if(s.startsWith('info ')&&s.includes(' score ')&&s.includes(' pv ')){
-        const m=/ score (cp|mate) (-?\d+)/.exec(s); const pv=s.split(' pv ')[1].split(' ');
+        const m=/ score (cp|mate) (-?\d+)/.exec(s); const pv=s.split(' pv ')[1].split(' '); const k=+((/ multipv (\d+)/.exec(s)||[0,1])[1]);
         let cp=null, mate=null; if(m[1]==='cp') cp=+m[2]; else mate=+m[2];
         if(stm==='b'){ if(cp!==null) cp=-cp; if(mate!==null) mate=-mate; }
-        last={cp,mate,pv};
+        lines[k]={cp,mate,pv}; if(k===1) last=lines[1];
       } else if(s.startsWith('bestmove')){ clearTimeout(wd); E.handler=null;
-        const best=s.split(' ')[1]; res({cp:last?last.cp:0, mate:last?last.mate:null, best:best==='(none)'?null:best, pv:last?last.pv.slice(0,6):[]}); } };
-    E.w.postMessage('position fen '+fen); E.w.postMessage(`go depth ${depth} movetime ${movetime}`);
+        const best=s.split(' ')[1]; const a=lines[2]; res({cp:last?last.cp:0, mate:last?last.mate:null, best:best==='(none)'?null:best, pv:last?last.pv.slice(0,6):[], alt:a?{uci:a.pv[0],cp:a.cp,mate:a.mate}:null}); } };
+    E.lastFen=fen; E.fail=err=>{ clearTimeout(wd); E.handler=null; rej(err); };
+    E.w.postMessage('position fen '+cleanFen(fen)); E.w.postMessage(`go depth ${depth} movetime ${movetime}`);
   });
   E.kill=()=>{ try{ E.w.terminate(); }catch(e){} };
   return E;
 }
+/* Stockfish 19 (WASM) plante sur une case en passant impossible : on ne la garde que si une prise en passant existe */
+function cleanFen(fen){ const f=fen.split(' '); if(f[3]==='-') return fen; const file=f[3].charCodeAt(0)-97, stm=f[1]; const rows=f[0].split('/'); const rank=stm==='w'?5:4; const row=rows[8-rank]; let x=0; const cells=[];
+  for(const ch of row){ if(/\d/.test(ch)){ for(let k=0;k<+ch;k++) cells.push(''); } else cells.push(ch); }
+  const pawn=stm==='w'?'P':'p'; if(cells[file-1]!==pawn&&cells[file+1]!==pawn) f[3]='-'; return f.join(' '); }
 function engineInit(){
   if(ENGINE.init) return ENGINE.init;
   const E=makeEngine(); ENGINE.main=E;
@@ -54,7 +63,7 @@ async function analyseGameEngine(g, onProgress, E){
   for(let i=0;i<fens.length;i++){
     if(ENGINE.cancel) return false;
     const fen=fens[i]; const gameOver=(i===fens.length-1)&&(()=>{const t=new Chess(fen);return t.game_over();})();
-    ev.push(gameOver?{cp:0,mate:null,best:null,pv:[],end:true}:await E.eval(fen,depth,mt));
+    ev.push(gameOver?{cp:0,mate:null,best:null,pv:[],end:true}:await E.eval(fen,depth,mt,2));
     if(onProgress) onProgress(i+1,fens.length);
   }
   // notation de chaque coup
@@ -71,7 +80,7 @@ async function analyseGameEngine(g, onProgress, E){
     }
   }
   const acc=n?Math.round(Math.max(0,Math.min(100,103.1668*Math.exp(-0.04354*(lossSum/n))-3.1669))):null;
-  g.ev=ev.map(e=>({c:e.cp,m:e.mate,b:e.best,p:e.pv.slice(0,4)})); g.cls=cls;
+  g.ev=ev.map(e=>{ const o={c:e.cp,m:e.mate,b:e.best,p:e.pv.slice(0,4)}; if(e.alt){ o.b2=e.alt.uci; o.c2=e.alt.cp; o.m2=e.alt.mate; } return o; }); g.cls=cls;
   g.st={acc, loss:n?+(lossSum/n).toFixed(1):0, blunder:cnt.blunder, mistake:cnt.mistake, inacc:cnt.inacc, depth};
   P.gfaults[g.id]=faults.sort((a,b)=>(b.played.wp_before-b.played.wp_after)-(a.played.wp_before-a.played.wp_after)).slice(0,4);
   save(); return true;
@@ -138,4 +147,15 @@ async function analyseBatch(ids, onProgress){
   };
   tick(); await Promise.all(Array.from({length:n},lane));
   ENGINE.busy=false; if(!done&&lastErr) throw lastErr; return done;
+}
+
+/* vérification en profondeur d'une position (moteur principal) : renvoie le format compact de g.ev */
+async function deepEval(fen){
+  const base=+(P.settings.depth||12), mt=Math.max(1200,+(P.settings.movetime||350)*4);
+  /* les recherches très profondes peuvent faire planter la version WASM (pile) : on relance le moteur et on réessaie moins profond */
+  for(const [d,mpv] of [[base+6,2],[base+3,1]]){
+    try{ await engineInit(); const e=await ENGINE.main.eval(fen,d,mt,mpv); const o={c:e.cp,m:e.mate,b:e.best,p:e.pv.slice(0,4),deep:1}; if(e.alt){ o.b2=e.alt.uci; o.c2=e.alt.cp; o.m2=e.alt.mate; } return o; }
+    catch(err){ try{ ENGINE.main&&ENGINE.main.kill(); }catch(e2){} ENGINE.main=null; ENGINE.init=null; ENGINE.ready=false; }
+  }
+  return null;
 }
