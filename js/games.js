@@ -154,7 +154,7 @@ function renderGames(h){
   ${filterBar()}
   ${updBox()}
   <div class="stats"><div class="stat"><div class="n">${list.length}</div><div class="l">parties · ${an} analysées</div></div><div class="stat"><div class="n">${cov===null?'–':cov+'%'}</div><div class="l">restées dans ton répertoire</div></div><div class="stat"><div class="n">${devs.length}</div><div class="l">déviations à corriger</div></div></div>
-  ${devs.length?`<h2 class="sec">Déviations — tu as quitté ta ligne</h2>${devs.slice(0,8).map(gameCard).join('')}${devs.length>8?`<details class="grp"><summary>${devs.length-8} autres déviations</summary>${devs.slice(8).map(gameCard).join('')}</details>`:''}`:''}
+  ${devs.length?`<h2 class="sec">Déviations — tu as quitté ta ligne</h2>${devs.slice(0,QN).map(gameCard).join('')}${devs.length>QN?`<details class="grp"><summary>${devs.length-QN} autres déviations</summary>${devs.slice(QN).map(gameCard).join('')}</details>`:''}`:''}
   ${only==='dev'?'':`
   ${gaps.length?`<details class="grp"><summary>Trous — l'adversaire sort du répertoire (${gaps.length})</summary>${gaps.slice(0,30).map(gameCard).join('')}</details>`:''}
   ${softs.length?`<details class="grp"><summary>Écarts sur des lignes à apprendre (${softs.length})</summary>${softs.slice(0,20).map(gameCard).join('')}</details>`:''}

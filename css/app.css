@@ -304,3 +304,4 @@ a.lnk{color:var(--brass);align-self:center;margin-left:auto}
 .solnav button.on{border-color:var(--brass);color:var(--brass)}
 .solnav .pos{font-family:var(--mono);font-size:12.5px;color:var(--mute)}
 .coach .why2{margin:6px 0 0;line-height:1.5}
+.badge.bad2{border-color:#e08a3c;color:#e08a3c}

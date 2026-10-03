@@ -109,3 +109,6 @@ Trois statuts par système : **joué** (tes lignes réelles : seules elles gén�
 
 ## v11 — exercices plus lisibles
 `js/puzzle2.js` : barre d'évaluation à côté de l'échiquier dans les fautes, coups forcés et Woodpecker ; plus d'enchaînement automatique après une réussite (« Suivant » explicite, chrono Woodpecker en pause pendant la lecture) ; explication « Pourquoi ce coup ? » (ce qu'il fait, matériel gagné, mat, menace parée) et « Dans ta partie » (réponse adverse et matériel perdu) ; navigation ‹ › dans la solution et dans le coup de la partie, avec la barre qui suit.
+
+## Itération 3 (v12) — files intelligentes
+`js/queue.js`. Fini les compteurs qui s'accumulent : chaque mode (Fautes, Coups forcés) montre « À revoir maintenant », les 10 positions les plus utiles, triées par priorité (position due, chances perdues, récence de la partie, jamais vue, ratée plusieurs fois). Répétition espacée par position : trouvée du premier coup → revient dans 3 jours puis de plus en plus tard ; trouvée après erreur → demain ; solution affichée → demain, facilité réduite. « Commencer » enchaîne la file puis revient à la liste ; Woodpecker en cycle complet ou sur les 10 prioritaires ; toutes les positions restent consultables, avec leur échéance. Aujourd'hui et Parties affichent au plus 10 éléments par tâche.

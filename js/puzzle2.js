@@ -51,7 +51,7 @@ window.startFault=function(i){ _startFault(i); if(cur&&cur.kind==='fault'){ cons
 window.faultMove=function(m){
   const F=cur.F; const uci=m.from+m.to+(m.promotion||''); cur.tries++;
   if(uci===F.best.uci){ game.move(m); lastMove=m; flash(m.to,'good'); render(); paintMoves();
-    P.fault[cur.key]={done:true,tries:cur.tries}; save(); if(WOOD&&cur.tries===1) WOOD.solved++;
+    schedulePos(cur.key,cur.tries===1?'good':'ok',cur.tries); if(WOOD&&cur.tries===1) WOOD.solved++;
     solved(false); return; }
   render(); flash(m.to,'bad');
   if(uci===F.played.uci) paintCoach(`<div class="lead bad">${F.played.san} : c'est le coup de ta partie</div><p>Il faisait passer tes chances de ${Math.round(F.played.wp_before)} % à ${Math.round(F.played.wp_after)} %.${F.played.refut?' L\'adversaire répond '+F.played.refut+'.':''}</p><p class="why">Cherche mieux.</p>`);
@@ -59,13 +59,13 @@ window.faultMove=function(m){
   else paintCoach(`<div class="lead bad">${m.san} : non</div><p class="why">${hintFor(F.theme)}</p>`);
   paintActions();
 };
-window.showSolution=function(){ const F=cur.F; if(cur.solved) return; P.fault[cur.key]=P.fault[cur.key]||{done:false,shown:true}; save(); solved(true); };
+window.showSolution=function(){ const F=cur.F; if(cur.solved) return; schedulePos(cur.key,'fail',cur.tries); solved(true); };
 /* boutons : on n'enchaîne plus tout seul, « Suivant » reste explicite */
 const _paintActions=window.paintActions;
 window.paintActions=function(){ if(!cur||cur.kind!=='fault'){ _paintActions(); return; }
   const a=$('#actions'); a.innerHTML=`<button id="bHint" ${cur.solved?'disabled':''}>Indice</button><button id="bSol" ${cur.solved?'disabled':''}>Solution</button><button id="bNext" class="pri">Suivant ›</button>`;
   $('#bHint').onclick=hint; $('#bSol').onclick=showSolution;
-  $('#bNext').onclick=()=>{ const n=cur.i+1; if(WOOD){ woodNext(); return; } if(n<allFaults().length) startFault(n); else back(); };
+  $('#bNext').onclick=()=>{ const n=cur.i+1; if(WOOD){ woodNext(); return; } if(queueNext()) return; if(cur.key&&cur.key.startsWith('R:')){ back(); return; } if(n<allFaults().length) startFault(n); else back(); };
 };
 /* la barre ne sert qu'aux exercices */
 const _startBranch=window.startBranch; window.startBranch=function(){ evbar(null); return _startBranch.apply(this,arguments); };

@@ -47,8 +47,7 @@ function allBranchIds(){ return DATA.blocs.flatMap(b=>b.systemes.flatMap(s=>s.br
 function renderToday(h){
   const ids=allBranchIds(); const due=ids.filter(isDue);
   const list=gamesList(); const devs=list.filter(g=>g.a.status==='dev'&&!g.a.soft&&!P.ignored[g.id]&&!P.fixed[g.id]);
-  const FF=forcedFaults().filter(x=>!(P.fault[x.key]&&P.fault[x.key].done));
-  const newF=allFaults().filter(x=>x.src==='game'&&!(P.fault[x.key]&&P.fault[x.key].done));
+  const QN_=typeof QN!=='undefined'?QN:10, dc=typeof dueCount==='function'?dueCount:(L=>L.length); const fm=FMODE; FMODE='all'; const LF=allFaults(); FMODE=fm; const ffDue=Math.min(QN_,dc(forcedFaults())), fDue=Math.min(QN_,dc(LF));
   const ts=tiltStatus();
   const item=(cls,icon,t,s2,fn)=>{ const id='t'+Math.random().toString(36).slice(2,7); setTimeout(()=>{ const el=document.getElementById(id); if(el) el.onclick=fn; },0); return `<div class="card act ${cls}" id="${id}"><div class="ico">${icon}</div><div class="body"><div class="t">${t}</div><div class="s">${s2}</div></div><div class="go">›</div></div>`; };
   let html='';
@@ -62,9 +61,9 @@ function renderToday(h){
   html+=updBox();
   html+=`<h2 class="sec">À faire</h2>`; let n=0;
   if(due.length){ n++; html+=item('pri','↻',`Réviser ${due.length} ligne${due.length>1?'s':''}`,'Répétition espacée du répertoire',()=>startDrill(due,'Révision')); }
-  if(devs.length){ n++; html+=item('pri','⚠',`Corriger ${devs.length} déviation${devs.length>1?'s':''}`,'Tu as quitté ton répertoire',()=>go({s:'games',filter:'dev'})); }
-  if(FF.length){ n++; html+=item('','⚡',`${FF.length} coup${FF.length>1?'s':''} forcé${FF.length>1?'s':''} à retrouver`,'Échecs et prises que tu n\'as pas joués',()=>go({s:'forced'})); }
-  else if(newF.length){ n++; html+=item('','✕',`${newF.length} faute${newF.length>1?'s':''} à retrouver`,'Extraites de tes parties',()=>go({s:'faults'})); }
+  if(devs.length){ n++; const dn=Math.min(devs.length,QN_); html+=item('pri','⚠',`Corriger ${dn} déviation${dn>1?'s':''}`,devs.length>QN_?`Les ${QN_} plus récentes (sur ${devs.length})`:'Tu as quitté ton répertoire',()=>go({s:'games',filter:'dev'})); }
+  if(ffDue){ n++; html+=item('','⚡',`${ffDue} coup${ffDue>1?'s':''} forcé${ffDue>1?'s':''} à revoir`,'Les plus utiles d\'abord : échecs et prises que tu n\'as pas joués',()=>go({s:'forced'})); }
+  if(fDue){ n++; html+=item('','✕',`${fDue} faute${fDue>1?'s':''} à revoir`,'Tes erreurs les plus coûteuses et les plus récentes',()=>go({s:'faults'})); }
   if(!n) html+=item('pri','▶','Drill mixte · 10 lignes','Rien d\'urgent : entretiens ton répertoire',()=>startDrill(ids,'Drill mixte'));
   h.innerHTML=html; bindUpdBox();
 }
