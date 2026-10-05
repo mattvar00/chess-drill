@@ -70,9 +70,9 @@ function rvAnalyse(g){
     if(k==='blunder'&&wa>=60) k=wa>=70?'inacc':'mistake'; else if(k==='mistake'&&wa>=70) k='inacc';
     const prevOppBl=i>0&&R[i-1]&&R[i-1].loss>=20; if(prevOppBl&&loss>=10&&k!=='blunder') k='miss'; else if(prevOppBl&&loss>=20) k='blunder';
     let only=false; if(ev[i].b2&&isBest){ const w2=WP(ev[i].c2,ev[i].m2); const s2=me==='w'?w2:100-w2; only=(wb-s2)>=15; }
-    if((k==='best'||k==='excellent')&&i>=book){ /* sacrifice juste et difficile à trouver ? seul coup ? */ const after=ev[i+1]; const ml=rvLineMat(F[i+1],after.p&&after.p.length?after.p:[after.b],me,2);
+    if((k==='best'||k==='excellent')&&i>=book){ /* sacrifice juste et difficile à trouver ? seul coup ? */ const after=ev[i+1]; const rep=after.p&&after.p.length?after.p[0]:after.b; const ml=rvLineMat(F[i],[uci,rep],me,2); /* matériel après le coup ET la meilleure réponse, comparé à AVANT le coup : un simple échange vaut 0 */
       const mp=g._mp&&g._mp[i]; const hard=mp==null||mp<0.12;
-      if(ml<=-2&&wa>=45&&wb<92&&hard) k='brilliant'; else if(isBest&&only&&wb<97) k='great'; }
+      const sac=ml<=-2&&rep&&rep.slice(2,4)===m.to; /* la pièce jouée est prise : vrai sacrifice */ if(sac&&wa>=45&&wb<92&&hard) k='brilliant'; else if(isBest&&only&&wb<97) k='great'; }
     R.push({i,m,me,wb,wa,loss,k,t:oppT[i],only});
   }
   const acc=c2=>{ const L=R.filter(r=>r.me===c2&&r.k!=='book'&&r.k!=='forced'); if(!L.length) return null; const a=L.reduce((s,r)=>s+r.loss,0)/L.length; return Math.round(Math.max(0,Math.min(100,103.1668*Math.exp(-0.04354*a)-3.1669))); };
