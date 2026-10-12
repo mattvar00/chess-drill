@@ -357,7 +357,7 @@ function renderSettings(h){
   <div class="fetch"><select id="sLim">${[6,8,10,12,15,20].map(d=>`<option ${+(P.settings.dayLimit||12)===d?'selected':''} value="${d}">${d} parties / jour</option>`).join('')}</select><button id="sLimSave" class="pri">OK</button></div>
   <details class="grp"><summary>Avancé : moteur, Maia, sauvegarde, proxy</summary>
   <div class="intro"><b>Sauvegarde.</b> La progression vit dans ce navigateur. Exporte un fichier JSON pour la garder ou la transférer sur un autre appareil ; l'import fusionne (la version la plus avancée de chaque branche gagne).</div>
-  <div class="stats"><div class="stat"><div class="n">${nb}</div><div class="l">branches avec historique</div></div><div class="stat"><div class="n">${ng}</div><div class="l">parties en cache</div></div><div class="stat"><div class="n">${Object.values(P.fault).filter(x=>x.done).length}</div><div class="l">fautes trouvées</div></div></div>
+  <div class="stats"><div class="stat"><div class="n">${nb}</div><div class="l">branches avec historique</div></div><div class="stat"><div class="n">${ng}</div><div class="l">parties en cache</div></div><div class="stat"><div class="n">${Object.values(P.fault).filter(x=>x.done).length}</div><div class="l">fautes trouvées</div></div><div class="stat"><div class="n">${storageInfo().pct} %</div><div class="l">stockage utilisé</div></div></div>
   <div class="sysbar"><button id="sExp">Exporter la progression</button><button id="sImp" class="sec">Importer un fichier</button></div>
   <input type="file" id="sFile" accept="application/json" class="hidden">
   <div class="sysbar"><button id="sRean" class="sec">Réanalyser les parties</button><button id="sReset" class="sec danger">Tout effacer</button></div>

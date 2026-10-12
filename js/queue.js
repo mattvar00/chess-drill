@@ -24,7 +24,7 @@ function posCard(x,i){ const F=x.F; const drop=Math.round((F.played.wp_before||0
 window.renderFaults=function(h){
   const L=allFaults(); const n=L.length; const Q=smartQueue(L,QN); const due=dueCount(L);
   const W=(P.wood||[]).filter(c=>(c.mode||'all')===FMODE); const last=W[W.length-1]; const WC=P.woodCur&&(P.woodCur.mode||'all')===FMODE?P.woodCur:null;
-  const intro=FMODE==='forced'?`<div class="intro"><b>Coups forcés.</b> Les positions de tes parties où un échec ou une prise s'imposait et où tu as joué un coup calme. Le réflexe à prendre : <b>échecs, prises, menaces</b> avant chaque coup.</div>`
+  const intro=FMODE.startsWith('th:')?`<div class="intro"><b>${themeLabel(FMODE.slice(3))}.</b> Les positions de ce type que tu as ratées dans tes parties. Même principe que les fautes : réussie du premier coup, elle revient de plus en plus tard ; ratée, elle revient dès demain.</div>`:FMODE==='forced'?`<div class="intro"><b>Coups forcés.</b> Les positions de tes parties où un échec ou une prise s'imposait et où tu as joué un coup calme. Le réflexe à prendre : <b>échecs, prises, menaces</b> avant chaque coup.</div>`
     :`<div class="intro"><b>Fautes.</b> Tes erreurs les plus coûteuses, tirées de tes parties analysées. Une position réussie du premier coup revient plus tard, de plus en plus espacée ; une position ratée revient dès demain.</div>`;
   h.innerHTML=intro+(n?`
     <h2 class="sec">À revoir maintenant · ${Q.length}${due>Q.length?` <span class="dim">(sur ${due})</span>`:''}</h2>

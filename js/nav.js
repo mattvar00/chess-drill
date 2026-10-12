@@ -1,6 +1,6 @@
 /* ---------- navigation : pile d'écrans, bouton retour, barre du bas ---------- */
 const NAV=[]; const ROOTS=['today','train','games','prof'];
-const TITLES={today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',structs:'Plans par structure',struct:'',squiz:'',review:'',plans:'Plans animés',plan:'',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
+const TITLES={themes:'Profil par thème',tfaults:'Thème',today:'Aujourd\'hui',train:'Entraîner',blocs:'Répertoire',threats:'Adversaires réels',faults:'Fautes',forced:'Coups forcés',structs:'Plans par structure',struct:'',squiz:'',review:'',plans:'Plans animés',plan:'',games:'Parties',prof:'Progrès',settings:'Réglages',board:''};
 function navTop(){ return NAV[NAV.length-1]; }
 function go(entry){ NAV.push(entry); try{ history.pushState({n:NAV.length},''); }catch(e){} renderNav(); }
 function replaceTop(entry){ NAV[NAV.length-1]=entry; renderNav(); }
@@ -15,7 +15,7 @@ function showBoard(){ if(!navTop()||navTop().s!=='board') go({s:'board'}); else 
 function renderChrome(){
   const t=navTop(); const rootOf=NAV[0].s;
   $('#back').classList.toggle('hidden', NAV.length<=1);
-  $('#htitle').textContent = t.s==='sys'?(DATA.blocs.find(b=>b.id===t.bloc)||{}).titre||'' : t.s==='br'?((DATA.blocs.find(b=>b.id===t.bloc)||{systemes:[]}).systemes.find(s=>s.id===t.sys)||{}).titre||'' : t.s==='board'?'':(TITLES[t.s]||'');
+  $('#htitle').textContent = t.s==='tfaults'?(typeof themeLabel==='function'?themeLabel(t.th):'Thème') : t.s==='sys'?(DATA.blocs.find(b=>b.id===t.bloc)||{}).titre||'' : t.s==='br'?((DATA.blocs.find(b=>b.id===t.bloc)||{systemes:[]}).systemes.find(s=>s.id===t.sys)||{}).titre||'' : t.s==='board'?'':(TITLES[t.s]||'');
   ROOTS.forEach(r=>$('#nav-'+r).classList.toggle('on',rootOf===r));
 }
 function renderNav(){
@@ -31,6 +31,8 @@ function renderNav(){
     case 'threats': renderThreats(h); break;
     case 'faults': FMODE='all'; renderFaults(h); break;
     case 'forced': FMODE='forced'; renderFaults(h); break;
+    case 'themes': renderThemes(h); break;
+    case 'tfaults': FMODE='th:'+t.th; renderFaults(h); break;
     case 'plans': renderPlans(h); break;
     case 'review': renderReview(h,t); break;
     case 'structs': renderStructs(h); break;
@@ -81,6 +83,7 @@ function renderTrain(h){
     +item('▶','Drill mixte','10 lignes pondérées, tous blocs',()=>startDrill(ids,'Drill mixte'))
     +item('♜','Adversaires réels (Maia)','Les réponses humaines que ton répertoire ne couvre pas',()=>go({s:'threats'}))
     +`<h2 class="sec">Tactique</h2>`
+    +item('◎','Profil par thème',(()=>{ const D=window.THEMES_get&&THEMES_get(); if(!D||!D.cats.length) return ''; const c=D.cats.filter(c=>c.group==='mot'&&!['middlegame','opening','endgame'].includes(c.id)).sort((a,b)=>a.ok/a.n-b.ok/b.n)[0]; return `Ta note par situation et par motif · point faible : ${c?c.label:'—'}`; })(),()=>go({s:'themes'}))
     +item('✕','Fautes',`${L.length} positions tirées de tes parties · ${done} trouvées`,()=>go({s:'faults'}),Math.round(100*done/Math.max(1,L.length)))
     +item('♟','Plans par structure','Tes structures de pions, leurs plans, et un quiz sur tes positions',()=>go({s:'structs'}))
     +item('▦','Plans animés',`${(window.PLANS||[]).length} animations : ruptures, cases clés, pièces à échanger`,()=>go({s:'plans'}))

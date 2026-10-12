@@ -6,10 +6,58 @@ let P={br:{}, fault:{}, games:{}, gfaults:{}, ignored:{}, pref:{}, fixed:{}, set
   try{
     let raw=localStorage.getItem(KEY);
     if(!raw){ raw=localStorage.getItem(OLD_KEY); }           // migration v2 → v3
-    if(raw){ const o=JSON.parse(raw); P=Object.assign(P,o); P.br=P.br||{}; P.fault=P.fault||{}; P.games=P.games||{}; P.ignored=P.ignored||{}; P.gfaults=P.gfaults||{}; P.pref=P.pref||{}; P.fixed=P.fixed||{}; P.settings=Object.assign({user:'matt_chess00',depth:12,movetime:350},P.settings||{}); }
+    if(raw){ const o=JSON.parse(raw); unpackGames(o.games); P=Object.assign(P,o); P.br=P.br||{}; P.fault=P.fault||{}; P.games=P.games||{}; P.ignored=P.ignored||{}; P.gfaults=P.gfaults||{}; P.pref=P.pref||{}; P.fixed=P.fixed||{}; P.settings=Object.assign({user:'matt_chess00',depth:12,movetime:350},P.settings||{}); }
   }catch(e){}
 })();
-function save(){ try{ localStorage.setItem(KEY,JSON.stringify(P)); }catch(e){ console.warn('save failed',e); } }
+/* stockage compact (le format en mémoire ne change pas) :
+   - évals moteur g.ev : chaque position en chaîne "§c|m|b|pv|b2|c2|m2"
+   - pendules g.clocks : "§secondes,…" au lieu de ["0:09:58.5",…]
+   - les caches recalculables (clés "_…") ne sont pas écrits */
+const EV_KEYS=new Set(['c','m','b','p','b2','c2','m2']);
+const nz=v=>v==null?'':v;
+function evPack(e){
+  if(!e||typeof e!=='object'||Array.isArray(e)) return e;
+  for(const k in e) if(!EV_KEYS.has(k)) return e;          // champ inconnu : on garde l'objet tel quel
+  const p=e.p||[]; const b=e.b==null?'-':(e.b===p[0]?'':e.b);
+  let s='§'+nz(e.c)+'|'+nz(e.m)+'|'+b+'|'+p.join(' ');
+  if('b2' in e||'c2' in e||'m2' in e) s+='|'+(e.b2==null?'-':e.b2)+'|'+nz(e.c2)+'|'+nz(e.m2);
+  return s;
+}
+function evUnpack(s){
+  const f=s.slice(1).split('|'); const pv=f[3]?f[3].split(' '):[]; const num=x=>x===''?null:+x;
+  const o={c:num(f[0]), m:num(f[1]), b:f[2]==='-'?null:(f[2]===''?(pv[0]||null):f[2]), p:pv};
+  if(f.length>4){ o.b2=f[4]==='-'?null:f[4]; o.c2=num(f[5]); o.m2=num(f[6]); }
+  return o;
+}
+const CLK_RE=/^0:(\d\d):(\d\d)(\.\d+)?$/;
+function clkPack(a){
+  const out=[]; for(const t of a){ const m=typeof t==='string'&&CLK_RE.exec(t); if(!m) return a; out.push((+m[1]*60+ +m[2])+(m[3]||'')); }
+  return '§'+out.join(',');
+}
+function clkUnpack(s){ if(s.length<2) return []; return s.slice(1).split(',').map(t=>{ const d=t.indexOf('.'); const n=+(d<0?t:t.slice(0,d)); return '0:'+String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0')+(d<0?'':t.slice(d)); }); }
+const isPacked=v=>typeof v==='string'&&v.charCodeAt(0)===0xa7;
+function unpackGames(G){
+  for(const id in G||{}){ const g=G[id]; if(!g) continue;
+    if(Array.isArray(g.ev)) for(let i=0;i<g.ev.length;i++) if(isPacked(g.ev[i])) g.ev[i]=evUnpack(g.ev[i]);
+    if(isPacked(g.clocks)) g.clocks=clkUnpack(g.clocks); }
+}
+function packReplacer(k,v){
+  if(k&&k[0]==='_') return undefined;
+  if(k==='ev'&&Array.isArray(v)) return v.map(evPack);
+  if(k==='clocks'&&Array.isArray(v)) return clkPack(v);
+  return v;
+}
+let SAVE_FAIL=0;
+function storageWarn(msg){
+  let el=document.getElementById('storeWarn');
+  if(!el){ el=document.createElement('div'); el.id='storeWarn'; el.style.cssText='position:fixed;left:8px;right:8px;bottom:8px;z-index:9999;background:#b3261e;color:#fff;padding:10px 12px;border-radius:8px;font:14px system-ui;box-shadow:0 2px 8px #0006;cursor:pointer'; el.onclick=()=>el.remove(); if(document.body) document.body.appendChild(el); }
+  el.textContent=msg;
+}
+function save(){
+  try{ localStorage.setItem(KEY,JSON.stringify(P,packReplacer)); SAVE_FAIL=0; }
+  catch(e){ console.warn('save failed',e); if(!SAVE_FAIL++) storageWarn('⚠ Sauvegarde impossible : stockage du navigateur plein. Tes dernières analyses ne sont pas enregistrées.'); }
+}
+function storageInfo(){ const n=JSON.stringify(P,packReplacer).length; return {chars:n, pct:Math.round(100*n/5e6)}; }
 
 function brState(id){ return P.br[id]||{clean:0,runs:0,last:0,due:0,ivl:0,ease:2.5,fails:0}; }
 function isValid(id){ return brState(id).clean>=2; }
