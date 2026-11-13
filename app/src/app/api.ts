@@ -24,9 +24,13 @@ export async function sync(): Promise<{ games: number; lines: number }> {
   if (!getToken()) throw new Error("Aucun code d'accès enregistré.");
   const user = String(store.state.settings.user || 'matt_chess00');
   const newest = store.games.reduce((m, g) => Math.max(m, g.t), 0);
-  const since = newest ? newest + 1 : Math.floor(Date.now() / 1000) - 120 * 86400;
-  const games = await call<Game[]>(`/games?user=${encodeURIComponent(user)}&since=${since}`);
-  await addGames(games);
+  // Les parties reçues avant l'ajout de la courbe des chances sont redemandées une fois.
+  const stale = store.games.some(g => g.st && !g.wp);
+  const since = newest && !stale ? newest + 1 : Math.floor(Date.now() / 1000) - 120 * 86400;
+  const fetched = await call<Game[]>(`/games?user=${encodeURIComponent(user)}&since=${since}`);
+  const known = new Set(store.games.filter(g => g.wp || !g.st).map(g => g.id)), games = fetched.filter(g => !known.has(g.id));
+  const fresh = games.filter(g => !store.games.some(x => x.id === g.id)).length;
+  await addGames(games.map(g => ({ ...store.games.find(x => x.id === g.id), ...g })));
 
   // Fautes : on redemande tout ce qui est plus récent que la dernière partie déjà couverte.
   const covered = +(localStorage.getItem(FAULTS) || 0);
@@ -47,8 +51,18 @@ export async function sync(): Promise<{ games: number; lines: number }> {
   if (Object.keys(out).length) await call('/progress', { method: 'PUT', body: JSON.stringify(out) });
   const now = Date.now(); localStorage.setItem(PUSHED, String(now)); localStorage.setItem(SYNCED, String(now));
   if (lines) save();
-  return { games: games.length, lines };
+  return { games: fresh, lines };
 }
 let pending: ReturnType<typeof setTimeout> | undefined;
 /** Synchronisation en arrière-plan après un passage (silencieuse si hors ligne). */
 export function syncSoon() { if (!getToken()) return; clearTimeout(pending); pending = setTimeout(() => { sync().catch(() => { /* réessayé au prochain passage */ }); }, 4000); }
+
+/** Partie complète avec les évaluations de chaque position (pour la revue), gardée ensuite sur l'appareil. */
+export async function fullGame(id: string): Promise<Game | null> {
+  const g = store.games.find(x => x.id === id); if (!g) return null; if (g.ev?.length) return g;
+  if (!getToken() || !g.st) return g;
+  const user = String(store.state.settings.user || 'matt_chess00');
+  const full = await call<Game>(`/games/${encodeURIComponent(user)}/${encodeURIComponent(id)}`);
+  if (full.ev?.length) { const merged = { ...g, ev: full.ev }; await addGames([merged]); return merged; }
+  return g;
+}

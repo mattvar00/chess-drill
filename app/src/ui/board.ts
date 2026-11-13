@@ -37,6 +37,19 @@ export class Board {
   /** Met des cases en évidence (indice). */
   hint(squares: string[]) { this.sel = null; this.legal = []; this.render(); for (const s of squares) this.sq(s)?.classList.add('hint'); }
 
+  /**
+   * Dessine par-dessus la position (à rappeler après chaque `set`) : flèches, cases colorées, pastille sur une case.
+   * `cls` choisit la couleur (classes CSS .arr-*, .mk-*, .mvb-*).
+   */
+  overlay(o: { arrows?: { from: string; to: string; cls: string }[]; marks?: { sq: string; cls: string }[]; badge?: { sq: string; text: string; cls: string; label: string } | null }) {
+    for (const m of o.marks ?? []) this.sq(m.sq)?.classList.add('mk', 'mk-' + m.cls);
+    if (o.badge) this.sq(o.badge.sq)?.insertAdjacentHTML('beforeend', `<span class="mvb mvb-${o.badge.cls}" role="img" aria-label="${o.badge.label}">${o.badge.text}</span>`);
+    const c = (s: string): [number, number] => { const f = FILES.indexOf(s[0]), r = +s[1]; return this.orient === 'w' ? [(f + 0.5) * 100, (8 - r + 0.5) * 100] : [(7 - f + 0.5) * 100, (r - 0.5) * 100]; };
+    this.svg.innerHTML = (o.arrows ?? []).map(a => { const [x1, y1] = c(a.from), [x2, y2] = c(a.to), dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1;
+      const ex = x2 - (dx / L) * 34, ey = y2 - (dy / L) * 34, nx = -dy / L, ny = dx / L;   // la tige s'arrête sous la pointe
+      return `<g class="arr arr-${a.cls}"><line x1="${x1}" y1="${y1}" x2="${ex}" y2="${ey}"/><polygon points="${x2},${y2} ${ex + nx * 26},${ey + ny * 26} ${ex - nx * 26},${ey - ny * 26}"/></g>`; }).join('');
+  }
+  private svg!: SVGSVGElement;
   private sq(s: string) { return this.el.querySelector<HTMLElement>(`[data-sq="${s}"]`); }
   private build() {
     this.built = this.orient; this.el.innerHTML = '';
@@ -50,15 +63,18 @@ export class Board {
       d.addEventListener('pointerdown', ev => this.down(ev, sq));
       this.el.appendChild(d);
     }
+    this.svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); this.svg.setAttribute('viewBox', '0 0 800 800'); this.svg.classList.add('arrows'); this.svg.setAttribute('aria-hidden', 'true');
+    this.el.appendChild(this.svg);
   }
   private render() {
     this.el.querySelectorAll<HTMLElement>('.sq').forEach(e => {
-      const sq = e.dataset.sq!; e.querySelectorAll('img').forEach(i => i.remove());
-      e.classList.remove('sel', 'dot', 'cap', 'last', 'hint', 'hover');
+      const sq = e.dataset.sq!; e.querySelectorAll('img, .mvb').forEach(i => i.remove());
+      e.classList.remove('sel', 'dot', 'cap', 'last', 'hint', 'hover', 'mk'); e.className = e.className.replace(/\bmk-\S+/g, '').trim();
       const p = this.game.get(sq as never);
       if (p) { const img = document.createElement('img'); img.src = PIECES[p.color + p.type]; img.alt = ''; img.draggable = false; e.appendChild(img); }
       if (this.last && (sq === this.last.from || sq === this.last.to)) e.classList.add('last');
     });
+    this.svg.innerHTML = '';
     if (this.sel) { this.sq(this.sel)?.classList.add('sel'); for (const m of this.legal) this.sq(m.to)?.classList.add(m.captured ? 'cap' : 'dot'); }
   }
   private slide(from: string, to: string) {

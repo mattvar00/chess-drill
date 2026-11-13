@@ -88,7 +88,7 @@ const score = (e: RawEval, side: Color) => {
   return mate != null ? (mate > 0 ? `mat en ${mate}` : `mat en ${-mate} contre toi`) : `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
 };
 
-function buildFault(g: Pick<Game, 'id' | 'sans' | 'opp' | 't' | 'res'>, i: number, fen: string, m: Move, before: RawEval, after: RawEval, wpB: number, wpA: number): Fault | null {
+export function buildFault(g: Pick<Game, 'id' | 'sans' | 'opp' | 't' | 'res'>, i: number, fen: string, m: Move, before: RawEval, after: RawEval, wpB: number, wpA: number): Fault | null {
   const best = sanLine(fen, before.pv.length ? before.pv : [before.best!]); const bestM = best.moves[0];
   if (!bestM) return null;
   const afterPlayed = new Chess(fen); tryMove(afterPlayed, m.san);

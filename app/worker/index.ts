@@ -5,6 +5,7 @@
  */
 import type { Fault, GameStats } from '../src/core/analysis';
 import type { Game, EvalEntry } from '../src/core/types';
+import { winPct } from '../src/core/winpct';
 
 export interface Env {
   ASSETS: Fetcher; DB: D1Database;
@@ -90,9 +91,11 @@ async function api(req: Request, env: Env, ctx: ExecutionContext, url: URL): Pro
   if (p === '/api/analyse-now' && req.method === 'POST') return analyseNow(env, account, lower(((await req.json().catch(() => ({}))) as { username?: string }).username ?? null));
 
   if (p === '/api/games' && req.method === 'GET') {
-    const rows = (await env.DB.prepare('SELECT g.data, a.st, a.depth FROM games g LEFT JOIN analyses a ON a.username = g.username AND a.game_id = g.id WHERE g.username = ? AND g.t >= ? ORDER BY g.t DESC LIMIT 500')
-      .bind(user, since).all<{ data: string; st: string | null; depth: number | null }>()).results;
-    return json(rows.map(r => ({ ...JSON.parse(r.data), st: r.st ? JSON.parse(r.st) : undefined })));
+    // Pour chaque partie analysée : la courbe des chances (Blancs, 0-100) et la classe de chaque coup, assez légères pour la liste
+    // et suffisantes pour les statistiques. Les évaluations complètes restent sur /api/games/:user/:id.
+    const rows = (await env.DB.prepare('SELECT g.data, a.st, a.ev, a.cls FROM games g LEFT JOIN analyses a ON a.username = g.username AND a.game_id = g.id WHERE g.username = ? AND g.t >= ? ORDER BY g.t DESC LIMIT 500')
+      .bind(user, since).all<{ data: string; st: string | null; ev: string | null; cls: string | null }>()).results;
+    return json(rows.map(r => ({ ...JSON.parse(r.data), ...(r.st ? { st: JSON.parse(r.st), cls: JSON.parse(r.cls || '[]'), wp: (JSON.parse(r.ev || '[]') as EvalEntry[]).map(e => Math.round(winPct(e.c, e.m))) } : {}) })));
   }
   const gm = /^\/api\/games\/([^/]+)\/([^/]+)$/.exec(p);
   if (gm && req.method === 'GET') {

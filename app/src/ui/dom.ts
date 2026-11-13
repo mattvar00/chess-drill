@@ -21,6 +21,9 @@ const ICONS: Record<string, string> = {
   arrow: '<path d="M5 12h14M13 6l6 6-6 6" stroke-width="2"/>',
   calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>',
   stack: '<path d="M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5" stroke-width="2"/>',
+  pawn: '<circle cx="12" cy="6.5" r="3"/><path d="M9.5 10.5h5l1 6h-7zM6.5 20.5h11l-1.5-4h-8z"/>',
+  chart: '<path d="M4 20V4M4 20h16"/><path d="M7.5 15l3.5-4.5 3 2.5 5-6.5" stroke-width="2"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
 };
 export const icon = (name: string, cls = '') => `<svg class="ic${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] ?? ''}</svg>`;

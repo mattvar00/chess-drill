@@ -1,4 +1,4 @@
-/** Travail d'une ligne du répertoire : Drill (de mémoire) ou Explorer (ligne commentée). */
+/** Travail d'une ligne du répertoire : Drill (de mémoire) ou Voir la ligne (ligne commentée). */
 import { Chess, tryMove, uciOf, uciToObj, type Move } from '../core/chess';
 import { isValid, scheduleBranch } from '../core/schedule';
 import { isUserPly, theoryStart } from '../core/drill';
@@ -9,6 +9,7 @@ import { $, esc, icon, plural } from '../ui/dom';
 import { BR, markActive, refreshDevs, save, store } from './store';
 import { syncSoon } from './api';
 import { lineUrl, nextUrl, remaining, session } from './session';
+import { exploreButton, openExplorer, type Explorer } from './explorer';
 
 const PRAISE = ['Exact.', 'Bien joué.', "C'est la ligne.", 'Juste.', 'Parfait.'];
 type Step = 'ok' | 'bad';
@@ -17,25 +18,32 @@ let active: (() => void) | null = null;
 
 export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'explore', fromGame?: Game): () => void {
   const { br, sys, bloc } = BR[id], side = bloc.side, moves = br.moves, S = session();
-  const listUrl = `#/rep/${bloc.id}/${sys.id}`;
+  const plan = id.startsWith('plan-') ? id.slice(5) : null, listUrl = plan ? `#/plan/${plan}?vu=1` : `#/rep/${bloc.id}/${sys.id}`;
   root.innerHTML = `<div class="trainer">
     <div class="tboard"><div id="board"></div><div class="stepper" id="stepper"></div></div>
-    <div class="tside">
+    <div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">
       <div class="coach" id="coach" aria-live="polite"></div>
       <div class="explnav" id="explnav" ${mode === 'explore' ? '' : 'hidden'}>${[['first', 'Début', 'first'], ['prev', 'Coup précédent', 'back'], ['next', 'Coup suivant', 'chev'], ['last', 'Fin', 'last']].map(([to, l, i]) => `<button class="btn" data-to="${to}" aria-label="${l}">${icon(i)}</button>`).join('')}</div>
       <div class="moves" id="moves"></div>
       <div class="actions" id="actions"></div>
-    </div></div>`;
+    </div></div></div>`;
   const coach = $('#coach', root), actions = $('#actions', root), movesEl = $('#moves', root), stepper = $('#stepper', root);
 
   let game = new Chess(), ply = 0, last: Move | null = null;
   let errs = 0, wrongHere = 0, hintLevel = 0, locked = false, finished = false, lastNote: string | null = null;
   const steps: (Step | undefined)[] = []; let timer: ReturnType<typeof setTimeout> | undefined;
 
+  let X: Explorer | null = null;
   const board = new Board($('#board', root), {
-    movable: () => mode === 'drill' && !locked && !finished && game.turn() === side ? side : null,
-    onMove: m => userMove(m),
+    movable: () => X ? X.movable() : mode === 'drill' && !locked && !finished && game.turn() === side ? side : null,
+    onMove: m => X ? X.onMove(m) : userMove(m),
   });
+  /** Explorateur depuis la position affichée : la suite de la ligne, ou tes propres coups évalués par le moteur. */
+  function explore() {
+    X = openExplorer(board, $('#tmain', root), $('#xp', root), { fen: game.fen(), orient: side, lines: ply < moves.length ? [{ label: 'Suite de la ligne', sans: moves.slice(ply).map(m => m.san) }] : [] },
+      () => { X = null; show(); });
+  }
+  const bindExplore = () => { const b = actions.querySelector<HTMLButtonElement>('#bExplore'); if (b) b.onclick = explore; };
   const show = (animate = false) => board.set(game, side, last, animate);
   const apply = (i: number) => { last = tryMove(game, uciToObj(moves[i].uci)); };
   const num = (i: number) => `${Math.floor(i / 2) + 1}${i % 2 ? '…' : '.'}`;
@@ -63,9 +71,9 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     ply = target; show(forward); paintMoves();
     if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(sys.resume)}</p><p class="why">Avance avec les flèches, à l'écran ou au clavier. Les coups soulignés portent un commentaire.</p>`);
     else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)}${esc(moves[ply - 1].san)}`, note ? `<p>${esc(note)}</p>` : '<p class="why">Coup de la ligne.</p>'); }
-    actions.innerHTML = ply >= moves.length ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">Passer au drill</a>` : '';
+    actions.innerHTML = `${ply >= moves.length ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">Passer au drill</a>` : ''}${exploreButton()}`; bindExplore();
   }
-  const onKey = (e: KeyboardEvent) => { if (mode !== 'explore') return; if (e.key === 'ArrowRight') explTo(ply + 1); if (e.key === 'ArrowLeft') explTo(ply - 1); };
+  const onKey = (e: KeyboardEvent) => { if (mode !== 'explore' || X) return; if (e.key === 'ArrowRight') explTo(ply + 1); if (e.key === 'ArrowLeft') explTo(ply - 1); };
 
   /* ---------- Drill ---------- */
   function drillActions() {
@@ -114,12 +122,13 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     if (finished) return; finished = true; locked = true; SFX.done();
     const s = store.state.br[id] = scheduleBranch(store.state.br[id], errs);
     if (fromGame && errs === 0) { store.state.fixed[fromGame.id] = true; refreshDevs(); }
+    if (plan) (store.state.planDone ??= {})[plan] = { errs, at: Date.now() };
     markActive(); syncSoon(); S?.done.add(id); paintStepper();
     const when = s.ivl <= 1 ? 'demain' : `dans ${s.ivl} jours`, next = S ? nextUrl(id) : null, left = remaining().length;
     const verdict = errs === 0 ? (isValid(s) ? `Ligne validée. Prochaine révision ${when}.` : 'Encore un passage sans faute et elle est validée.')
       : errs === 1 ? `Presque. Elle revient ${s.ivl ? when : 'tout de suite'}.` : "Le compteur repart à zéro : il faut deux passages sans faute d'affilée.";
     coach.innerHTML = `<div class="done"><p class="big">${errs === 0 ? 'Ligne sans faute' : plural(errs, 'erreur')}</p><p>${verdict}</p>${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`;
-    actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">Terminer</a>` : ''}<a class="btn${next || S ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn" href="${listUrl}">Liste</a>`;
+    actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">Terminer</a>` : ''}<a class="btn${next || S || plan ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn${plan ? ' pri' : ''}" href="${listUrl}">${plan ? 'Voir le plan' : 'Liste'}</a>${exploreButton()}`; bindExplore();
     $('#bAgain', actions).onclick = e => { e.preventDefault(); remount(); };
   }
   /** Relance la même ligne (l'adresse ne change pas, donc pas de navigation). */
@@ -136,7 +145,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   const onPick = (e: Event) => { const i = (e.target as HTMLElement).closest<HTMLElement>('.m')?.dataset.i; if (mode === 'explore' && i != null) explTo(+i + 1); };
   $('#explnav', root).addEventListener('click', onNav); movesEl.addEventListener('click', onPick); document.addEventListener('keydown', onKey);
   let disposed = false;
-  function dispose() { if (disposed) return; disposed = true; clearTimeout(timer); finished = true; board.destroy(); document.removeEventListener('keydown', onKey); }
+  function dispose() { if (disposed) return; disposed = true; X?.destroy(); clearTimeout(timer); finished = true; board.destroy(); document.removeEventListener('keydown', onKey); }
   active = dispose; start();
   return () => active?.();
 }

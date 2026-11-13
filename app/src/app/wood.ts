@@ -8,6 +8,7 @@ import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
 import { markActive, save, store, woodCur, woodHistory, type WoodCur } from './store';
 import { getToken, syncSoon } from './api';
+import { exploreButton, openExplorer, sanTokens, type Explorer } from './explorer';
 
 export const GO = '#/wood/go';
 /** Début d'une variante, pour l'affichage (les lignes du moteur sont longues). */
@@ -55,23 +56,35 @@ export function viewWood(root: HTMLElement) {
   $('#bAll', root).addEventListener('click', () => startCycle('Tout le stock', all));
 }
 
-/** Écran d'exercice. `header` met à jour le titre de la page et le chronomètre ; renvoie le nettoyage. */
-export function mountExercise(root: HTMLElement, header: (title: string, sub: string, clock?: string) => void): () => void {
-  const faults = byId(); let W = woodCur();
+/**
+ * Écran d'exercice. `header` met à jour le titre de la page et le chronomètre ; renvoie le nettoyage.
+ * `one` : une seule position hors cycle (« Retrouver le bon coup » depuis la revue), puis retour à `back`.
+ */
+export function mountExercise(root: HTMLElement, header: (title: string, sub: string, clock?: string) => void, one?: { fault: Fault; back: string }): () => void {
+  const faults = one ? new Map([[one.fault.id, one.fault]]) : byId(); let W = one ? { ids: [one.fault.id], i: 0, solved: 0, elapsed: 0, label: 'Retrouver le bon coup' } : woodCur();
   if (!W || !W.ids.some(id => faults.has(id))) { location.replace('#/wood'); return () => { /* rien à nettoyer */ }; }
   const cyc = W;
   root.innerHTML = `<div class="trainer"><div class="tboard"><div id="board"></div></div>
-    <div class="tside"><p class="meta" id="meta"></p><div class="coach" id="coach" aria-live="polite"></div><div class="actions" id="actions"></div></div></div>`;
+    <div class="tside"><div id="ex"><p class="meta" id="meta"></p><div class="coach" id="coach" aria-live="polite"></div><div class="actions" id="actions"></div></div><div id="xp" hidden></div></div></div>`;
   const coach = $('#coach', root), actions = $('#actions', root), meta = $('#meta', root);
   let F: Fault, game = new Chess(), last: Move | null = null, tries = 0, solved = false, hintLevel = 0, ended = false;
   let since = Date.now(); const elapsed = () => cyc.elapsed + (ended ? 0 : Date.now() - since);
-  const board = new Board($('#board', root), { movable: () => solved || ended ? null : F.side, onMove: m => attempt(m) });
-  const sub = () => header(cyc.label, `Position ${cyc.i + 1} sur ${cyc.ids.length}`, fmtTime(elapsed()));
+  let X: Explorer | null = null;
+  const board = new Board($('#board', root), { movable: () => X ? X.movable() : solved || ended ? null : F.side, onMove: m => X ? X.onMove(m) : attempt(m) });
+  /** Explorateur : la meilleure suite, la réfutation de ton coup, ou tes propres coups, évalués par le moteur. */
+  function explore() {
+    X = openExplorer(board, $('#ex', root), $('#xp', root), { fen: F.fen, orient: F.side, lines: [
+      { label: 'Meilleure suite', sans: [F.best.san, ...sanTokens(F.best.suite)] },
+      { label: 'Ton coup dans la partie', sans: [F.played.san, ...sanTokens(F.played.refut)] }] },
+      () => { X = null; board.set(game, F.side, last); });
+  }
+  const sub = () => header(cyc.label, one ? `Contre ${F.opp}, coup ${F.move_no}` : `Position ${cyc.i + 1} sur ${cyc.ids.length}`, fmtTime(elapsed()));
   const numbered = (san: string) => `${F.move_no}${F.side === 'w' ? '.' : '…'}${san}`;
   const tick = setInterval(() => { if (!ended) sub(); }, 1000);
-  const hold = () => { cyc.elapsed = elapsed(); since = Date.now(); store.state.woodCur = cyc; save(); };
+  const hold = () => { cyc.elapsed = elapsed(); since = Date.now(); if (!one) store.state.woodCur = cyc; save(); };
 
   function load() {
+    if (X) { X.destroy(); X = null; $('#xp', root).hidden = true; $('#ex', root).hidden = false; }
     while (cyc.i < cyc.ids.length && !faults.has(cyc.ids[cyc.i])) cyc.i++;   // position disparue du stock : on passe
     if (cyc.i >= cyc.ids.length) return finish();
     F = faults.get(cyc.ids[cyc.i])!; game = new Chess(F.fen); last = null; tries = 0; solved = false; hintLevel = 0;
@@ -82,6 +95,7 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     actions.innerHTML = `<button class="btn" id="bHint">${icon('bulb')}Indice</button><button class="btn" id="bSol">Solution</button><button class="btn" id="bSkip">Passer</button>`;
     $('#bHint', actions).onclick = () => { hintLevel++; board.hint(hintLevel >= 2 ? [F.best.uci.slice(0, 2), F.best.uci.slice(2, 4)] : [F.best.uci.slice(0, 2)]); };
     $('#bSol', actions).onclick = () => reveal(false); $('#bSkip', actions).onclick = next;
+    if (one) { $('#bSkip', actions).remove(); actions.className = 'actions'; }
   }
   function explain(found: boolean) {
     const p = F.played, clean = found && tries === 1 && !hintLevel;
@@ -90,8 +104,12 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
       <div class="surf ingame"><p class="label">Dans la partie</p>
         <p>Tu as joué <b>${esc(numbered(p.san))}</b>${p.refut ? `, puni par <b>${esc(short(p.refut, 3))}</b>` : ''}.</p>
         <p class="odds"><span>Chances de gain</span><b>${Math.round(p.wp_before)} %</b>${icon('arrow')}<b class="down">${Math.round(p.wp_after)} %</b></p></div>`;
-    actions.className = 'actions duo';
-    actions.innerHTML = `<button class="btn pri" id="bNext">${cyc.i + 1 < cyc.ids.length ? 'Position suivante' : 'Terminer le cycle'}</button><a class="btn" href="https://www.chess.com/game/live/${encodeURIComponent(F.game)}" target="_blank" rel="noopener">Voir la partie</a>`;
+    actions.className = 'actions';
+    const xbtn = exploreButton();
+    actions.innerHTML = one ? `<a class="btn pri" href="${one.back}">Revenir à la partie</a>${xbtn}<button class="btn" id="bAgain1">Refaire</button>`
+      : `<button class="btn pri" id="bNext">${cyc.i + 1 < cyc.ids.length ? 'Position suivante' : 'Terminer le cycle'}</button>${xbtn}<a class="btn" href="https://www.chess.com/game/live/${encodeURIComponent(F.game)}" target="_blank" rel="noopener">Voir la partie</a>`;
+    $('#bExplore', actions).onclick = explore;
+    const again = actions.querySelector<HTMLButtonElement>('#bAgain1'); if (again) { again.onclick = () => { since = Date.now(); load(); }; return; }
     $('#bNext', actions).onclick = next;
   }
   /** Montre le meilleur coup. `found` : trouvé par le joueur (sinon c'est un échec pour la répétition espacée). */
@@ -110,6 +128,7 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
   }
   function next() { if (!solved) store.state.fault[F.id] = schedulePos(store.state.fault[F.id], 'fail', tries || 1); cyc.i++; hold(); load(); }
   function finish() {
+    if (one) { ended = true; location.hash = one.back; return; }
     ended = true; cyc.elapsed = cyc.elapsed + Date.now() - since; SFX.done();
     const done = { date: Date.now(), time: cyc.elapsed, solved: cyc.solved, n: cyc.ids.length, label: cyc.label };
     const prev = [...woodHistory()].reverse().find(c => c.label === done.label && c.n === done.n);
@@ -122,5 +141,5 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
   const onHide = () => { if (document.hidden && !ended) hold(); else since = Date.now(); };
   document.addEventListener('visibilitychange', onHide);
   load();
-  return () => { clearInterval(tick); document.removeEventListener('visibilitychange', onHide); board.destroy(); if (!ended) { hold(); syncSoon(); } };
+  return () => { X?.destroy(); clearInterval(tick); document.removeEventListener('visibilitychange', onHide); board.destroy(); if (!ended) { hold(); syncSoon(); } };
 }

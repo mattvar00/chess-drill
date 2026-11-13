@@ -1,5 +1,7 @@
 /** État de l'app en mémoire, chargé depuis IndexedDB. */
 import rep from '../data/repertoire.json';
+import plansJson from '../data/plans.json';
+import { Chess, tryMove, uciOf } from '../core/chess';
 import type { Game, Repertoire, BranchState } from '../core/types';
 import { indexBranches } from '../core/book';
 import { devCounts } from '../core/drill';
@@ -10,6 +12,18 @@ import { emptyState, getAllGames, getAllGFaults, getState, migrateLegacy, putGFa
 export const REP = rep as unknown as Repertoire;
 export const BR = indexBranches(REP);
 export const ALL_IDS = Object.keys(BR);
+
+/** Plans animés : chacun se rejoue aussi comme une ligne (« plan-<id> »), hors des tirages du répertoire. */
+export interface PlanStep { p: number; a: [string, string][]; h: string[]; c: string }
+export interface Plan { id: string; sans: string[]; steps: PlanStep[]; cat: string; title: string; side: 'w' | 'b'; sys: string[]; sub: string; src: string[] }
+export const PLANS = plansJson as Plan[];
+export const planBranch = (id: string) => 'plan-' + id;
+for (const P of PLANS) {
+  const g = new Chess(), moves = P.sans.slice(0, P.steps[P.steps.length - 1].p).map(san => { const m = tryMove(g, san)!; return { san: m.san, uci: uciOf(m) }; });
+  const br = { id: planBranch(P.id), titre: P.title, moves, notes: {} };
+  BR[br.id] = { br, sys: { id: 'plan', titre: P.title, statut: 'plan', resume: P.sub, branches: [br] }, bloc: { id: 'plans', titre: P.cat, sous: '', side: P.side, systemes: [] } };
+}
+export const plansFor = (sysId: string) => PLANS.filter(p => p.sys.includes(sysId));
 
 /** Cycle Woodpecker en cours (repris après une fermeture de l'app) et cycles terminés. */
 export interface WoodCur { ids: string[]; i: number; solved: number; elapsed: number; label: string }

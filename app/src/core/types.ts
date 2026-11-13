@@ -29,6 +29,8 @@ export interface Game {
   a: BookResult;
   ev?: EvalEntry[];
   st?: { acc: number | null; loss: number; blunder: number; mistake: number; inacc: number; depth: number };
+  /** Chances des Blancs (0-100) avant chaque coup puis à la fin, et classe de chaque coup : envoyées avec la liste des parties analysées. */
+  wp?: number[]; cls?: string[];
 }
 
 export interface RepMove { san: string; uci: string }
