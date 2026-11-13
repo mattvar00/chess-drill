@@ -40,5 +40,6 @@ Le modèle Maia (45 Mo) dépasse la limite de 25 Mo par fichier de Cloudflare Pa
 ## Avancement
 - [x] 1a — squelette, cœur testé, stockage, moteur
 - [x] 1b — analyse de nuit (Stockfish natif), API Worker + D1
-- [ ] 1c — écrans : Aujourd'hui, Répertoire (+ plans), Woodpecker, Stats, revue de partie
+- [x] 1c — app installable : Aujourd'hui (séance du jour, sorties de répertoire), Répertoire, Drill / Explorer, Réglages (code d'accès, synchro entre appareils, reprise de l'ancienne progression)
+- [ ] 1c bis — Woodpecker, revue de partie, Stats, plans
 - [ ] 1d — bascule depuis la v1

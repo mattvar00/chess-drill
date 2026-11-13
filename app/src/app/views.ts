@@ -1,0 +1,65 @@
+/** Écrans de listes : Aujourd'hui, Répertoire (blocs → systèmes → lignes). */
+import { isDue, isValid } from '../core/schedule';
+import { recentDeviations, refBranch, todayPool } from '../core/drill';
+import type { Bloc, Branch, System } from '../core/types';
+import { esc, plural, $ } from '../ui/dom';
+import { ALL_IDS, BR, REP, store } from './store';
+import { getToken, lastSync } from './api';
+import { lineUrl, startSession } from './session';
+
+const DAY = 864e5;
+const st = (id: string) => store.state.br[id];
+const validCount = (ids: string[]) => ids.filter(id => isValid(st(id))).length;
+const idsOf = (b: Bloc | System) => 'systemes' in b ? b.systemes.flatMap(s => s.branches.map(x => x.id)) : b.branches.map(x => x.id);
+const go = (label: string, pool: string[], back: string) => { location.hash = startSession(label, pool, back); };
+const bar = (done: number, total: number) => `<span class="prog" role="img" aria-label="${done} sur ${total} validées"><b style="width:${total ? Math.round(100 * done / total) : 0}%"></b></span>`;
+const ago = (t: number) => { const d = Math.floor((Date.now() - t) / DAY); return d <= 0 ? "aujourd'hui" : d === 1 ? 'hier' : `il y a ${d} jours`; };
+
+export function viewToday(root: HTMLElement) {
+  const { due, fresh } = todayPool(REP, store.state.br), pool = [...due, ...fresh];
+  const devs = recentDeviations(store.games, store.state.fixed, BR);
+  const headline = due.length ? `${plural(due.length, 'ligne')} à revoir` : fresh.length ? `${plural(fresh.length, 'nouvelle ligne', 'nouvelles lignes')} à apprendre` : 'Tout est à jour';
+  const sub = due.length && fresh.length ? `et ${plural(fresh.length, 'nouvelle', 'nouvelles')} à apprendre`
+    : !pool.length ? 'Aucune ligne à revoir aujourd\'hui. Un drill mixte entretient le reste.' : '';
+  root.innerHTML = `
+    <section class="hero">
+      <h1>${headline}</h1>${sub ? `<p>${sub}</p>` : ''}
+      <div class="row">${pool.length ? '<button class="btn pri" id="bToday">Commencer la séance</button>' : ''}<button class="btn" id="bMix">Drill mixte</button></div>
+    </section>
+    ${devs.length ? `<h2>Sorties de répertoire récentes</h2>${devs.map(g => { const id = refBranch(g, BR)!; const want = (g.a.expected || []).map(e => e.san).join(' ou ');
+      return `<a class="card" href="${lineUrl(id, 'drill', g.id)}"><span class="chip ${g.color}"></span><span class="body"><b>${esc(BR[id].br.titre)}</b>
+        <small>Contre ${esc(g.opp)}, ${ago(g.t * 1000)} : tu as joué ${esc(g.a.played)}${want ? `, la ligne joue ${esc(want)}` : ''}</small></span></a>`; }).join('')}` : ''}
+    ${getToken() ? `<p class="foot">${store.games.length ? `${plural(store.games.length, 'partie analysée', 'parties analysées')}` : 'Aucune partie reçue pour l\'instant'}${lastSync() ? `, synchronisé ${ago(lastSync())}` : ''}.</p>`
+      : `<a class="card link" href="#/reglages"><span class="body"><b>Relier l'app à tes parties</b><small>Entre ton code d'accès pour voir tes sorties de répertoire et retrouver ta progression sur tous tes appareils.</small></span></a>`}`;
+  $('#bToday', root)?.addEventListener('click', () => go('Séance du jour', pool, '#/'));
+  $('#bMix', root).addEventListener('click', () => go('Drill mixte', ALL_IDS, '#/'));
+}
+
+export function viewBlocs(root: HTMLElement) {
+  const due = ALL_IDS.filter(id => st(id)?.runs && isDue(st(id)));
+  root.innerHTML = `
+    <div class="stats"><div><b>${ALL_IDS.length}</b><span>lignes</span></div><div><b>${validCount(ALL_IDS)}</b><span>validées</span></div><div><b>${due.length}</b><span>à revoir</span></div></div>
+    ${REP.blocs.map(b => { const ids = idsOf(b); return `<a class="card" href="#/rep/${b.id}"><span class="chip ${b.side}"></span><span class="body"><b>${esc(b.titre)}</b><small>${esc(b.sous)} · ${plural(ids.length, 'ligne')}</small></span>${bar(validCount(ids), ids.length)}</a>`; }).join('')}
+    <details class="help"><summary>Comment ça marche</summary><p>Le drill te fait rejouer une ligne de mémoire ; Explorer la montre avec ses plans. Deux passages sans faute valident une ligne, qui revient ensuite à intervalles de plus en plus longs. Le tirage favorise les lignes neuves et celles où tu es sorti du répertoire en partie.</p></details>`;
+}
+
+const badge = (s: System) => `<span class="badge ${s.statut === 'joué' ? 'ok' : s.statut === 'à apprendre' ? 'learn' : ''}">${esc(s.statut)}</span>`;
+export function viewBloc(root: HTMLElement, bloc: Bloc) {
+  root.innerHTML = `<div class="row"><button class="btn pri" id="bAll">Drill sur tout le bloc</button></div>
+    ${bloc.systemes.map(s => { const ids = idsOf(s); return `<a class="card" href="#/rep/${bloc.id}/${s.id}"><span class="body"><b>${esc(s.titre)}</b> ${badge(s)}<small>${plural(ids.length, 'ligne')} · ${esc(s.resume)}</small></span>${bar(validCount(ids), ids.length)}</a>`; }).join('')}`;
+  $('#bAll', root).addEventListener('click', () => go(bloc.titre, idsOf(bloc), `#/rep/${bloc.id}`));
+}
+
+function lineStatus(br: Branch): string {
+  const s = st(br.id), parts = [plural(Math.ceil(br.moves.length / 2), 'coup')];
+  if (s?.runs) parts.push(isValid(s) ? (isDue(s) ? 'à revoir' : `validée, revient dans ${plural(Math.max(1, Math.ceil((s.due - Date.now()) / DAY)), 'jour')}`) : `${s.clean}/2 sans faute`);
+  else parts.push('jamais jouée');
+  return parts.join(' · ');
+}
+export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
+  const back = `#/rep/${bloc.id}/${sys.id}`;
+  root.innerHTML = `<p class="intro">${esc(sys.resume)}</p>
+    <div class="row"><button class="btn pri" id="bDrill">Drill sur ce système</button></div>
+    ${sys.branches.map(br => { const d = store.devs[br.id]; return `<a class="card" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(br.titre)}</b><small>${lineStatus(br)}${d ? ` · <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? '<span class="tick" aria-label="validée">✓</span>' : ''}</a>`; }).join('')}`;
+  $('#bDrill', root).addEventListener('click', () => go(sys.titre, idsOf(sys), back));
+}

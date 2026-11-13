@@ -1,14 +1,54 @@
-/** Point d'entrée v2 (étape 1a) : stockage migré + moteur. Les écrans arrivent à l'étape 1b. */
-import { migrateLegacy, getAllGames, getState } from './storage/db';
-import { canThread, mainEngine } from './engine/stockfish';
-import rep from './data/repertoire.json';
+/** Point d'entrée : coquille de l'app et navigation par adresse (#/…), pour que le bouton retour du téléphone fonctionne. */
+import './styles.css';
+import { $, esc } from './ui/dom';
+import { setSound } from './ui/sound';
+import { BR, REP, loadStore, store } from './app/store';
+import { viewBloc, viewBlocs, viewSystem, viewToday } from './app/views';
+import { mountTrainer } from './app/trainer';
+import { viewSettings } from './app/settings';
+import { endSession, session } from './app/session';
+import { getToken, sync } from './app/api';
+
+const TABS = [['#/', "Aujourd'hui"], ['#/rep', 'Répertoire'], ['#/reglages', 'Réglages']] as const;
+document.getElementById('app')!.innerHTML = `
+  <header class="top"><a class="back" id="back" aria-label="Retour">‹</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div></header>
+  <main id="view" tabindex="-1"></main>
+  <nav class="tabs" id="tabs" aria-label="Sections">${TABS.map(([h, l]) => `<a href="${h}">${l}</a>`).join('')}</nav>`;
+const view = $('#view'), back = $<HTMLAnchorElement>('#back');
+let cleanup: (() => void) | null = null;
+
+function shell(title: string, sub: string, backHref: string | null, tab: string | null) {
+  $('#title').textContent = title; $('#subtitle').textContent = sub; document.title = `${title} · Chess Drill`;
+  back.hidden = !backHref; if (backHref) back.href = backHref;
+  $('#tabs').hidden = !tab; document.body.classList.toggle('focus', !tab);
+  document.querySelectorAll<HTMLAnchorElement>('#tabs a').forEach(a => { if (a.getAttribute('href') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+}
+function route() {
+  cleanup?.(); cleanup = null;
+  const [path, query = ''] = location.hash.slice(1).split('?'), p = path.split('/').filter(Boolean), q = new URLSearchParams(query);
+  if (p[0] === 'l' && BR[p[1]]) {
+    const { br, sys, bloc } = BR[p[1]], mode = p[2] === 'drill' ? 'drill' : 'explore', S = session();
+    if (S && !S.pool.includes(br.id)) endSession();
+    const cur = session(), g = q.get('g');
+    shell(br.titre, cur ? cur.label : sys.titre, cur ? cur.back : `#/rep/${bloc.id}/${sys.id}`, null);
+    cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
+  } else {
+    endSession();
+    const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
+    if (bloc && sys) { shell(sys.titre, bloc.titre, `#/rep/${bloc.id}`, '#/rep'); viewSystem(view, bloc, sys); }
+    else if (bloc) { shell(bloc.titre, bloc.sous, '#/rep', '#/rep'); viewBloc(view, bloc); }
+    else if (p[0] === 'rep') { shell('Répertoire', '', null, '#/rep'); viewBlocs(view); }
+    else if (p[0] === 'reglages') { shell('Réglages', '', null, '#/reglages'); viewSettings(view); }
+    else { shell("Aujourd'hui", new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }), null, '#/'); viewToday(view); }
+  }
+  window.scrollTo(0, 0);
+}
 
 async function boot() {
-  const el = document.getElementById('app')!;
-  const imported = await migrateLegacy(); const games = await getAllGames(); const st = await getState();
-  const n = (rep as { blocs: { systemes: { branches: unknown[] }[] }[] }).blocs.reduce((a, b) => a + b.systemes.reduce((x, s) => x + s.branches.length, 0), 0);
-  el.innerHTML = `<h1 style="font-size:20px">Chess Drill v2 · en construction</h1><p>${games.length} parties en base locale${imported ? ` (dont ${imported} importées de l'ancienne version)` : ''} · ${Object.keys(st.br).length} lignes avec historique · ${n} lignes de répertoire.</p><p id="eng">Moteur : démarrage…</p>`;
-  const t0 = performance.now(); const e = await mainEngine(); const r = await e.eval('rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1', 18, 3000);
-  document.getElementById('eng')!.textContent = `Moteur : Stockfish 19 ${canThread() && e.threads > 1 ? `multicœur (${e.threads} fils)` : (canThread() ? "multicœur possible (1 seul cœur libre)" : "mono-thread")} · profondeur 18 en ${Math.round(performance.now() - t0)} ms · meilleur coup ${r.best}`;
+  await loadStore(); setSound(store.state.settings.sound !== false);
+  window.addEventListener('hashchange', route); route();
+  // Nouvelles parties et progression des autres appareils : on rafraîchit l'écran d'accueil si quelque chose est arrivé.
+  if (getToken()) sync().then(r => { if ((r.games || r.lines) && !location.hash.startsWith('#/l/')) route(); }).catch(() => { /* hors ligne : l'app reste utilisable */ });
+  if (import.meta.env.PROD && 'serviceWorker' in navigator) void navigator.serviceWorker.register('./sw.js');
 }
-boot().catch(e => { document.getElementById('app')!.textContent = 'Erreur : ' + e.message; });
+boot().catch(e => { view.innerHTML = `<p class="status err">L'app n'a pas pu démarrer : ${esc((e as Error).message)}</p>`; });
