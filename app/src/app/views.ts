@@ -6,6 +6,8 @@ import { esc, plural, $ } from '../ui/dom';
 import { ALL_IDS, BR, REP, store } from './store';
 import { getToken, lastSync } from './api';
 import { lineUrl, startSession } from './session';
+import { duePositions } from '../core/wood';
+import { startPriority } from './wood';
 
 const DAY = 864e5;
 const st = (id: string) => store.state.br[id];
@@ -29,10 +31,12 @@ export function viewToday(root: HTMLElement) {
     ${devs.length ? `<h2>Sorties de répertoire récentes</h2>${devs.map(g => { const id = refBranch(g, BR)!; const want = (g.a.expected || []).map(e => e.san).join(' ou ');
       return `<a class="card" href="${lineUrl(id, 'drill', g.id)}"><span class="chip ${g.color}"></span><span class="body"><b>${esc(BR[id].br.titre)}</b>
         <small>Contre ${esc(g.opp)}, ${ago(g.t * 1000)} : tu as joué ${esc(g.a.played)}${want ? `, la ligne joue ${esc(want)}` : ''}</small></span></a>`; }).join('')}` : ''}
+    ${store.faults.length ? `<h2>Tactique</h2><button class="card" id="bWood"><span class="body"><b>${Math.min(10, store.faults.length)} positions tirées de tes fautes</b><small>${(d => d ? `${plural(d, 'position')} à revoir aujourd'hui` : `${plural(store.faults.length, 'position')} en stock, les plus utiles d'abord`)(duePositions(store.faults, store.state.fault))}</small></span></button>` : ''}
     ${getToken() ? `<p class="foot">${store.games.length ? `${plural(store.games.length, 'partie analysée', 'parties analysées')}` : 'Aucune partie reçue pour l\'instant'}${lastSync() ? `, synchronisé ${ago(lastSync())}` : ''}.</p>`
       : `<a class="card link" href="#/reglages"><span class="body"><b>Relier l'app à tes parties</b><small>Entre ton code d'accès pour voir tes sorties de répertoire et retrouver ta progression sur tous tes appareils.</small></span></a>`}`;
   $('#bToday', root)?.addEventListener('click', () => go('Séance du jour', pool, '#/'));
   $('#bMix', root).addEventListener('click', () => go('Drill mixte', ALL_IDS, '#/'));
+  $('#bWood', root)?.addEventListener('click', startPriority);
 }
 
 export function viewBlocs(root: HTMLElement) {

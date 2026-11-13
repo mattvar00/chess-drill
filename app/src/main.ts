@@ -6,10 +6,11 @@ import { BR, REP, loadStore, store } from './app/store';
 import { viewBloc, viewBlocs, viewSystem, viewToday } from './app/views';
 import { mountTrainer } from './app/trainer';
 import { viewSettings } from './app/settings';
+import { mountExercise, viewWood } from './app/wood';
 import { endSession, session } from './app/session';
 import { getToken, sync } from './app/api';
 
-const TABS = [['#/', "Aujourd'hui"], ['#/rep', 'Répertoire'], ['#/reglages', 'Réglages']] as const;
+const TABS = [['#/', "Aujourd'hui"], ['#/rep', 'Répertoire'], ['#/wood', 'Woodpecker'], ['#/reglages', 'Réglages']] as const;
 document.getElementById('app')!.innerHTML = `
   <header class="top"><a class="back" id="back" aria-label="Retour">‹</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div></header>
   <main id="view" tabindex="-1"></main>
@@ -32,12 +33,16 @@ function route() {
     const cur = session(), g = q.get('g');
     shell(br.titre, cur ? cur.label : sys.titre, cur ? cur.back : `#/rep/${bloc.id}/${sys.id}`, null);
     cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
+  } else if (p[0] === 'wood' && p[1] === 'go') {
+    endSession(); shell('Woodpecker', '', '#/wood', null);
+    cleanup = mountExercise(view, (title, sub) => { $('#title').textContent = title; $('#subtitle').innerHTML = sub; });
   } else {
     endSession();
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
     if (bloc && sys) { shell(sys.titre, bloc.titre, `#/rep/${bloc.id}`, '#/rep'); viewSystem(view, bloc, sys); }
     else if (bloc) { shell(bloc.titre, bloc.sous, '#/rep', '#/rep'); viewBloc(view, bloc); }
     else if (p[0] === 'rep') { shell('Répertoire', '', null, '#/rep'); viewBlocs(view); }
+    else if (p[0] === 'wood') { shell('Woodpecker', '', null, '#/wood'); viewWood(view); }
     else if (p[0] === 'reglages') { shell('Réglages', '', null, '#/reglages'); viewSettings(view); }
     else { shell("Aujourd'hui", new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }), null, '#/'); viewToday(view); }
   }

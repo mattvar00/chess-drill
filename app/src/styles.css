@@ -27,7 +27,7 @@ main{max-width:1080px;margin:0 auto;padding:14px 14px calc(var(--tabs) + 24px + 
 main:focus{outline:none}
 body.focus main{padding-bottom:20px}
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-.tabs a{flex:1;height:var(--tabs);display:grid;place-items:center;color:var(--mute);font-size:14px;border-top:2px solid transparent;margin-top:-1px}
+.tabs a{flex:1;height:var(--tabs);display:grid;place-items:center;color:var(--mute);font-size:13.5px;border-top:2px solid transparent;margin-top:-1px}
 .tabs a[aria-current]{color:var(--ink);border-top-color:var(--brass);font-weight:600}
 
 /* listes */
@@ -61,6 +61,15 @@ h2{font:600 17px/1.3 var(--serif);margin:26px 0 10px}
 .foot,.hint{color:var(--dim);font-size:13.5px;max-width:68ch}
 .foot{margin-top:22px}
 .help{margin-top:18px;color:var(--mute);font-size:14px}.help summary{cursor:pointer;padding:8px 0;color:var(--ink)}.help p{margin:4px 0;max-width:68ch}
+
+button.card{width:100%;text-align:left;color:inherit;font:inherit}
+.row.col{flex-direction:column}.row.col .btn{flex:none}
+.hero.center{text-align:center;padding-top:40px}.hero.center .row{justify-content:center}
+.cycles{width:100%;border-collapse:collapse;font-size:14.5px;font-variant-numeric:tabular-nums}
+.cycles th{text-align:left;color:var(--mute);font-weight:400;font-size:13px;padding:6px 8px 6px 0;border-bottom:1px solid var(--line)}
+.cycles td{padding:9px 8px 9px 0;border-bottom:1px solid var(--line)}
+.meta{color:var(--mute);font-size:14px;margin:0}.meta b{color:var(--ink);font-weight:600}
+.line{font-family:var(--serif);font-weight:600;color:var(--ink)}
 
 /* réglages */
 .form{display:grid;gap:6px;max-width:460px}

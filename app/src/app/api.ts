@@ -1,8 +1,9 @@
 /** Lien avec le serveur : parties analysées chaque nuit et progression partagée entre appareils. */
-import type { BranchState, Game } from '../core/types';
-import { addGames, save, store } from './store';
+import type { BranchState, Game, PosState } from '../core/types';
+import type { Fault } from '../core/analysis';
+import { addFaults, addGames, save, store, woodHistory, type WoodCycle } from './store';
 
-const TOKEN = 'cd_token', PUSHED = 'cd_pushed', SYNCED = 'cd_synced';
+const TOKEN = 'cd_token', PUSHED = 'cd_pushed', SYNCED = 'cd_synced', FAULTS = 'cd_faults';
 export const getToken = () => localStorage.getItem(TOKEN) || '';
 export const setToken = (t: string) => { if (t) localStorage.setItem(TOKEN, t.trim()); else localStorage.removeItem(TOKEN); };
 export const lastSync = () => +(localStorage.getItem(SYNCED) || 0);
@@ -17,7 +18,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 type Remote = Record<string, { value: unknown; updated: number }>;
-/** Récupère les nouvelles parties, puis fusionne la progression : pour chaque ligne, le passage le plus récent gagne. */
+const woodStamp = () => woodHistory().reduce((m, c) => Math.max(m, c.date), 0);
+/** Récupère les nouvelles parties et fautes, puis fusionne la progression : pour chaque ligne ou position, le passage le plus récent gagne. */
 export async function sync(): Promise<{ games: number; lines: number }> {
   if (!getToken()) throw new Error("Aucun code d'accès enregistré.");
   const user = String(store.state.settings.user || 'matt_chess00');
@@ -26,13 +28,22 @@ export async function sync(): Promise<{ games: number; lines: number }> {
   const games = await call<Game[]>(`/games?user=${encodeURIComponent(user)}&since=${since}`);
   await addGames(games);
 
+  // Fautes : on redemande tout ce qui est plus récent que la dernière partie déjà couverte.
+  const covered = +(localStorage.getItem(FAULTS) || 0);
+  await addFaults(await call<Fault[]>(`/faults?user=${encodeURIComponent(user)}&since=${covered ? covered + 1 : 0}`));
+  localStorage.setItem(FAULTS, String(store.games.reduce((m, g) => Math.max(m, g.t), covered)));
+
   const remote = await call<Remote>('/progress'); let lines = 0;
+  const st = store.state, pushed = +(localStorage.getItem(PUSHED) || 0), out: Remote = {};
   for (const [k, v] of Object.entries(remote)) {
-    if (!k.startsWith('br:')) continue; const id = k.slice(3), local = store.state.br[id];
-    if (v.updated > (local?.last || 0)) { store.state.br[id] = v.value as BranchState; lines++; }
+    if (k.startsWith('br:')) { const id = k.slice(3); if (v.updated > (st.br[id]?.last || 0)) { st.br[id] = v.value as BranchState; lines++; } }
+    else if (k.startsWith('fault:')) { const id = k.slice(6); if (v.updated > (st.fault[id]?.last || 0)) { st.fault[id] = v.value as PosState; lines++; } }
+    else if (k === 'wood' && v.updated > woodStamp()) { st.wood = v.value as WoodCycle[]; lines++; }
   }
-  const pushed = +(localStorage.getItem(PUSHED) || 0), out: Remote = {};
-  for (const [id, s] of Object.entries(store.state.br)) if (s.last > pushed && s.last > (remote['br:' + id]?.updated || 0)) out['br:' + id] = { value: s, updated: s.last };
+  const mine = (key: string, updated: number, value: unknown) => { if (updated > pushed && updated > (remote[key]?.updated || 0)) out[key] = { value, updated }; };
+  for (const [id, s] of Object.entries(st.br)) mine('br:' + id, s.last, s);
+  for (const [id, s] of Object.entries(st.fault)) mine('fault:' + id, s.last || 0, s);
+  if (woodHistory().length) mine('wood', woodStamp(), woodHistory());
   if (Object.keys(out).length) await call('/progress', { method: 'PUT', body: JSON.stringify(out) });
   const now = Date.now(); localStorage.setItem(PUSHED, String(now)); localStorage.setItem(SYNCED, String(now));
   if (lines) save();
