@@ -3,7 +3,7 @@ import type { BranchState, Game, PosState } from '../core/types';
 import type { Fault } from '../core/analysis';
 import { addFaults, addGames, save, store, woodHistory, type WoodCycle } from './store';
 
-const TOKEN = 'cd_token', PUSHED = 'cd_pushed', SYNCED = 'cd_synced', FAULTS = 'cd_faults';
+const TOKEN = 'cd_token', PUSHED = 'cd_pushed', SYNCED = 'cd_synced', CURSOR = 'cd_games_cursor';
 export const getToken = () => localStorage.getItem(TOKEN) || '';
 export const setToken = (t: string) => { if (t) localStorage.setItem(TOKEN, t.trim()); else localStorage.removeItem(TOKEN); };
 export const lastSync = () => +(localStorage.getItem(SYNCED) || 0);
@@ -23,19 +23,21 @@ const woodStamp = () => woodHistory().reduce((m, c) => Math.max(m, c.date), 0);
 export async function sync(): Promise<{ games: number; lines: number }> {
   if (!getToken()) throw new Error("Aucun code d'accès enregistré.");
   const user = String(store.state.settings.user || 'matt_chess00');
-  const newest = store.games.reduce((m, g) => Math.max(m, g.t), 0);
-  // Les parties reçues avant l'ajout de la courbe des chances sont redemandées une fois.
-  const stale = store.games.some(g => g.st && !g.wp);
-  const since = newest && !stale ? newest + 1 : Math.floor(Date.now() / 1000) - 120 * 86400;
-  const fetched = await call<Game[]>(`/games?user=${encodeURIComponent(user)}&since=${since}`);
-  const known = new Set(store.games.filter(g => g.wp || !g.st).map(g => g.id)), games = fetched.filter(g => !known.has(g.id));
-  const fresh = games.filter(g => !store.games.some(x => x.id === g.id)).length;
-  await addGames(games.map(g => ({ ...store.games.find(x => x.id === g.id), ...g })));
-
-  // Fautes : on redemande tout ce qui est plus récent que la dernière partie déjà couverte.
-  const covered = +(localStorage.getItem(FAULTS) || 0);
-  await addFaults(await call<Fault[]>(`/faults?user=${encodeURIComponent(user)}&since=${covered ? covered + 1 : 0}`));
-  localStorage.setItem(FAULTS, String(store.games.reduce((m, g) => Math.max(m, g.t), covered)));
+  // Parties : tout ce qui a changé côté serveur depuis la dernière fois (nouvelles parties, ou anciennes tout juste analysées),
+  // page par page. Le curseur n'avance qu'une fois la page enregistrée : une synchro interrompue reprend où elle en était.
+  let fresh = 0;
+  for (let page = 0; page < 200; page++) {
+    const r = await call<{ games: Game[]; cursor: string; more: boolean }>(`/games?user=${encodeURIComponent(user)}&cursor=${encodeURIComponent(localStorage.getItem(CURSOR + ':' + user) || '0:')}`);
+    const known = new Map(store.games.map(g => [g.id, g]));
+    fresh += r.games.filter(g => !known.has(g.id)).length;
+    // les évaluations complètes déjà téléchargées pour une revue sont gardées
+    await addGames(r.games.map(g => ({ ...(known.get(g.id)?.ev ? { ev: known.get(g.id)!.ev } : {}), ...g })));
+    // les fautes des parties analysées de cette page (une ancienne partie peut venir d'être analysée)
+    const an = r.games.filter(g => g.st);
+    if (an.length) await addFaults(await call<Fault[]>(`/faults?user=${encodeURIComponent(user)}&since=${Math.min(...an.map(g => g.t))}&until=${Math.max(...an.map(g => g.t))}`));
+    localStorage.setItem(CURSOR + ':' + user, r.cursor);
+    if (!r.more) break;
+  }
 
   const remote = await call<Remote>('/progress'); let lines = 0;
   const st = store.state, pushed = +(localStorage.getItem(PUSHED) || 0), out: Remote = {};

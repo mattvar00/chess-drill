@@ -13,7 +13,8 @@ export interface Env {
   GH_TOKEN?: string;                       // secret : jeton GitHub (actions:write) pour « analyser maintenant »
   GH_REPO?: string; GH_WORKFLOW?: string;  // ex. mattvar00/chess-drill, analyse.yml
 }
-interface IngestBody { depth: number; results: { user: string; game: Game; rated: { ev: EvalEntry[]; cls: string[]; st: GameStats; faults: Fault[] } }[] }
+/** `rated` absent : import léger (la partie seule, sans analyse au moteur). */
+interface IngestBody { depth: number; results: { user: string; game: Game; rated?: { ev: EvalEntry[]; cls: string[]; st: GameStats; faults: Fault[] } }[] }
 
 const UA = 'chess-drill/2.0 (perso)';
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
@@ -49,9 +50,11 @@ async function ingest(env: Env, body: IngestBody): Promise<Response> {
   if (!Array.isArray(body?.results)) return err('results manquant', 400);
   const now = Date.now(), stmts: D1PreparedStatement[] = [];
   for (const { user, game, rated } of body.results) {
-    const u = lower(user); if (!u || !game?.id || !rated) return err('entrée invalide', 400);
+    const u = lower(user); if (!u || !game?.id) return err('entrée invalide', 400);
     const { ev: _ev, ...light } = game as Game;
-    stmts.push(env.DB.prepare('INSERT OR REPLACE INTO games (username, id, t, data) VALUES (?, ?, ?, ?)').bind(u, game.id, game.t, JSON.stringify(light)));
+    // import léger : on n'écrase jamais une partie déjà là (elle est peut-être analysée)
+    if (!rated) { stmts.push(env.DB.prepare('INSERT OR IGNORE INTO games (username, id, t, data, updated) VALUES (?, ?, ?, ?, ?)').bind(u, game.id, game.t, JSON.stringify(light), now)); continue; }
+    stmts.push(env.DB.prepare('INSERT OR REPLACE INTO games (username, id, t, data, updated) VALUES (?, ?, ?, ?, ?)').bind(u, game.id, game.t, JSON.stringify(light), now));
     stmts.push(env.DB.prepare('INSERT OR REPLACE INTO analyses (username, game_id, depth, ev, cls, st, created) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .bind(u, game.id, body.depth | 0, JSON.stringify(rated.ev), JSON.stringify(rated.cls), JSON.stringify(rated.st), now));
     stmts.push(env.DB.prepare('DELETE FROM faults WHERE username = ? AND game_id = ?').bind(u, game.id));
@@ -85,17 +88,28 @@ async function api(req: Request, env: Env, ctx: ExecutionContext, url: URL): Pro
     await env.DB.prepare('INSERT OR IGNORE INTO follows (account_id, username, own, added) VALUES (?, ?, 0, ?)').bind(account, u, Date.now()).run();
     return json({ ok: true });
   }
+  if (p === '/api/known' && req.method === 'GET')   // toutes les parties déjà importées, analysées ou non
+    return json({ ids: (await env.DB.prepare('SELECT id FROM games WHERE username = ? AND t >= ?').bind(user, since).all<{ id: string }>()).results.map(r => r.id) });
   if (p === '/api/analysed' && req.method === 'GET')
     return json({ ids: (await env.DB.prepare('SELECT a.game_id FROM analyses a JOIN games g ON g.username = a.username AND g.id = a.game_id WHERE a.username = ? AND g.t >= ?').bind(user, since).all<{ game_id: string }>()).results.map(r => r.game_id) });
   if (p === '/api/ingest' && req.method === 'POST') return ingest(env, await req.json());
   if (p === '/api/analyse-now' && req.method === 'POST') return analyseNow(env, account, lower(((await req.json().catch(() => ({}))) as { username?: string }).username ?? null));
 
+  const withAnalysis = (r: { data: string; st: string | null; ev: string | null; cls: string | null }) => ({ ...JSON.parse(r.data), ...(r.st ? { st: JSON.parse(r.st), cls: JSON.parse(r.cls || '[]'), wp: (JSON.parse(r.ev || '[]') as EvalEntry[]).map(e => Math.round(winPct(e.c, e.m))) } : {}) });
+  if (p === '/api/games' && req.method === 'GET' && q.has('cursor')) {
+    // Ce qui a changé depuis le curseur « date:identifiant », par pages : nouvelles parties comme anciennes parties tout juste analysées.
+    const [cu, cid = ''] = (q.get('cursor') || '0:').split(':'), limit = Math.max(1, Math.min(300, +(q.get('limit') || 300)));
+    const rows = (await env.DB.prepare('SELECT g.id, g.updated, g.data, a.st, a.ev, a.cls FROM games g LEFT JOIN analyses a ON a.username = g.username AND a.game_id = g.id WHERE g.username = ?1 AND (g.updated > ?2 OR (g.updated = ?2 AND g.id > ?3)) ORDER BY g.updated, g.id LIMIT ?4')
+      .bind(user, +cu || 0, cid, limit).all<{ id: string; updated: number; data: string; st: string | null; ev: string | null; cls: string | null }>()).results;
+    const last = rows[rows.length - 1];
+    return json({ games: rows.map(withAnalysis), cursor: last ? `${last.updated}:${last.id}` : q.get('cursor'), more: rows.length === limit });
+  }
   if (p === '/api/games' && req.method === 'GET') {
     // Pour chaque partie analysée : la courbe des chances (Blancs, 0-100) et la classe de chaque coup, assez légères pour la liste
     // et suffisantes pour les statistiques. Les évaluations complètes restent sur /api/games/:user/:id.
     const rows = (await env.DB.prepare('SELECT g.data, a.st, a.ev, a.cls FROM games g LEFT JOIN analyses a ON a.username = g.username AND a.game_id = g.id WHERE g.username = ? AND g.t >= ? ORDER BY g.t DESC LIMIT 500')
       .bind(user, since).all<{ data: string; st: string | null; ev: string | null; cls: string | null }>()).results;
-    return json(rows.map(r => ({ ...JSON.parse(r.data), ...(r.st ? { st: JSON.parse(r.st), cls: JSON.parse(r.cls || '[]'), wp: (JSON.parse(r.ev || '[]') as EvalEntry[]).map(e => Math.round(winPct(e.c, e.m))) } : {}) })));
+    return json(rows.map(withAnalysis));
   }
   const gm = /^\/api\/games\/([^/]+)\/([^/]+)$/.exec(p);
   if (gm && req.method === 'GET') {
@@ -106,7 +120,7 @@ async function api(req: Request, env: Env, ctx: ExecutionContext, url: URL): Pro
     return json({ ...JSON.parse(g.data), ...(a ? { ev: JSON.parse(a.ev), cls: JSON.parse(a.cls), st: JSON.parse(a.st) } : {}) });
   }
   if (p === '/api/faults' && req.method === 'GET')
-    return json((await env.DB.prepare('SELECT data FROM faults WHERE username = ? AND t >= ? ORDER BY t DESC LIMIT 1000').bind(user, since).all<{ data: string }>()).results.map(r => JSON.parse(r.data)));
+    return json((await env.DB.prepare('SELECT data FROM faults WHERE username = ? AND t >= ? AND t <= ? ORDER BY t DESC LIMIT 2000').bind(user, since, +(q.get('until') || 0) || 9e12).all<{ data: string }>()).results.map(r => JSON.parse(r.data)));
 
   if (p === '/api/progress' && req.method === 'GET')
     return json(Object.fromEntries((await env.DB.prepare('SELECT key, value, updated FROM progress WHERE account_id = ? AND updated > ?').bind(account, since).all<{ key: string; value: string; updated: number }>())

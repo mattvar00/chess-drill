@@ -8,12 +8,14 @@ on:
   workflow_dispatch:
     inputs:
       users: { description: 'Pseudos chess.com (virgules)', required: false, default: '' }
-      days: { description: 'Fenêtre en jours', required: false, default: '3' }
+      days: { description: "Fenêtre d'import en jours (toutes les parties, sans moteur)", required: false, default: '3' }
+      analyse_days: { description: "Fenêtre de l'analyse au moteur en jours (vide = comme l'import)", required: false, default: '' }
+      max: { description: 'Nombre maximal de parties analysées au moteur', required: false, default: '200' }
 concurrency: { group: analyse, cancel-in-progress: false }
 jobs:
   analyse:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 350
     defaults: { run: { working-directory: app } }
     steps:
       - uses: actions/checkout@v5
@@ -28,4 +30,4 @@ jobs:
           API_URL: ${{ vars.API_URL || 'https://chess-drill.mattvar36.workers.dev' }}
           API_TOKEN: ${{ secrets.APP_TOKEN }}
           USERS: ${{ inputs.users || vars.USERS || 'matt_chess00' }}
-        run: npx tsx scripts/analyse.ts --days "${{ inputs.days || '3' }}" --depth 16
+        run: npx tsx scripts/analyse.ts --days "${{ inputs.days || '3' }}" --analyse-days "${{ inputs.analyse_days || inputs.days || '3' }}" --max "${{ inputs.max || '200' }}" --depth 16
