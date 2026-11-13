@@ -2,7 +2,7 @@
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { buildFault, type Fault } from '../core/analysis';
 import { CLASS, NOTABLE, commentMove, ecoName, evalText, reviewGame, type ReviewClass } from '../core/review';
-import { AXES, byColor, phaseAccuracy, playerCard, profile, structureStats, type AxisKey, type Profile } from '../core/stats';
+import { AXES, byColor, byDay, byMoment, coldStart, phaseAccuracy, playerCard, profile, structureStats, type AxisKey, type Profile } from '../core/stats';
 import { STRUCT, gameStructure } from '../core/structures';
 import type { Game } from '../core/types';
 import { Board } from '../ui/board';
@@ -70,9 +70,34 @@ export function viewGames(root: HTMLElement) {
   const S = structureStats(list), weak = Object.entries(S).filter(([, o]) => o.n >= 3 && o.errMe - o.errOp > 2).sort((a, b) => (b[1].errMe - b[1].errOp) * b[1].n - (a[1].errMe - a[1].errOp) * a[1].n)[0];
   const seg = (name: string, opts: readonly (readonly [string | number, string])[], cur: string | number) => `<div class="seg" role="group" aria-label="${name === 'period' ? 'Période' : 'Cadence'}">${opts.map(([v, l]) => `<button type="button" data-${name}="${v}" aria-pressed="${v === cur}">${l}</button>`).join('')}</div>`;
   const elo = Object.entries(pr.elo).filter(([, p]) => p.length >= 3).sort((a, b) => b[1].length - a[1].length);
-  const colorBar = (c: 'w' | 'b') => { const r = byColor(list, c); return !r.n ? '' : `<div class="wdl"><div class="wdl-h"><b>Avec les ${c === 'w' ? 'Blancs' : 'Noirs'}</b><span>${r.w} gagnée${r.w > 1 ? 's' : ''}, ${r.d} nulle${r.d > 1 ? 's' : ''}, ${r.l} perdue${r.l > 1 ? 's' : ''}</span></div>
-    <div class="wdl-bar" role="img" aria-label="${Math.round(100 * r.w / r.n)} % de victoires">${r.w ? `<i class="w" style="flex:${r.w}"></i>` : ''}${r.d ? `<i class="d" style="flex:${r.d}"></i>` : ''}${r.l ? `<i class="l" style="flex:${r.l}"></i>` : ''}</div></div>`; };
   const phase = (l: string, v: number | null) => v == null ? '' : `<span>${l}</span><span class="prog"><b style="width:${v}%"></b></span><b>${v}</b>`;
+  // Les tuiles : un libellé, un chiffre, un petit dessin, une phrase. Les demi-tuiles vont par deux ; une demi-tuile seule prend toute la largeur.
+  const pct = (a: number, n: number) => n ? Math.round((100 * a) / n) : 0;
+  const wdlBar = (r: { n: number; w: number; d: number; l: number }) => `<div class="wdl-bar" role="img" aria-label="${r.w} gagnées, ${r.d} nulles, ${r.l} perdues">${r.w ? `<i class="w" style="flex:${r.w}"></i>` : ''}${r.d ? `<i class="d" style="flex:${r.d}"></i>` : ''}${r.l ? `<i class="l" style="flex:${r.l}"></i>` : ''}</div>`;
+  const spark = (p: { e: number }[]) => { const es = p.map(x => x.e), mn = Math.min(...es), span = Math.max(20, Math.max(...es) - mn), k = p.length - 1;
+    return `<svg class="spark" viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true"><path class="elo-line" vector-effect="non-scaling-stroke" d="${p.map((x, j) => `${j ? 'L' : 'M'}${((j / k) * 100).toFixed(1)},${(36 - ((x.e - mn) / span) * 32).toFixed(1)}`).join(' ')}"/></svg>`; };
+  const delta = (p: { e: number }[]) => { const dlt = p[p.length - 1].e - p[0].e; return `<span class="res ${dlt >= 0 ? 'res-W' : 'res-L'}">${dlt >= 0 ? '+' : '−'}${Math.abs(dlt)}</span>`; };
+  const half = (label: string, big: string, viz: string, note: string) => `<section class="surf card tile t2"><span class="tl">${label}</span><b class="tn">${big}</b>${viz}${note ? `<small>${note}</small>` : ''}</section>`;
+  /** Deux demi-tuiles qui vont ensemble ; s'il n'y en a qu'une, elle prend toute la largeur. */
+  const pair = (...t: (string | false | null | undefined)[]) => { const l = t.filter(Boolean) as string[]; return l.length === 1 ? l[0].replace('tile t2', 'tile t2 wide') : l.join(''); };
+  const p0 = elo[0]?.[1], e1 = elo[1];
+  const all = { n: list.length, w: list.filter(g => g.res === 'W').length, d: list.filter(g => g.res === 'D').length, l: list.filter(g => g.res === 'L').length };
+  const color = (c: 'w' | 'b') => { const r = byColor(list, c); return r.n ? half(`Avec les ${c === 'w' ? 'Blancs' : 'Noirs'}`, `${pct(r.w, r.n)} %`, wdlBar(r), `de victoires sur ${plural(r.n, 'partie')}`) : ''; };
+  const scoped = store.games.filter(g => !store.state.ignored[g.id] && (cadence === 'all' || g.tc === cadence)), D = byDay(scoped, 28), played = D.filter(x => x.n).length, top = Math.max(1, ...D.map(x => x.n));
+  const cs = coldStart(list), mo = byMoment(list), best = [...mo].sort((x, y) => y.pct - x.pct)[0];
+  const th = pr.tactics?.themes ?? [], thMax = Math.max(1, ...th.map(x => x[1]));
+  const tiles = [
+    p0 ? `<section class="surf card padded tile"><div class="elohead"><div><span class="tl">Elo en ${(TC[elo[0][0]] ?? elo[0][0]).toLowerCase()}</span><b>${p0[p0.length - 1].e}</b></div>${delta(p0)}</div>${eloChart(p0)}</section>` : '',
+    pair(e1 && half(`Elo en ${(TC[e1[0]] ?? e1[0]).toLowerCase()}`, String(e1[1][e1[1].length - 1].e), spark(e1[1]), `${e1[1][e1[1].length - 1].e >= e1[1][0].e ? '+' : '−'}${Math.abs(e1[1][e1[1].length - 1].e - e1[1][0].e)} sur ${plural(e1[1].length, 'partie')}`),
+      card.worst && facts[card.worst] && `<a class="tile t2 hot" href="#/profil"><span class="tl">Ton point faible</span><b class="tn">${cap(article(card.worst))}</b><small>${facts[card.worst]}.</small></a>`),
+    pair(half('Victoires', `${pct(all.w, all.n)} %`, wdlBar(all), `${all.w} gagnée${all.w > 1 ? 's' : ''}, ${all.l} perdue${all.l > 1 ? 's' : ''}`),
+      pr.tactics && half('Précision', String(pr.tactics.acc), ph.o != null || ph.m != null ? `<div class="phases">${phase('Ouverture', ph.o)}${phase('Milieu', ph.m)}${phase('Finale', ph.f)}</div>` : '', '')),
+    pair(color('w'), color('b')),
+    pair(played > 0 && half('Tes 4 dernières semaines', plural(played, 'jour joué', 'jours joués'), `<div class="heat" role="img" aria-label="Parties par jour sur 28 jours, jusqu'à ${top} en une journée">${D.map(x => `<i${x.n ? ` style="--v:${Math.max(0.25, x.n / top).toFixed(2)}"` : ''}></i>`).join('')}</div>`, `Jusqu'à ${plural(top, 'partie')} en une journée`),
+      cs && half('Début de session', `${cs.first} %`, `<div class="bars3" role="img" aria-label="${cs.first} % de victoires sur les 3 premières parties, ${cs.rest} % ensuite"><i class="${cs.first < cs.rest ? 'lo' : ''}" style="height:${cs.first}%"></i><i style="height:${cs.rest}%"></i></div>`, `de victoires sur tes 3 premières parties, ${cs.rest} % ensuite`)),
+    mo.length >= 2 ? `<section class="surf card padded tile"><h2>Victoires selon le moment de la journée</h2><div class="cols" style="--n:${mo.length}">${mo.map(x => `<div class="${x === best ? 'best' : ''}"><b>${x.pct} %</b><span class="colbar"><i style="height:${x.pct}%"></i></span><span>${x.label}</span><small>${plural(x.n, 'partie')}</small></div>`).join('')}</div></section>` : '',
+    th.length ? `<section class="surf card padded tile"><h2>Tes fautes les plus fréquentes</h2><div class="phases faults">${th.map(([k, v]) => `<span>${esc(THEME_LABEL[k] ?? k)}</span><span class="prog"><b style="width:${Math.round((100 * v) / thMax)}%"></b></span><b>${v}</b>`).join('')}</div></section>` : '',
+  ];
   root.innerHTML = `
     <header class="pagehead"><h1>Progrès</h1><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
     ${periods.length > 1 ? seg('period', periods, period) : ''}
@@ -84,11 +109,7 @@ export function viewGames(root: HTMLElement) {
       <div class="pcard-id"><b>${esc(String(store.state.settings.user || ''))}</b><span>${esc(card.type)}${card.best && card.worst ? ` : fort sur ${article(card.best)}, à travailler sur ${article(card.worst)}` : ''}</span></div>
       <div class="pcard-grid">${AXES.map(([k, l]) => `<div><b>${card.scores[k] ?? '–'}</b><span>${l}</span></div>`).join('')}</div>
       <span class="pcard-more">Voir le radar et le détail${icon('chev')}</span></a>` : ''}
-    ${elo.map(([tc, p]) => `<section class="surf card padded tile"><div class="elohead"><div><span class="label">Elo en ${(TC[tc] ?? tc).toLowerCase()}</span><b>${p[p.length - 1].e}</b></div><span class="res ${p[p.length - 1].e >= p[0].e ? 'res-W' : 'res-L'}">${p[p.length - 1].e >= p[0].e ? '+' : '−'}${Math.abs(p[p.length - 1].e - p[0].e)} sur la période</span></div>${eloChart(p)}</section>`).join('')}
-    ${card.worst && facts[card.worst] ? `<a class="tile hot" href="#/profil"><span class="label">Ton point faible</span><b>${cap(article(card.worst))}</b><span>${facts[card.worst]}.</span></a>` : ''}
-    <section class="surf card padded tile"><h2>Résultats par couleur</h2>${colorBar('w')}${colorBar('b')}</section>
-    ${ph.o != null || ph.m != null ? `<section class="surf card padded tile"><h2>Précision par phase</h2><div class="phases">${phase('Ouverture', ph.o)}${phase('Milieu', ph.m)}${phase('Finale', ph.f)}</div></section>` : ''}
-    ${pr.tactics?.themes.length ? `<section class="surf card padded tile"><h2>Tes fautes les plus fréquentes</h2><div class="keys">${pr.tactics.themes.map(([k, v]) => `<span class="cnt c-book">${esc(k)} <b>${v}</b></span>`).join('')}</div></section>` : ''}
+    <div class="tiles">${tiles.join('')}</div>
     <div class="surf card list">
       <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>${weak ? `À travailler : ${esc(STRUCT[weak[0]].name)}` : 'Tes structures de pions'}</b><small>${weak ? `${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires` : 'Leurs plans, ton score, et tes fautes à y rejouer'}</small></span>${chev}</a>
     </div>
@@ -100,7 +121,9 @@ export function viewGames(root: HTMLElement) {
   root.querySelectorAll<HTMLElement>('.chart.elo').forEach(el => bindChart(el));
   const more = root.querySelector<HTMLButtonElement>('#bMore'); if (more) more.onclick = () => { shown += 30; const y = scrollY; viewGames(root); scrollTo(0, y); };
 }
-const cap = (s: string) => s.replace(/^l'|^la |^le /, m => m).replace(/^./, c => c.toUpperCase());
+const cap = (s: string) => s.replace(/^./, c => c.toUpperCase());
+/** Thèmes de faute dont le nom mérite d'être dit plus simplement. */
+const THEME_LABEL: Record<string, string> = { 'Coup calme': 'Bon coup tranquille manqué' };
 
 /** Détail de la carte joueur : le radar des six notes, puis chaque axe avec ce qui l'explique. */
 export function viewProfile(root: HTMLElement) {

@@ -3,17 +3,17 @@ import { isDue, isValid } from '../core/schedule';
 import { recentDeviations, refBranch, todayPool } from '../core/drill';
 import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
-import { miniBoard } from '../ui/board';
+import { miniBoard, miniFen } from '../ui/board';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
-import { streak, trainedToday } from '../core/streak';
+import { dayKey, streak, trainedToday } from '../core/streak';
 import { getToken, lastSync } from './api';
 import { lineUrl, startSession } from './session';
 import { duePositions, priorityFaults } from '../core/wood';
 import { gameRow, gameUrl } from './games';
 import { PLAN_LINES } from './trainer';
 import { startCycle } from './wood';
-import { coldStart, keyMoment, myWp } from '../core/stats';
+import { coldStart, keyMoment, lastSession, myWp } from '../core/stats';
 
 const DAY = 864e5;
 const st = (id: string) => store.state.br[id];
@@ -35,17 +35,11 @@ function preview(id: string): string {
   const { br, bloc } = BR[id], g = new Chess(); for (const m of br.moves) if (!tryMove(g, uciToObj(m.uci))) break;
   return miniBoard(g, bloc.side);
 }
-/** Bilan des 7 derniers jours de parties analysées. */
-function week() {
-  const since = Date.now() / 1000 - 7 * 86400, gs = store.games.filter(g => g.t >= since && g.st && g.st.acc != null);
-  if (!gs.length) return null;
-  return { n: gs.length, acc: Math.round(gs.reduce((a, g) => a + (g.st!.acc || 0), 0) / gs.length), wins: gs.filter(g => g.res === 'W').length, blunders: gs.reduce((a, g) => a + g.st!.blunder, 0) };
-}
-
-const thumb = (game: Chess, orient: 'w' | 'b') => miniBoard(game, orient).replace('class="mini"', 'class="mini sm"');
+const small = (h: string) => h.replace('class="mini"', 'class="mini sm"');
+const thumb = (game: Chess, orient: 'w' | 'b') => small(miniBoard(game, orient));
 /** Position après les `n` premiers demi-coups d'une partie. */
 function positionAt(sans: string[], n: number): Chess { const g = new Chess(); for (let i = 0; i < n; i++) if (!tryMove(g, sans[i])) break; return g; }
-const lineThumb = (id: string) => { const { br, bloc } = BR[id], g = new Chess(); for (const m of br.moves) if (!tryMove(g, uciToObj(m.uci))) break; return thumb(g, bloc.side); };
+const lineThumb = (id: string) => small(preview(id));
 /** Nom d'une ligne en mots simples : le camp et l'ouverture adverse, pas le nom de la variante. */
 const plainBloc = (id: string) => { const b = BR[id].bloc; return `${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'} : ${b.sous || b.titre}`; };
 
@@ -57,60 +51,75 @@ function dailyPlan() {
   const done = planDone(), steps: { key: string; thumb: string; title: string; sub: string; min: number; done: boolean; go: () => void }[] = [];
   const faults = priorityFaults(store.faults, store.state.fault, 5);
   if (faults.length) { const th: Record<string, number> = {}; for (const f of faults) th[f.theme] = (th[f.theme] || 0) + 1; const top = Object.entries(th).sort((x, y) => y[1] - x[1])[0][0];
-    steps.push({ key: 'tac', thumb: thumb(new Chess(faults[0].fen), faults[0].side), title: `${plural(faults.length, 'position')} à résoudre`, sub: `Tirées de tes fautes : ${PLAIN_THEME[top] ?? top.toLowerCase()}`, min: Math.max(1, Math.round(faults.length * 0.6)), done: done.includes('tac'),
+    steps.push({ key: 'tac', thumb: miniBoard(new Chess(faults[0].fen), faults[0].side), title: `${plural(faults.length, 'position')} à résoudre`, sub: `Tirées de tes fautes : ${PLAIN_THEME[top] ?? top.toLowerCase()}`, min: Math.max(1, Math.round(faults.length * 0.6)), done: done.includes('tac'),
       go: () => startCycle('Plan du jour', faults, '#/', true) }); }
   const { due, fresh } = todayPool(REP, store.state.br), pool = [...due, ...fresh];
-  if (pool.length) steps.push({ key: 'lines', thumb: lineThumb(pool[0]), title: due.length ? `${plural(due.length, 'ligne')} à revoir${fresh.length ? `, ${fresh.length} à découvrir` : ''}` : `${plural(fresh.length, 'ligne')} à découvrir`,
+  if (pool.length) steps.push({ key: 'lines', thumb: preview(pool[0]), title: due.length ? `${plural(due.length, 'ligne')} à revoir${fresh.length ? `, ${fresh.length} à découvrir` : ''}` : `${plural(fresh.length, 'ligne')} à découvrir`,
     sub: plainBloc(pool[0]), min: pool.length, done: done.includes('lines'), go: () => { location.hash = startSession(PLAN_LINES, pool, '#/', pool[0]); } });
   const g = store.games.filter(x => x.st && x.wp).sort((x, y) => y.t - x.t)[0], k = g ? keyMoment(g) : null;
-  if (g && k) steps.push({ key: 'review', thumb: thumb(positionAt(g.sans, k.ply), g.color), title: 'Un coup à retrouver', sub: `${Math.floor(k.ply / 2) + 1}${k.ply % 2 ? '…' : '.'}${k.san} ${ago(g.t * 1000)}, contre ${g.opp}`, min: 2, done: done.includes('review'),
+  if (g && k) steps.push({ key: 'review', thumb: miniBoard(positionAt(g.sans, k.ply), g.color), title: 'Un coup à retrouver', sub: `${Math.floor(k.ply / 2) + 1}${k.ply % 2 ? '…' : '.'}${k.san} ${ago(g.t * 1000)}, contre ${g.opp}`, min: 2, done: done.includes('review'),
     go: () => { markPlan('review'); location.hash = gameUrl(g.id, k.ply + 1, '#/'); } });
   return steps;
 }
 
+/** Les 7 derniers jours, aujourd'hui à droite : un point plein par jour d'entraînement. */
+function weekStrip(days: string[]) {
+  const set = new Set(days), cells: string[] = []; let n = 0;
+  for (let k = 6; k >= 0; k--) { const d = new Date(); d.setHours(12, 0, 0, 0); d.setDate(d.getDate() - k); const on = set.has(dayKey(d.getTime())); if (on) n++;
+    cells.push(`<span class="${on ? 'on' : ''}${k ? '' : ' now'}"><i></i>${d.toLocaleDateString('fr-FR', { weekday: 'narrow' })}</span>`); }
+  return `<div class="week" role="img" aria-label="${plural(n, "jour d'entraînement", "jours d'entraînement")} sur les 7 derniers">${cells.join('')}</div>`;
+}
+
 export function viewHome(root: HTMLElement) {
-  const steps = dailyPlan(), next = steps.find(s => !s.done), total = steps.reduce((a, s) => a + s.min, 0), left = steps.filter(s => !s.done).length;
+  const steps = dailyPlan(), todo = steps.filter(s => !s.done), next = todo[0], later = todo.slice(1), did = steps.filter(s => s.done);
   const days = trainingDays(), n = streak(days), cold = coldStart(store.games);
-  const lead = !steps.length ? 'Rien de prévu aujourd\'hui : tout est à jour.' : !next ? 'Plan du jour terminé.' : left < steps.length ? `Encore ${plural(left, 'exercice')}.`
-    : `${steps.length === 1 ? 'Un exercice' : steps.length === 2 ? 'Deux exercices' : 'Trois exercices'}${store.games.length ? ' tirés de tes parties' : ''}, ${plural(total, 'minute')}.`;
+  const games = store.games.filter(g => !store.state.ignored[g.id]), last = lastSession(games), res = (r: string) => last ? last.games.filter(g => g.res === r).length : 0;
+  const hero = next ? `<section class="surf today now">
+      <div class="today-top"><div class="today-text"><h2>${esc(next.title)}</h2><p>${esc(next.sub)}</p></div>${next.thumb}</div>
+      <button class="btn pri block" id="bGo">${did.length ? 'Continuer' : 'Commencer'}, ${next.min} min</button></section>`
+    : `<section class="surf today now"><div class="today-text"><h2>${steps.length ? 'Séance du jour terminée' : 'Tout est à jour'}</h2><p>${steps.length ? `${did.map(s => s.title.toLowerCase()).join(', ')}.` : 'Rien à revoir aujourd\'hui. Tu peux avancer dans ton répertoire ou rejouer tes fautes.'}</p></div>
+      <a class="btn pri block" href="#/entrainer">S'entraîner en libre</a></section>`;
   root.innerHTML = `
     <header class="hello">
       <div><p class="date">${cap(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</p><h1>Aujourd'hui</h1></div>
       <div class="hello-r">${n ? `<span class="pill${trainedToday(days) ? '' : ' off'}" title="${trainedToday(days) ? 'Série d\'entraînement en cours' : 'Entraîne-toi aujourd\'hui pour garder ta série'}">${n > 1 ? `${n} jours de suite` : '1 jour'}</span>` : ''}<a class="iconbtn" href="#/reglages" aria-label="Réglages">${icon('sliders')}</a></div>
     </header>
-    <p class="leadline">${lead}</p>
-    ${steps.length ? `<div class="surf card list plan">${steps.map((s, i) => `<button class="rowi step${s.done ? ' isdone' : ''}" data-step="${i}">${s.thumb}<span class="body"><small class="stepn${s === next ? ' on' : ''}">${s.done ? 'Fait' : `Étape ${i + 1}, ${s.min} min`}</small><b>${esc(s.title)}</b><small>${esc(s.sub)}</small></span>${s.done ? icon('check', 'tick') : ''}</button>`).join('')}</div>` : ''}
-    ${next ? `<button class="btn pri block" id="bGo">${left < steps.length ? 'Continuer' : 'Commencer'}</button>` : `<a class="btn pri block" href="#/entrainer">S'entraîner en libre</a>`}
-    ${cold && cold.rest - cold.first >= 5 && steps[0]?.key === 'tac' ? `<section class="surf card padded why2">
-      <div class="bars3" role="img" aria-label="${cold.first} % de victoires sur les parties 1 à 3 d'une session, ${cold.rest} % ensuite"><i class="lo" style="height:${cold.first}%"></i><i style="height:${cold.rest}%"></i><i style="height:${cold.rest}%"></i></div>
-      <div><b>Pourquoi commencer par la tactique</b><small>Tu gagnes ${cold.first} % de tes 3 premières parties d'une session, ${cold.rest} % des suivantes.</small></div></section>` : ''}
+    ${weekStrip(days)}
+    ${hero}
+    ${next && !did.length && next.key === 'tac' && cold && cold.rest - cold.first >= 5 ? `<p class="hint">À faire avant de jouer : tu gagnes ${cold.first} % de tes 3 premières parties d'une session, ${cold.rest} % des suivantes.</p>` : ''}
+    ${later.length ? `<section class="grp"><h2>Ensuite</h2><div class="surf card list">${later.map(s => `<button class="rowi" data-step="${steps.indexOf(s)}">${small(s.thumb)}<span class="body"><b>${esc(s.title)}</b><small>${esc(s.sub)}</small></span><span class="dim">${s.min} min</span>${chev}</button>`).join('')}</div></section>` : ''}
+    ${next && did.length ? `<p class="doneline">${icon('check', 'tick')}<span>Déjà fait aujourd'hui : ${did.map(s => esc(s.title.toLowerCase())).join(', ')}</span></p>` : ''}
+    ${last ? `<section class="grp"><h2>Tes dernières parties</h2>
+      <div class="surf card list"><a class="rowi sess" href="#/progres"><span class="body"><b>${cap(ago(last.t * 1000))}, ${plural(last.games.length, 'partie')}</b><small>${[res('W') ? plural(res('W'), 'gagnée') : '', res('D') ? plural(res('D'), 'nulle') : '', res('L') ? plural(res('L'), 'perdue') : ''].filter(Boolean).join(', ')}</small></span>
+        <span class="dots" aria-hidden="true">${last.games.slice(-12).map(g => `<i class="${g.res}"></i>`).join('')}</span>${chev}</a>
+      ${[...last.games].reverse().slice(0, 2).map(g => gameRow(g, '#/')).join('')}</div></section>` : ''}
     ${next ? `<a class="quiet" href="#/entrainer">Choisir moi-même</a>` : ''}
     ${getToken() ? '' : `<div class="surf card list"><a class="rowi" href="#/reglages"><span class="body"><b>Relier l'app à tes parties</b><small>Entre ton code d'accès : le plan du jour s'appuiera sur tes propres parties, et ta progression suivra sur tous tes appareils.</small></span>${chev}</a></div>`}`;
   root.querySelectorAll<HTMLButtonElement>('[data-step]').forEach(b => b.addEventListener('click', () => steps[+b.dataset.step!].go()));
   $('#bGo', root)?.addEventListener('click', () => next!.go());
 }
 
-/** S'entraîner : tout ce qui se lance en libre, rangé par intention. */
+/** S'entraîner : tout ce qui se lance en libre. Chaque chose a sa forme : le répertoire et sa progression, les plans et les structures en images, les fautes en chiffre, les sorties de ligne coup contre coup. */
 export function viewTrain(root: HTMLElement) {
-  const devs = recentDeviations(store.games, store.state.fixed, BR), due = dueLines(ALL_IDS), posDue = duePositions(store.faults, store.state.fault);
-  const { due: d, fresh } = todayPool(REP, store.state.br), firstLine = d[0] ?? fresh[0] ?? ALL_IDS[0], f0 = store.faults[0];
-  const start = new Chess(), plan = PLANS[0], planPos = plan ? positionAt(plan.sans, plan.steps[0].p) : start;
-  const item = (href: string, th: string, title: string, sub: string, tag = '') => `<a class="rowi" href="${href}">${th}<span class="body"><b>${title}</b><small>${sub}</small></span>${tag ? `<span class="due">${tag}</span>` : ''}${chev}</a>`;
+  const devs = recentDeviations(store.games, store.state.fixed, BR), due = dueLines(ALL_IDS), posDue = duePositions(store.faults, store.state.fault), valid = validCount(ALL_IDS);
+  const { due: d, fresh } = todayPool(REP, store.state.br), firstLine = d[0] ?? fresh[0] ?? ALL_IDS[0];
+  const plan = PLANS[0], planPos = plan ? positionAt(plan.sans, plan.steps[0].p) : new Chess(), stPos = PLANS[1] ? positionAt(PLANS[1].sans, PLANS[1].steps[0].p) : planPos;
   root.innerHTML = `
-    <header class="pagehead"><h1>S'entraîner</h1><div class="sumrow"><p>Quand tu veux choisir toi-même</p></div></header>
-    <section class="grp"><h2>Tes ouvertures</h2><div class="surf card list">
-      ${item('#/rep', lineThumb(firstLine), 'Répertoire', `${plural(ALL_IDS.length, 'ligne')}, ${validCount(ALL_IDS)} validée${validCount(ALL_IDS) > 1 ? 's' : ''}`, due ? `${due} à revoir` : '')}
-      ${item('#/plans', thumb(planPos, plan?.side ?? 'w'), 'Plans animés', `${plural(PLANS.length, 'plan')} : quoi faire une fois l'ouverture jouée`)}
-      ${item('#/structures', thumb(planPos, plan?.side ?? 'w'), 'Structures de pions', 'Ton score dans chacune, et le plan qui va avec')}
-    </div></section>
-    <section class="grp"><h2>Tes fautes</h2><div class="surf card list">
-      ${item('#/wood', thumb(f0 ? new Chess(f0.fen) : start, f0?.side ?? 'w'), 'Fautes à rejouer', store.faults.length ? `${plural(store.faults.length, 'position tirée', 'positions tirées')} de tes parties` : 'Elles arrivent après la première analyse de tes parties', posDue ? `${posDue} à revoir` : '')}
-      ${devs.slice(0, 3).map(g => { const id = refBranch(g, BR)!; return item(lineUrl(id, 'drill', g.id), thumb(positionAt(g.sans, g.a.ply ?? 0), g.color), `Tu as quitté ta ligne ${ago(g.t * 1000)}`, `Contre ${esc(g.opp)} : tu as joué ${esc(g.a.played ?? '')}${(g.a.expected || []).length ? `, ta ligne joue ${esc(g.a.expected!.map(e => e.san).join(' ou '))}` : ''}`); }).join('')}
-    </div></section>
-    <section class="grp"><h2>Libre</h2><div class="surf card list">
-      <button class="rowi" id="bMix">${lineThumb(ALL_IDS[Math.floor(ALL_IDS.length / 2)])}<span class="body"><b>Lignes au hasard</b><small>Tout le répertoire, les lignes fragiles d'abord</small></span>${chev}</button>
-      ${item('#/explorer', thumb(start, 'w'), 'Explorer une position', "Joue tes coups, le moteur donne son avis")}
-    </div></section>`;
+    <header class="pagehead"><h1>S'entraîner</h1></header>
+    <section class="grp"><h2>Tes ouvertures</h2>
+      <a class="surf card feat" href="#/rep">${preview(firstLine)}<span class="body"><b>Répertoire</b><small>${validPhrase(valid, ALL_IDS.length)}</small>${bar(valid, ALL_IDS.length, 'big')}${due ? `<span class="due">${due} à revoir</span>` : ''}</span>${chev}</a>
+      <div class="halves">
+        <a class="surf card half" href="#/plans">${miniBoard(planPos, plan?.side ?? 'w')}<b>Plans animés</b><small>${plural(PLANS.length, 'plan')} : quoi faire une fois l'ouverture jouée</small></a>
+        <a class="surf card half" href="#/structures">${miniFen(stPos.fen(), PLANS[1]?.side ?? 'w', 'p')}<b>Structures de pions</b><small>Ton score dans chacune, et le plan qui va avec</small></a>
+      </div></section>
+    <section class="grp"><h2>Tes fautes</h2>
+      <a class="surf card feat count" href="#/wood"><b class="num">${store.faults.length}</b><span class="body"><b>Fautes à rejouer</b><small>${store.faults.length ? `${store.faults.length > 1 ? 'Positions tirées' : 'Position tirée'} de tes parties, à résoudre jusqu'à ne plus les rater` : 'Elles arrivent après la première analyse de tes parties'}</small>${posDue ? `<span class="due">${posDue} à revoir</span>` : ''}</span>${chev}</a></section>
+    ${devs.length ? `<section class="grp"><h2>Là où tu as quitté ta ligne</h2><div class="surf card list">
+      ${devs.slice(0, 3).map(g => { const id = refBranch(g, BR)!, exp = (g.a.expected || []).map(e => e.san);
+        return `<a class="rowi" href="${lineUrl(id, 'drill', g.id)}">${thumb(positionAt(g.sans, g.a.ply ?? 0), g.color)}<span class="body"><b>Contre ${esc(g.opp)}, ${ago(g.t * 1000)}</b>
+          <span class="swap"><span class="mv no">${esc(g.a.played ?? '')}</span>${exp.length ? `<small>au lieu de</small>${exp.slice(0, 2).map(x => `<span class="mv yes">${esc(x)}</span>`).join('')}` : ''}</span></span>${chev}</a>`; }).join('')}
+    </div></section>` : ''}
+    <section class="grp"><h2>Libre</h2><div class="row"><button class="btn" id="bMix">Lignes au hasard</button><a class="btn" href="#/explorer">Explorer une position</a></div></section>`;
   $('#bMix', root).addEventListener('click', () => go('Lignes au hasard', ALL_IDS, '#/entrainer'));
 }
 

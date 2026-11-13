@@ -133,3 +133,12 @@ export function miniBoard(game: Chess, orient: Color): string {
   for (const r of ranks) for (const f of files) { const p = game.get((FILES[f] + r) as never); h += `<i class="${(f + r) % 2 === 1 ? 'd' : 'l'}">${p ? `<img src="${PIECES[p.color + p.type]}" alt="">` : ''}</i>`; }
   return `<span class="mini" aria-hidden="true">${h}</span>`;
 }
+
+/** Petit échiquier à partir d'une position écrite (FEN). `only` : ne montrer que ces pièces, par exemple « p » pour la structure de pions. */
+export function miniFen(fen: string, orient: Color, only?: string): string {
+  const rows = fen.split(' ')[0].split('/').map(r => { const out: string[] = []; for (const ch of r) { if (/\d/.test(ch)) for (let k = 0; k < +ch; k++) out.push(''); else out.push(ch); } return out; });
+  let h = '';
+  for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) { const r = orient === 'w' ? y : 7 - y, f = orient === 'w' ? x : 7 - x, ch = rows[r]?.[f] ?? '', show = ch && (!only || only.includes(ch.toLowerCase()));
+    h += `<i class="${(r + f) % 2 === 1 ? 'd' : 'l'}">${show ? `<img src="${PIECES[(ch === ch.toUpperCase() ? 'w' : 'b') + ch.toLowerCase()]}" alt="">` : ''}</i>`; }
+  return `<span class="mini" aria-hidden="true">${h}</span>`;
+}

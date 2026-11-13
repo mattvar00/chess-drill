@@ -26,8 +26,6 @@ export function viewPlans(root: HTMLElement, ids?: string[]) {
 function positionAt(P: Plan, ply: number): { game: Chess; last: Move | null } {
   const game = new Chess(); let last: Move | null = null; for (let i = 0; i < ply; i++) last = tryMove(game, P.sans[i]); return { game, last };
 }
-const recent = (P: Plan, ply: number) => { const from = Math.max(0, ply - 6), out: string[] = [];
-  for (let i = from; i < ply; i++) out.push((i % 2 === 0 ? `${i / 2 + 1}.` : i === from ? `${Math.ceil(i / 2)}…` : '') + P.sans[i]); return out.join(' '); };
 
 export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): () => void {
   const P = PLANS.find(x => x.id === id); if (!P) { root.innerHTML = '<section class="empty"><p>Ce plan n\'existe plus.</p><a class="btn" href="#/plans">Tous les plans</a></section>'; return () => { /* rien */ }; }
@@ -39,11 +37,12 @@ export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): ()
       <a class="btn pri block" href="${lineUrl(planBranch(P.id), 'drill')}">Jouer la ligne</a><a class="btn block" href="#/plan/${P.id}?vu=1">Voir directement le plan</a></section>`;
     return () => { /* rien */ };
   }
-  let i = 0, timer: ReturnType<typeof setInterval> | undefined;
+  // `i` : l'étape affichée ; `at` : le demi-coup affiché. Entre deux étapes, les coups se jouent un par un, pour qu'aucun ne soit sauté.
+  let i = 0, at = P.steps[0].p, auto = false, timer: ReturnType<typeof setTimeout> | undefined;
   root.innerHTML = `<div class="trainer plan">
     <div class="tboard"><div id="board"></div><div class="stepper" id="stepper"></div></div>
     <div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">
-      <div class="coach" aria-live="polite"><p class="meta" id="mv"></p><p id="cap"></p></div>
+      <div class="coach" aria-live="polite"><p class="meta" id="mv"></p><p class="moves mseg" id="seg"></p><p id="cap"></p></div>
       <div class="explnav three"><button class="btn" id="bPrev" aria-label="Étape précédente">${icon('back')}</button><button class="btn" id="bPlay"></button><button class="btn" id="bNext" aria-label="Étape suivante">${icon('chev')}</button></div>
       <div class="row"><a class="btn" href="${lineUrl(planBranch(P.id), 'drill')}">${done ? 'Rejouer la ligne' : 'Jouer la ligne'}</a></div>
       ${done ? `<p class="hint">Ligne déjà jouée${done.errs ? `, ${plural(done.errs, 'erreur')} la dernière fois` : ' sans faute'}.</p>` : ''}
@@ -51,27 +50,39 @@ export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): ()
         <p>Idées tirées de : ${P.src.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\/(www\.)?/, '').split('/')[0])}</a>`).join(', ')}. Chaque coup est vérifié au moteur.</p></details>
     </div></div></div>`;
   const board = new Board($('#board', root), { movable: () => XS.active()?.movable() ?? null, onMove: m => XS.active()?.onMove(m) });
-  const XS = explorerSlot(board, () => $('#tmain', root), () => $('#xp', root), () => { stop(); const ply = P.steps[i].p;
-    return { fen: positionAt(P, ply).game.fen(), orient: P.side, lines: ply < P.sans.length ? [{ label: 'Suite de la ligne', sans: P.sans.slice(ply) }] : [] }; }, () => draw());
+  const XS = explorerSlot(board, () => $('#tmain', root), () => $('#xp', root), () => { stop();
+    return { fen: positionAt(P, at).game.fen(), orient: P.side, lines: at < P.sans.length ? [{ label: 'Suite de la ligne', sans: P.sans.slice(at) }] : [] }; }, () => draw());
   XS.available(true);
-  const play = $('#bPlay', root);
+  const play = $('#bPlay', root), MOVE_MS = 650, READ_MS = 4000;
+  /** Premier demi-coup du tronçon qui mène à l'étape `k` : les coups joués depuis l'étape précédente. */
+  const segStart = (k: number) => k ? P.steps[k - 1].p : Math.max(0, P.steps[0].p - 4);
   const draw = (animate = false) => {
-    const S = P.steps[i], { game, last } = positionAt(P, S.p);
+    const S = P.steps[i], onStep = at === S.p, { game, last } = positionAt(P, at), from = segStart(i);
     board.set(game, P.side, last, animate);
-    board.overlay({ arrows: S.a.map(([from, to]) => ({ from, to, cls: 'plan' })), marks: S.h.map(sq => ({ sq, cls: 'key' })) });
-    $('#cap', root).textContent = S.c; $('#mv', root).textContent = `Étape ${i + 1} sur ${P.steps.length}, après ${recent(P, S.p)}`;
+    board.overlay(onStep ? { arrows: S.a.map(([f, t]) => ({ from: f, to: t, cls: 'plan' })), marks: S.h.map(sq => ({ sq, cls: 'key' })) } : { arrows: [], marks: [] });
+    $('#mv', root).textContent = `Étape ${i + 1} sur ${P.steps.length}${i ? ', les coups joués depuis la précédente' : ', les derniers coups de la ligne'}`;
+    $('#seg', root).innerHTML = P.sans.slice(from, S.p).map((san, k) => { const n = from + k;
+      return `${n % 2 === 0 ? `<span class="n">${n / 2 + 1}.</span>` : k === 0 ? `<span class="n">${(n + 1) / 2}…</span>` : ''}<button type="button" class="m${n + 1 === at ? ' cur' : n + 1 > at ? ' fut' : ''}" data-ply="${n + 1}">${esc(san)}</button> `; }).join('');
+    const cap = $('#cap', root); cap.textContent = S.c; cap.classList.toggle('wait', !onStep);
     $('#stepper', root).innerHTML = P.steps.map((_, k) => `<i class="${k < i ? 'ok' : k === i ? 'cur' : ''}"></i>`).join('');
   };
-  const stop = () => { clearInterval(timer); timer = undefined; play.innerHTML = 'Lecture'; play.setAttribute('aria-label', 'Lire le plan'); };
-  const step = (d: number) => { const j = Math.max(0, Math.min(P.steps.length - 1, i + d)); if (j !== i) { i = j; draw(d === 1); } };
-  $('#bPrev', root).onclick = () => { stop(); step(-1); }; $('#bNext', root).onclick = () => { stop(); step(1); };
-  play.onclick = () => { if (timer) return stop(); if (i >= P.steps.length - 1) { i = 0; draw(); }
-    play.innerHTML = 'Pause'; play.setAttribute('aria-label', 'Mettre en pause');
-    timer = setInterval(() => { if (i < P.steps.length - 1) step(1); else stop(); }, 4500); };
-  const onKey = (e: KeyboardEvent) => { if (XS.active()) return; if (e.key === 'ArrowRight') { stop(); step(1); } if (e.key === 'ArrowLeft') { stop(); step(-1); } };
+  const setPlay = () => { play.innerHTML = auto ? 'Pause' : 'Lecture'; play.setAttribute('aria-label', auto ? 'Mettre en pause' : 'Lire le plan'); };
+  const stop = () => { clearTimeout(timer); timer = undefined; auto = false; setPlay(); };
+  /** Joue un coup, puis le suivant, jusqu'à la position de l'étape ; en lecture, enchaîne ensuite sur l'étape suivante. */
+  const tick = () => { timer = undefined;
+    if (at < P.steps[i].p) { at++; draw(true); timer = setTimeout(tick, at < P.steps[i].p ? MOVE_MS : auto ? READ_MS : 0); return; }
+    if (auto) { if (i < P.steps.length - 1) { i++; tick(); } else stop(); } };
+  const next = () => { if (at < P.steps[i].p) { clearTimeout(timer); timer = undefined; at = P.steps[i].p; draw(); return; }   // un deuxième appui va droit à l'étape
+    if (i < P.steps.length - 1) { i++; tick(); } };
+  const prev = () => { if (at === P.steps[i].p && i > 0) i--; at = P.steps[i].p; draw(); };
+  $('#bPrev', root).onclick = () => { stop(); prev(); }; $('#bNext', root).onclick = () => { stop(); next(); };
+  $('#seg', root).addEventListener('click', e => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-ply]'); if (!b) return; stop(); at = +b.dataset.ply!; draw(); });
+  play.onclick = () => { if (auto) return stop(); auto = true; setPlay();
+    if (i >= P.steps.length - 1 && at === P.steps[i].p) { i = 0; at = P.steps[0].p; draw(); timer = setTimeout(tick, READ_MS); } else if (at < P.steps[i].p) tick(); else timer = setTimeout(tick, 600); };
+  const onKey = (e: KeyboardEvent) => { if (XS.active()) return; if (e.key === 'ArrowRight') { stop(); next(); } if (e.key === 'ArrowLeft') { stop(); prev(); } };
   document.addEventListener('keydown', onKey);
   stop(); draw();
-  return () => { XS.destroy(); clearInterval(timer); board.destroy(); document.removeEventListener('keydown', onKey); };
+  return () => { XS.destroy(); clearTimeout(timer); board.destroy(); document.removeEventListener('keydown', onKey); };
 }
 
 /* ---------- structures de pions ---------- */

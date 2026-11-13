@@ -131,3 +131,17 @@ export function coldStart(list: Game[]): { first: number; rest: number } | null 
   for (const s of sessions(list)) s.forEach((g, i) => { const x = i < 3 ? a : b; x[0]++; if (g.res === 'W') x[1]++; });
   return a[0] >= 20 && b[0] >= 20 ? { first: Math.round((100 * a[1]) / a[0]), rest: Math.round((100 * b[1]) / b[0]) } : null;
 }
+
+/** Nombre de parties et de victoires pour chacun des `days` derniers jours (le dernier est aujourd'hui). */
+export function byDay(list: Game[], days = 28, now = Date.now()): { n: number; w: number }[] {
+  const out = Array.from({ length: days }, () => ({ n: 0, w: 0 })), start = new Date(now); start.setHours(0, 0, 0, 0);
+  for (const g of list) { const d = new Date(g.t * 1000); d.setHours(0, 0, 0, 0); const k = days - 1 - Math.round((start.getTime() - d.getTime()) / 864e5); if (k >= 0 && k < days) { out[k].n++; if (g.res === 'W') out[k].w++; } }
+  return out;
+}
+/** Part de victoires selon le moment de la journée (heure locale), pour les moments avec au moins 15 parties. */
+export function byMoment(list: Game[]): { label: string; n: number; pct: number }[] {
+  const M: [string, number, number][] = [['Matin', 5, 12], ['Après-midi', 12, 18], ['Soir', 18, 22], ['Nuit', 22, 29]];
+  return M.map(([label, a, b]) => { const l = list.filter(g => { const h = (new Date(g.t * 1000).getHours() + 24 - 5) % 24 + 5; return h >= a && h < b; }); return { label, n: l.length, pct: l.length ? Math.round((100 * l.filter(g => g.res === 'W').length) / l.length) : 0 }; }).filter(x => x.n >= 15);
+}
+/** La dernière session de parties (les parties séparées de moins de 20 minutes). */
+export function lastSession(list: Game[]): { t: number; games: Game[] } | null { const s = sessions(list); const last = s[s.length - 1]; return last ? { t: last[last.length - 1].t, games: last } : null; }

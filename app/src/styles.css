@@ -504,3 +504,71 @@ body.focus main{display:block;padding:0 var(--pad)}
   .today .mini{width:136px;height:136px}
 }
 @media(prefers-reduced-motion:reduce){.sq.bad,.sq.good{animation-duration:.01s}}
+
+/* ---------- Aujourd'hui : la semaine, l'exercice du moment, la dernière session ---------- */
+.week{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.week span{display:flex;flex-direction:column;align-items:center;gap:5px;font-size:12px;color:var(--c-mute);text-transform:capitalize}
+.week i{width:100%;height:6px;border-radius:3px;background:var(--c-pend)}
+.week .on i{background:var(--c-ok)}
+.week .now{color:var(--c-ink);font-weight:600}
+.today.now h2{font-size:22px}
+.today.now .mini{width:112px;height:112px}
+.doneline{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--c-mute)}
+.doneline .tick{flex:none;width:18px;height:18px;color:var(--c-ok)}
+.rowi>.dim{flex:none;white-space:nowrap}
+.dots{flex:none;display:grid;grid-template-columns:repeat(6,8px);gap:4px}
+.dots i{width:8px;height:8px;border-radius:2px;background:var(--chev)}.dots .W{background:var(--ok)}.dots .L{background:var(--bad)}
+/* ---------- S'entraîner : une forme par chose ---------- */
+.feat{display:flex;align-items:center;gap:14px;padding:14px;color:inherit}
+.feat .body{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:4px}
+.feat .body>b{font:700 20px/1.2 var(--f-title);letter-spacing:-.01em}
+.feat small{font-size:13px;color:var(--mute)}
+.feat .prog{align-self:stretch;margin:4px 0 2px}
+.feat .mini{width:92px;height:92px}
+.feat.count .num{flex:none;min-width:92px;text-align:center;font:700 44px/1 var(--f-title);letter-spacing:-.03em;color:var(--accent-text)}
+.halves{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.half{display:flex;flex-direction:column;gap:2px;padding:12px;color:inherit}
+.half .mini{width:100%;height:auto;aspect-ratio:1;margin-bottom:8px}
+.half b{font-weight:600}
+.half small{font-size:13px;color:var(--mute)}
+.swap{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:3px}
+.mv{display:inline-flex;align-items:center;height:24px;padding:0 8px;border-radius:7px;font-size:13px;font-weight:600}
+.mv.no{background:color-mix(in srgb,var(--bad) 14%,transparent);color:var(--bad);text-decoration:line-through}
+.mv.yes{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+/* ---------- Progrès : grille de tuiles ---------- */
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.tiles>*{grid-column:span 2;min-width:0}
+.tiles>.t2{grid-column:span 1}.tiles>.t2.wide{grid-column:span 2}
+.tile.t2{padding:14px;gap:6px;color:inherit}
+.tl{font-size:13px;font-weight:600;color:var(--mute)}
+.tn{font:700 28px/1.1 var(--f-title);letter-spacing:-.02em}
+.tile.t2 small{font-size:12px;color:var(--mute)}
+.tile.t2 .wdl-bar,.tile.t2 .spark,.tile.t2 .heat,.tile.t2 .phases{margin:4px 0 2px}
+.tile.t2 .phases{gap:6px 8px;font-size:12px}
+.tile.t2.hot .tl,.tile.t2.hot small{color:inherit}
+.tile.t2.hot .tn{font-size:24px}
+.tile.t2.hot small{font-size:13px;font-weight:500}
+.spark{display:block;width:100%;height:36px}
+.heat{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.heat i{aspect-ratio:1;border-radius:3px;background:color-mix(in srgb,var(--ink) 9%,transparent)}
+.heat i[style]{background:color-mix(in srgb,var(--accent-text) calc(var(--v)*100%),transparent)}
+.tile.t2 .bars3{width:44px;height:40px;margin:2px 0}
+.cols{display:grid;grid-template-columns:repeat(var(--n),minmax(0,1fr));gap:10px}
+.cols div{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:13px;text-align:center}
+.cols b{font:700 18px/1.2 var(--f-title)}
+.cols small{font-size:12px;color:var(--mute)}
+.colbar{display:flex;align-items:flex-end;width:100%;max-width:56px;height:64px;border-radius:6px;background:color-mix(in srgb,var(--ink) 7%,transparent);overflow:hidden}
+.colbar i{width:100%;border-radius:6px 6px 0 0;background:var(--chev)}
+.cols .best .colbar i{background:var(--accent-text)}
+.phases.faults{grid-template-columns:minmax(0,auto) minmax(40px,1fr) 28px}
+/* ---------- plan animé : les coups du tronçon ---------- */
+.moves.mseg{max-height:none;margin:-4px 0}
+.moves button.m{border:0;background:none;font:inherit;font-weight:600;cursor:pointer}
+#cap.wait{opacity:.45}
+.tile.t2.wide .heat{grid-template-columns:repeat(14,minmax(0,1fr))}
+.tile.t2.wide .heat{max-width:420px}
+@media(min-width:600px){
+  .half{display:grid;grid-template-columns:120px minmax(0,1fr);column-gap:14px;row-gap:2px;align-content:center}
+  .half .mini{grid-row:span 2;margin:0}
+  .half b{align-self:end}
+}
