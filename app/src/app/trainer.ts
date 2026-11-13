@@ -6,7 +6,7 @@ import type { Game } from '../core/types';
 import { Board } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, plural } from '../ui/dom';
-import { BR, refreshDevs, save, store } from './store';
+import { BR, markActive, refreshDevs, save, store } from './store';
 import { syncSoon } from './api';
 import { lineUrl, nextUrl, remaining, session } from './session';
 
@@ -76,10 +76,10 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   }
   function prompt() {
     if (ply >= moves.length) return finish();
-    const key = br.notes[ply] ? ' <span class="tag">coup clé</span>' : '';
-    if (ply <= 1) say('you', 'À toi de jouer' + key, `<p class="why">${esc(sys.resume)}</p>`);
+    const key = br.notes[ply] ? ' <span class="tag">coup clé</span>' : '', turn = `<i class="stm ${side}"></i>À toi de jouer`;
+    if (ply <= 1) say('you', turn + key, `<p class="why">${esc(sys.resume)}</p>`);
     else { const ok = steps[ply - 2] === 'ok';
-      say('you', 'À toi de jouer' + key, `${ok ? `<p class="okline">✓ ${esc(moves[ply - 2].san)}, réponse ${esc(moves[ply - 1].san)}</p>` : ''}${lastNote ? `<p class="why">${esc(lastNote)}</p>` : ok ? '' : '<p class="why">Continue la ligne.</p>'}`); }
+      say('you', turn + key, `${ok ? `<p class="okline">✓ ${esc(moves[ply - 2].san)}, réponse ${esc(moves[ply - 1].san)}</p>` : ''}${lastNote ? `<p class="why">${esc(lastNote)}</p>` : ok ? '' : '<p class="why">Continue la ligne.</p>'}`); }
     drillActions();
   }
   function miss() { if (steps[ply] !== 'bad') { steps[ply] = 'bad'; errs++; } paintStepper(); }
@@ -115,7 +115,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     if (finished) return; finished = true; locked = true; SFX.done();
     const s = store.state.br[id] = scheduleBranch(store.state.br[id], errs);
     if (fromGame && errs === 0) { store.state.fixed[fromGame.id] = true; refreshDevs(); }
-    save(); syncSoon(); S?.done.add(id); paintStepper();
+    markActive(); syncSoon(); S?.done.add(id); paintStepper();
     const when = s.ivl <= 1 ? 'demain' : `dans ${s.ivl} jours`, next = S ? nextUrl(id) : null, left = remaining().length;
     const verdict = errs === 0 ? (isValid(s) ? `Ligne validée. Prochaine révision ${when}.` : 'Encore un passage sans faute et elle est validée.')
       : errs === 1 ? `Presque. Elle revient ${s.ivl ? when : 'tout de suite'}.` : "Le compteur repart à zéro : il faut deux passages sans faute d'affilée.";

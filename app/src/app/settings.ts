@@ -16,6 +16,9 @@ export function viewSettings(root: HTMLElement) {
       <button class="btn pri" type="submit">Enregistrer et synchroniser</button>
       <p class="status" id="syncStatus" role="status">${lastSync() ? `Dernière synchronisation le ${new Date(lastSync()).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}.` : ''}</p>
     </form>
+    <h2>Échiquier</h2>
+    <div class="seg" role="radiogroup" aria-label="Couleurs de l'échiquier">${[['wood', 'Bois'], ['green', 'Vert']].map(([v, l]) => `<label><input type="radio" name="board" value="${v}" ${(s.board || 'wood') === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+    <p class="hint">Vert reprend les couleurs du plateau par défaut de chess.com, pour t'entraîner sur ce que tu vois en partie.</p>
     <h2>Son</h2>
     <label class="check"><input type="checkbox" id="cSound" ${s.sound === false ? '' : 'checked'}> Bruit des pièces et signal de fin de ligne</label>
     <h2>Ancienne version</h2>
@@ -29,6 +32,7 @@ export function viewSettings(root: HTMLElement) {
     try { const r = await sync(); status.textContent = `Synchronisé : ${plural(r.games, 'nouvelle partie', 'nouvelles parties')}${r.lines ? ', progression mise à jour depuis un autre appareil' : ''}.`; }
     catch (err) { status.className = 'status err'; status.textContent = (err as Error).message; }
   });
+  root.querySelectorAll<HTMLInputElement>('input[name=board]').forEach(r => r.addEventListener('change', () => { s.board = r.value; document.body.dataset.board = r.value; save(); }));
   $('#cSound', root).addEventListener('change', e => { s.sound = (e.target as HTMLInputElement).checked; setSound(s.sound !== false); save(); });
   $('#fImport', root).addEventListener('change', async e => {
     const out = $('#importStatus', root), f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;

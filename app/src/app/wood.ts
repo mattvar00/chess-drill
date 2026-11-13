@@ -6,7 +6,7 @@ import { costliestFaults, duePositions, fmtTime, matPhrase, priorityFaults, them
 import { Board } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, plural } from '../ui/dom';
-import { save, store, woodCur, woodHistory, type WoodCur } from './store';
+import { markActive, save, store, woodCur, woodHistory, type WoodCur } from './store';
 import { getToken, syncSoon } from './api';
 
 export const GO = '#/wood/go';
@@ -65,7 +65,7 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     F = faults.get(cyc.ids[cyc.i])!; game = new Chess(F.fen); last = null; tries = 0; solved = false; hintLevel = 0;
     board.set(game, F.side); sub();
     meta.innerHTML = `Contre <b>${esc(F.opp)}</b>, ${esc(F.date.split('.').reverse().join('/'))}, coup ${F.move_no}`;
-    coach.innerHTML = `<p class="lead you">${F.side === 'w' ? 'Les Blancs' : 'Les Noirs'} jouent : trouve le coup</p><p class="why">${esc(F.phase.charAt(0).toUpperCase() + F.phase.slice(1))}, ${matPhrase(F.mat)}. ${esc(themeHint(F.theme))}</p>`;
+    coach.innerHTML = `<p class="lead you"><i class="stm ${F.side}"></i>${F.side === 'w' ? 'Trait aux Blancs' : 'Trait aux Noirs'} : trouve le coup</p><p class="why">${esc(F.phase.charAt(0).toUpperCase() + F.phase.slice(1))}, ${matPhrase(F.mat)}. ${esc(themeHint(F.theme))}</p>`;
     actions.innerHTML = '<button class="btn" id="bHint">Indice</button><button class="btn" id="bSol">Solution</button><button class="btn" id="bSkip">Passer</button>';
     $('#bHint', actions).onclick = () => { hintLevel++; board.hint(hintLevel >= 2 ? [F.best.uci.slice(0, 2), F.best.uci.slice(2, 4)] : [F.best.uci.slice(0, 2)]); };
     $('#bSol', actions).onclick = () => reveal(false); $('#bSkip', actions).onclick = next;
@@ -84,7 +84,7 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     last = tryMove(game, m ?? uciToObj(F.best.uci)); board.set(game, F.side, last, true); if (last) board.flash(last.to, 'good');
     store.state.fault[F.id] = schedulePos(store.state.fault[F.id], !found ? 'fail' : tries === 1 && !hintLevel ? 'good' : 'ok', tries);
     if (found && tries === 1 && !hintLevel) cyc.solved++;
-    hold(); explain(found);
+    markActive(); hold(); explain(found);
   }
   function attempt(m: Move) {
     tries++;

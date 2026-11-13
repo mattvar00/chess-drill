@@ -3,6 +3,7 @@ import rep from '../data/repertoire.json';
 import type { Game, Repertoire, BranchState } from '../core/types';
 import { indexBranches } from '../core/book';
 import { devCounts } from '../core/drill';
+import { addDay } from '../core/streak';
 import type { Fault } from '../core/analysis';
 import { emptyState, getAllGames, getAllGFaults, getState, migrateLegacy, putGFaults, putGames, putState, type AppState } from '../storage/db';
 
@@ -44,3 +45,6 @@ export async function addFaults(faults: Fault[]) {
   await putGFaults(byGame);
   const keep = store.faults.filter(f => !byGame[f.game]); store.faults = sortFaults([...keep, ...Object.values(byGame).flat()]);
 }
+/** Jours où tu t'es entraîné (pour la série). */
+export const trainingDays = () => (Array.isArray(store.state.settings.days) ? store.state.settings.days : []) as string[];
+export function markActive() { store.state.settings.days = addDay(trainingDays()); save(); }
