@@ -29,7 +29,7 @@ npx wrangler d1 migrations apply chess-drill --local && npx wrangler dev        
 ```
 
 ## Mise en place Cloudflare (une fois)
-1. `npx wrangler d1 create chess-drill` → reporter l'identifiant dans `wrangler.jsonc`.
+1. Rien à faire pour D1 : la CI crée la base `chess-drill` au premier déploiement et injecte son identifiant.
 2. `APP_TOKEN` est posé par la CI. `GH_TOKEN` (jeton GitHub fin, droit *Actions : écriture* sur ce repo) se pose à part : `npx wrangler secret put GH_TOKEN`.
 3. Secrets du repo GitHub : `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID`, `APP_TOKEN` (posé sur le Worker au déploiement et utilisé par l'analyse). Variable du repo : `API_URL`.
 

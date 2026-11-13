@@ -12,7 +12,7 @@
     "run_worker_first": ["/api/*"]
   },
   "d1_databases": [
-    // database_id : à remplacer par l'identifiant renvoyé par « wrangler d1 create chess-drill »
+    // database_id : injecté par la CI (deploy.yml), qui crée la base au premier passage
     { "binding": "DB", "database_name": "chess-drill", "database_id": "00000000-0000-0000-0000-000000000000", "migrations_dir": "migrations" }
   ],
   "vars": { "GH_REPO": "mattvar00/chess-drill", "GH_WORKFLOW": "analyse.yml" },
