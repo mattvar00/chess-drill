@@ -17,26 +17,36 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
       - name: Dépendances
+        id: npm
         working-directory: app
         run: npm ci
       - name: Tests, typecheck et build
+        id: build
         working-directory: app
         run: npm run build && npx tsc --noEmit -p worker
       - name: Base D1 (créée au premier passage, identifiant injecté dans wrangler.jsonc)
+        id: d1
         working-directory: app
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          id=$(npx wrangler d1 list --json | node -e 'const l=JSON.parse(require("fs").readFileSync(0,"utf8"));const d=l.find(x=>x.name==="chess-drill");process.stdout.write(d?d.uuid:"")')
+          # en cas d'échec, le message de wrangler remonte en annotation (visible sur la page du run, même sans connexion)
+          fail() { echo "::error title=$1::$(printf '%s' "$2" | grep -v '^\s*$' | tail -6 | tr '\n' ' ' | cut -c1-900)"; exit 1; }
+          [ -n "$CLOUDFLARE_API_TOKEN" ] || fail "Secret manquant" "CLOUDFLARE_API_TOKEN est vide"
+          [ -n "$CLOUDFLARE_ACCOUNT_ID" ] || fail "Secret manquant" "CLOUDFLARE_ACCOUNT_ID est vide"
+          pick='const l=JSON.parse(require("fs").readFileSync(0,"utf8"));const d=l.find(x=>x.name==="chess-drill");process.stdout.write(d?d.uuid:"")'
+          out=$(npx wrangler d1 list --json 2>/tmp/err) || fail "wrangler d1 list" "$(cat /tmp/err) $out"
+          id=$(printf '%s' "$out" | node -e "$pick") || fail "Lecture de la liste D1" "$out"
           if [ -z "$id" ]; then
-            npx wrangler d1 create chess-drill > /dev/null
-            id=$(npx wrangler d1 list --json | node -e 'const l=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(l.find(x=>x.name==="chess-drill").uuid)')
-            echo "Base D1 créée : $id"
+            out=$(npx wrangler d1 create chess-drill 2>&1) || fail "wrangler d1 create" "$out"
+            id=$(npx wrangler d1 list --json 2>/dev/null | node -e "$pick")
+            echo "::notice title=Base D1 créée::$id"
           fi
           sed -i "s/00000000-0000-0000-0000-000000000000/$id/" wrangler.jsonc
           grep -q "$id" wrangler.jsonc
       - name: Migrations D1 et déploiement
+        id: deploy
         uses: cloudflare/wrangler-action@v3
         env:
           APP_TOKEN: ${{ secrets.APP_TOKEN }}
@@ -49,3 +59,6 @@ jobs:
           command: |
             d1 migrations apply chess-drill --remote
             deploy
+      - name: Résumé de l'échec
+        if: failure()
+        run: echo "::error title=Étapes::dépendances=${{ steps.npm.outcome }} build=${{ steps.build.outcome }} d1=${{ steps.d1.outcome }} déploiement=${{ steps.deploy.outcome }}"
