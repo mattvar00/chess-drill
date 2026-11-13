@@ -8,7 +8,7 @@ import { $, esc, icon, plural } from '../ui/dom';
 import { PLANS, planBranch, store, type Plan } from './store';
 import { lineUrl } from './session';
 import { gameRow, gameUrl } from './games';
-import { exploreButton, openExplorer, type Explorer } from './explorer';
+import { explorerSlot } from './explorer';
 
 const chev = icon('chev', 'chev');
 const planRow = (P: Plan) => `<a class="rowi" href="#/plan/${P.id}"><span class="chip ${P.side}"></span><span class="body"><b>${esc(P.title)}</b><small>${esc(P.sub)}, ${plural(P.steps.length, 'étape')}</small></span>${(store.state.planDone as Record<string, unknown> | undefined)?.[P.id] ? icon('check', 'tick') : ''}${chev}</a>`;
@@ -45,15 +45,15 @@ export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): ()
     <div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">
       <div class="coach" aria-live="polite"><p class="meta" id="mv"></p><p id="cap"></p></div>
       <div class="explnav three"><button class="btn" id="bPrev" aria-label="Étape précédente">${icon('back')}</button><button class="btn" id="bPlay"></button><button class="btn" id="bNext" aria-label="Étape suivante">${icon('chev')}</button></div>
-      <div class="row"><a class="btn" href="${lineUrl(planBranch(P.id), 'drill')}">${done ? 'Rejouer la ligne' : 'Jouer la ligne'}</a>${exploreButton()}</div>
+      <div class="row"><a class="btn" href="${lineUrl(planBranch(P.id), 'drill')}">${done ? 'Rejouer la ligne' : 'Jouer la ligne'}</a></div>
       ${done ? `<p class="hint">Ligne déjà jouée${done.errs ? `, ${plural(done.errs, 'erreur')} la dernière fois` : ' sans faute'}.</p>` : ''}
       <details class="help"><summary>Toute la ligne et les sources</summary><p class="line">${P.sans.map((s, k) => (k % 2 === 0 ? `${k / 2 + 1}.` : '') + esc(s)).join(' ')}</p>
         <p>Idées tirées de : ${P.src.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\/(www\.)?/, '').split('/')[0])}</a>`).join(', ')}. Chaque coup est vérifié au moteur.</p></details>
     </div></div></div>`;
-  let X: Explorer | null = null;
-  const board = new Board($('#board', root), { movable: () => X?.movable() ?? null, onMove: m => X?.onMove(m) });
-  $('#bExplore', root).onclick = () => { stop(); const ply = P.steps[i].p;
-    X = openExplorer(board, $('#tmain', root), $('#xp', root), { fen: positionAt(P, ply).game.fen(), orient: P.side, lines: ply < P.sans.length ? [{ label: 'Suite de la ligne', sans: P.sans.slice(ply) }] : [] }, () => { X = null; draw(); }); };
+  const board = new Board($('#board', root), { movable: () => XS.active()?.movable() ?? null, onMove: m => XS.active()?.onMove(m) });
+  const XS = explorerSlot(board, () => $('#tmain', root), () => $('#xp', root), () => { stop(); const ply = P.steps[i].p;
+    return { fen: positionAt(P, ply).game.fen(), orient: P.side, lines: ply < P.sans.length ? [{ label: 'Suite de la ligne', sans: P.sans.slice(ply) }] : [] }; }, () => draw());
+  XS.available(true);
   const play = $('#bPlay', root);
   const draw = (animate = false) => {
     const S = P.steps[i], { game, last } = positionAt(P, S.p);
@@ -68,10 +68,10 @@ export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): ()
   play.onclick = () => { if (timer) return stop(); if (i >= P.steps.length - 1) { i = 0; draw(); }
     play.innerHTML = 'Pause'; play.setAttribute('aria-label', 'Mettre en pause');
     timer = setInterval(() => { if (i < P.steps.length - 1) step(1); else stop(); }, 4500); };
-  const onKey = (e: KeyboardEvent) => { if (X) return; if (e.key === 'ArrowRight') { stop(); step(1); } if (e.key === 'ArrowLeft') { stop(); step(-1); } };
+  const onKey = (e: KeyboardEvent) => { if (XS.active()) return; if (e.key === 'ArrowRight') { stop(); step(1); } if (e.key === 'ArrowLeft') { stop(); step(-1); } };
   document.addEventListener('keydown', onKey);
   stop(); draw();
-  return () => { X?.destroy(); clearInterval(timer); board.destroy(); document.removeEventListener('keydown', onKey); };
+  return () => { XS.destroy(); clearInterval(timer); board.destroy(); document.removeEventListener('keydown', onKey); };
 }
 
 /* ---------- structures de pions ---------- */
@@ -99,19 +99,19 @@ export function mountStruct(root: HTMLElement, id: string): () => void {
     <p class="meta">${ex ? `Position de ta partie contre <b>${esc(ex.opp)}</b>, coup 12. ` : ''}Cases clés : ${esc(s.key)}.</p>
     ${o ? `<div class="surf card stats"><div><b>${o.n}</b><span>${o.n > 1 ? 'parties' : 'partie'}</span></div><div><b>${o.score} %</b><span>de score</span></div><div><b>${Math.round(o.errMe)} / ${Math.round(o.errOp)} %</b><span>coups ratés, toi / eux</span></div></div>` : ''}
     ${games.length ? `<a class="btn pri block" href="#/structure/${id}/quiz">Quiz : quel est le plan ? (${Math.min(games.length, 10)} positions)</a>` : ''}
-    ${st ? `<div class="row">${exploreButton()}</div>` : ''}
     ${plan(side)}${plan(side === 'w' ? 'b' : 'w')}
     ${anims.length ? `<section class="grp"><h2>Plans animés</h2><div class="surf card list">${anims.map(a => planRow(PLANS.find(p => p.id === a)!)).join('')}</div></section>` : ''}
     ${games.length ? `<section class="grp"><h2>Tes parties dans cette structure</h2><div class="surf card list">${games.slice(0, 15).map(g => gameRow(g, `#/structure/${id}`).replace(gameUrl(g.id, undefined, `#/structure/${id}`), gameUrl(g.id, gameStructure(g.sans)?.ply, `#/structure/${id}`))).join('')}</div></section>` : ''}
     <p class="foot">Coups ratés : part des coups 9 à 25 qui font perdre au moins 10 points de chances de gain.</p>
   ${st ? '</div></div></div>' : '</div></div>'}`;
-  let board: Board | null = null, X: Explorer | null = null;
+  let board: Board | null = null, XS: ReturnType<typeof explorerSlot> | null = null;
   if (st && ex) {
-    const b = board = new Board($('#board', root), { movable: () => X?.movable() ?? null, onMove: m => X?.onMove(m) });
+    const b = board = new Board($('#board', root), { movable: () => XS?.active()?.movable() ?? null, onMove: m => XS?.active()?.onMove(m) });
     const show = () => { b.set(new Chess(st.fen), ex.color); b.overlay({ marks: keySquares(s).map(sq => ({ sq, cls: 'key' })) }); }; show();
-    $('#bExplore', root).onclick = () => { X = openExplorer(b, $('#tmain', root), $('#xp', root), { fen: st.fen, orient: ex.color, lines: [{ label: 'Suite de ta partie', sans: ex.sans.slice(st.ply, st.ply + 10) }] }, () => { X = null; show(); }); };
+    XS = explorerSlot(b, () => $('#tmain', root), () => $('#xp', root), () => ({ fen: st.fen, orient: ex.color, lines: [{ label: 'Suite de ta partie', sans: ex.sans.slice(st.ply, st.ply + 10) }] }), show);
+    XS.available(true);
   }
-  return () => { X?.destroy(); board?.destroy(); };
+  return () => { XS?.destroy(); board?.destroy(); };
 }
 
 /* ---------- quiz : à la position de ta partie, retrouver le plan de ton camp parmi trois ---------- */
@@ -119,9 +119,9 @@ const shuffle = <T>(a: T[]) => { const b = [...a]; for (let k = b.length - 1; k 
 export function mountQuiz(root: HTMLElement, id: string, header: (title: string, sub: string) => void): () => void {
   const s = STRUCT[id], games = s ? (structureStats(analysed())[id]?.games ?? []).slice(0, 10) : [];
   if (!s || !games.length) { location.replace(`#/structure/${id}`); return () => { /* rien */ }; }
-  let k = 0, ok = 0, board: Board | null = null, X: Explorer | null = null;
+  let k = 0, ok = 0, board: Board | null = null, XS: ReturnType<typeof explorerSlot> | null = null;
   const render = () => {
-    X?.destroy(); X = null; board?.destroy(); board = null;
+    XS?.destroy(); XS = null; board?.destroy(); board = null;
     if (k >= games.length) {
       header('Quiz terminé', s.name);
       root.innerHTML = `<div class="endwrap"><section class="endcard"><h1>${ok}/${games.length}</h1><p>${ok === games.length ? 'Tu connais le plan de cette structure.' : 'Relis les plans de la structure, puis revois tes parties à partir de cette position.'}</p>
@@ -136,16 +136,18 @@ export function mountQuiz(root: HTMLElement, id: string, header: (title: string,
       <div class="coach"><p class="lead">${esc(s.name)}</p><p class="why">Quel est le plan principal de ton camp ?</p></div>
       <div class="opts">${opts.map((o, j) => `<button class="btn opt" data-j="${j}">${esc(o)}</button>`).join('')}</div>
       <div id="after"></div></div></div></div>`;
-    const bd = board = new Board($('#board', root), { movable: () => X?.movable() ?? null, onMove: m => X?.onMove(m) }); bd.set(new Chess(st.fen), mine);
+    const bd = board = new Board($('#board', root), { movable: () => XS?.active()?.movable() ?? null, onMove: m => XS?.active()?.onMove(m) }); bd.set(new Chess(st.fen), mine);
+    const slot = XS = explorerSlot(bd, () => $('#tmain', root), () => $('#xp', root), () => ({ fen: st.fen, orient: mine, lines: [{ label: 'Suite de ta partie', sans: g.sans.slice(st.ply, st.ply + 10) }] }), () => bd.set(new Chess(st.fen), mine));
+    slot.available(false, "Réponds d'abord, puis explore la position.");
     root.querySelectorAll<HTMLButtonElement>('.opt').forEach(b => b.onclick = () => {
       const good = opts[+b.dataset.j!] === right; if (good) { ok++; SFX.done(); } else SFX.bad();
       root.querySelectorAll<HTMLButtonElement>('.opt').forEach(x => { x.disabled = true; if (opts[+x.dataset.j!] === right) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); });
       $('#after', root).innerHTML = `<p class="lead ${good ? 'ok' : 'bad'}">${good ? 'Exact' : 'Pas tout à fait'}</p><p>Le plan complet de ton camp : ${esc((mine === 'w' ? s.w : s.b).map(x => x.charAt(0).toLowerCase() + x.slice(1)).join(' ; '))}.</p>
-        <div class="actions"><button class="btn pri" id="bNext">${k + 1 < games.length ? 'Position suivante' : 'Voir le résultat'}</button>${exploreButton()}<a class="btn" href="${gameUrl(g.id, st.ply, `#/structure/${id}`)}">Suite de la partie</a></div>`;
+        <div class="actions"><button class="btn pri" id="bNext">${k + 1 < games.length ? 'Position suivante' : 'Voir le résultat'}</button><a class="btn" href="${gameUrl(g.id, st.ply, `#/structure/${id}`)}">Suite de la partie</a></div>`;
       $('#bNext', root).onclick = () => { k++; render(); scrollTo(0, 0); };
-      $('#bExplore', root).onclick = () => { X = openExplorer(bd, $('#tmain', root), $('#xp', root), { fen: st.fen, orient: mine, lines: [{ label: 'Suite de ta partie', sans: g.sans.slice(st.ply, st.ply + 10) }] }, () => { X = null; bd.set(new Chess(st.fen), mine); }); };
+      slot.available(true);
     });
   };
   render();
-  return () => { X?.destroy(); board?.destroy(); };
+  return () => { XS?.destroy(); board?.destroy(); };
 }

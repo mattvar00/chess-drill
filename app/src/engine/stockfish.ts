@@ -61,7 +61,8 @@ let main: Engine | null = null;
 /** Moteur principal (interactif). Multicœur si possible. */
 export async function mainEngine(): Promise<Engine> {
   if (main && !main.dead) { await main.ready; return main; }
-  const threads = canThread() ? Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1)) : 1;
+  // La version multicœur ne démarre pas sur le site (aucune réponse du worker) : on s'en tient à la version simple, assez rapide pour l'explorateur.
+  const threads = 1;
   main = new Engine(threads); try { await main.ready; } catch (e) { main = null; throw e; } return main;
 }
 /** Vérification en profondeur ; en cas de plantage, on relance le moteur et on réessaie moins profond. */

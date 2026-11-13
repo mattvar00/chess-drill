@@ -12,7 +12,7 @@ import { BR, store } from './store';
 import { fullGame, getToken } from './api';
 import { lineUrl } from './session';
 import { refBranch } from '../core/drill';
-import { exploreButton, openExplorer, type Explorer } from './explorer';
+import { explorerSlot } from './explorer';
 
 const chev = icon('chev', 'chev');
 const RES: Record<string, string> = { W: 'Victoire', D: 'Nulle', L: 'Défaite' };
@@ -23,7 +23,7 @@ export const gameUrl = (id: string, ply?: number, back?: string) => `#/partie/${
 
 /* ---------- onglet Parties ---------- */
 let period = 30, cadence = 'all', shown = 30;
-const PERIODS = [[30, '30 jours'], [90, '90 jours'], [0, 'Tout']] as const;
+const PERIODS = [[7, '7 jours'], [30, '30 jours'], [90, '90 jours']] as const;
 const bar = (v: number | null, max = 100) => `<span class="prog"><b style="width:${v == null ? 0 : Math.max(0, Math.min(100, Math.round((100 * v) / max)))}%"></b></span>`;
 const axis = (title: string, big: string, label: string, v: number | null, sub: string, max = 100) =>
   `<div class="axis"><div class="axh"><b>${title}</b><span class="big">${big}</span></div><small>${label}</small>${bar(v, max)}${sub ? `<p class="axs">${sub}</p>` : ''}</div>`;
@@ -41,16 +41,20 @@ export function viewGames(root: HTMLElement) {
       ${getToken() ? '' : '<a class="btn pri block" href="#/reglages">Relier l\'app à tes parties</a>'}`; return;
   }
   const tcs = [...new Set(store.games.map(g => g.tc))].filter(t => TC[t]);
+  // On ne propose une période que si elle laisse de côté des parties : sinon elle afficherait la même chose que « Tout ».
+  const oldest = Math.min(...store.games.map(g => g.t)), ageDays = (Date.now() / 1000 - oldest) / 86400;
+  const periods: (readonly [number, string])[] = [...PERIODS.filter(([d]) => ageDays > d), [0, 'Tout']];
+  if (!periods.some(([d]) => d === period)) period = 0;
   if (cadence !== 'all' && !tcs.includes(cadence)) cadence = 'all';
   const list = inScope(), byGame = new Map<string, Fault[]>(); for (const f of store.faults) (byGame.get(f.game) ?? byGame.set(f.game, []).get(f.game)!).push(f);
   const pr = profile(list, ids => { const c: Record<string, number> = {}; for (const id of ids) for (const f of byGame.get(id) ?? []) c[f.theme] = (c[f.theme] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 3); });
   const S = structureStats(list), weak = Object.entries(S).filter(([, o]) => o.n >= 3 && o.errMe - o.errOp > 2).sort((a, b) => (b[1].errMe - b[1].errOp) * b[1].n - (a[1].errMe - a[1].errOp) * a[1].n)[0];
   const t = pr.tactics, o = pr.opening, c = pr.clock, ti = pr.tilt;
-  const seg = (name: string, opts: readonly (readonly [string | number, string])[], cur: string | number) => `<div class="seg" role="group" aria-label="${name}">${opts.map(([v, l]) => `<button type="button" data-${name}="${v}" aria-pressed="${v === cur}">${l}</button>`).join('')}</div>`;
+  const seg = (name: string, opts: readonly (readonly [string | number, string])[], cur: string | number) => `<div class="seg" role="group" aria-label="${name === 'period' ? 'Période' : 'Cadence'}">${opts.map(([v, l]) => `<button type="button" data-${name}="${v}" aria-pressed="${v === cur}">${l}</button>`).join('')}</div>`;
   const elo = Object.entries(pr.elo).filter(([, p]) => p.length >= 3);
   root.innerHTML = `
-    <header class="pagehead"><h1>Parties</h1><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ''}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
-    ${seg('period', PERIODS, period)}
+    <header class="pagehead"><h1>Parties</h1><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
+    ${periods.length > 1 ? seg('period', periods, period) : ''}
     ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
     ${list.length ? `
     <div class="surf card stats"><div><b>${pr.winRate ?? '–'} %</b><span>de victoires</span></div><div><b>${t ? t.acc + ' %' : '–'}</b><span>de précision</span></div><div><b>${o.coverage == null ? '–' : o.coverage + ' %'}</b><span>dans ton répertoire</span></div></div>
@@ -85,8 +89,8 @@ export function reviewTitle(id: string): [string, string] {
 }
 
 export function mountReview(root: HTMLElement, id: string, start: number | null, back: string): () => void {
-  let disposed = false, board: Board | null = null, X: Explorer | null = null;
-  const onKey = (e: KeyboardEvent) => { if (X || e.target instanceof HTMLInputElement) return; if (e.key === 'ArrowRight') go(+1); if (e.key === 'ArrowLeft') go(-1); };
+  let disposed = false, board: Board | null = null, XS: ReturnType<typeof explorerSlot> | null = null;
+  const onKey = (e: KeyboardEvent) => { if (XS?.active() || e.target instanceof HTMLInputElement) return; if (e.key === 'ArrowRight') go(+1); if (e.key === 'ArrowLeft') go(-1); };
   let go = (_d: number) => { /* remplacé une fois la partie chargée */ };
   root.innerHTML = `<p class="status">Chargement de la partie…</p>`;
   fullGame(id).then(g => {
@@ -120,13 +124,12 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
         </div>
       </div></div></div>`;
     const coach = $('#coach', root), act = $('#act', root), movesEl = $('#moves', root), chart = root.querySelector<HTMLElement>('.chart.adv')!;
-    board = new Board($('#board', root), { movable: () => X?.movable() ?? null, onMove: m => X?.onMove(m) });
+    board = new Board($('#board', root), { movable: () => XS?.active()?.movable() ?? null, onMove: m => XS?.active()?.onMove(m) });
     /** Explorateur depuis la position affichée : la suite du moteur, celle de la partie, ou tes propres coups. */
-    const explore = () => {
+    const exploreOpts = () => {
       const pv = ev[i]?.p?.length ? ev[i].p : [ev[i]?.b].filter((u): u is string => !!u), t = new Chess(A.F[i]), sans: string[] = [];
       for (const u of pv) { const m = tryMove(t, uciToObj(u)); if (!m) break; sans.push(m.san); }
-      X = openExplorer(board!, $('#rv', root), $('#xp', root), { fen: A.F[i], orient: me, lines: [{ label: 'Suite du moteur', sans }, { label: 'Suite de la partie', sans: A.M.slice(i, i + 10).map(m => m.san) }] },
-        () => { X = null; draw(); });
+      return { fen: A.F[i], orient: me, lines: [{ label: 'Suite du moteur', sans }, { label: 'Suite de la partie', sans: A.M.slice(i, i + 10).map(m => m.san) }] };
     };
     const draw = (animate = false) => {
       const r = i > 0 ? A.R[i - 1] : null, game = new Chess(A.F[i]);
@@ -140,11 +143,9 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
       movesEl.querySelectorAll('.m').forEach(el => el.classList.toggle('cur', +(el as HTMLElement).dataset.i! === i));
       movesEl.querySelector('.m.cur')?.scrollIntoView({ block: 'nearest' });
       if (!r) { coach.innerHTML = `<p class="lead">Position de départ</p><p class="why">Avance coup par coup ou touche un moment clé. La flèche verte montre le coup qu'il fallait jouer.</p>`; act.innerHTML = ''; return; }
-      if (X) return;
       const mine = r.me === me;
       coach.innerHTML = `<p class="rvlab">${label(r.k)}<b>${num(r.i)}${esc(r.m.san)}</b>${mine ? '' : '<span class="who">adversaire</span>'}<span class="ev">${evalText(ev[r.i + 1])}</span></p><p>${esc(commentMove({ color: me, ev }, A, r))}</p>`;
-      act.innerHTML = `${mine && r.loss >= 10 && ev[r.i].b ? `<a class="btn pri" href="#/partie/${encodeURIComponent(g.id)}/refaire/${r.i}">Retrouver le bon coup</a>` : ''}${exploreButton()}`;
-      $('#bExplore', act).onclick = explore;
+      act.innerHTML = mine && r.loss >= 10 && ev[r.i].b ? `<a class="btn pri" href="#/partie/${encodeURIComponent(g.id)}/refaire/${r.i}">Retrouver le bon coup</a>` : '';
     };
     go = d => { const j = Math.max(0, Math.min(n, i + d)); if (j !== i) { i = j; draw(d === 1); } };
     const to = (j: number) => { i = Math.max(0, Math.min(n, j)); draw(); };
@@ -152,10 +153,12 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
     movesEl.addEventListener('click', e => { const j = (e.target as HTMLElement).closest<HTMLElement>('.m')?.dataset.i; if (j) to(+j); });
     root.querySelectorAll<HTMLButtonElement>('[data-k]').forEach(b => b.onclick = () => to(+b.dataset.k!));
     bindChart(chart, to);
+    XS = explorerSlot(board, () => $('#rv', root), () => $('#xp', root), exploreOpts, () => draw());
+    XS.available(true);
     draw();
   }).catch(err => { if (!disposed) root.innerHTML = `<section class="empty"><p>${esc((err as Error).message)}</p><a class="btn" href="${back}">Retour</a></section>`; });
   document.addEventListener('keydown', onKey);
-  return () => { disposed = true; X?.destroy(); board?.destroy(); document.removeEventListener('keydown', onKey); };
+  return () => { disposed = true; XS?.destroy(); board?.destroy(); document.removeEventListener('keydown', onKey); };
 }
 
 /** Exercice « Retrouver le bon coup » sur un coup de la partie. */

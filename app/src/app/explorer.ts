@@ -26,12 +26,12 @@ export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; 
     return `${showNo ? `<span class="n">${label(ply)}</span>` : ''}<span class="m${cls(k)}" data-k="${k}">${esc(m.san)}</span>`; }).join(' ');
 
   el.innerHTML = `<div class="explorer">
-    <p class="rvlab"><b>Explorateur</b><span class="ev" id="xEval"></span></p>
-    <p class="why" id="xEngine">Joue un coup sur l'échiquier ou touche une variante.</p>
+    <div class="xhead"><b>Explorateur</b><span class="ev" id="xEval"></span><button class="iconbtn xclose" id="xClose" aria-label="Fermer l'explorateur">${icon('close')}</button></div>
+    <p class="xeng" id="xEngine"></p>
+    <p class="hint">Joue tes propres coups sur l'échiquier, ou touche un coup d'une variante.</p>
     <div class="explnav">${[['first', 'Position de départ', 'first'], ['prev', 'Coup précédent', 'back'], ['next', 'Coup suivant', 'chev'], ['last', 'Dernier coup', 'last']].map(([to, l, ic]) => `<button class="btn" data-x="${to}" aria-label="${l}">${icon(ic)}</button>`).join('')}</div>
     <div class="xlines">${lines.map((l, j) => `<div class="xline" data-j="${j}"><p class="flabel">${esc(l.label)}</p><p class="moves">${fmt(l.moves)}</p></div>`).join('')}
-      <div class="xline" id="xMine" hidden><p class="flabel">Ta variante</p><p class="moves" id="xMineMoves"></p></div></div>
-    <div class="actions"><button class="btn pri" id="xClose">Fermer l'explorateur</button></div></div>`;
+      <div class="xline" id="xMine" hidden><p class="flabel">Ta variante</p><p class="moves" id="xMineMoves"></p></div></div></div>`;
   const evalEl = el.querySelector<HTMLElement>('#xEval')!, engEl = el.querySelector<HTMLElement>('#xEngine')!;
 
   const isLine = (j: number) => lines[j].moves.length >= cur && path.slice(0, cur).every((m, k) => uciOf(m) === uciOf(lines[j].moves[k]));
@@ -58,9 +58,9 @@ export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; 
         const side = o.orient, w = winPct(e.cp, e.mate), mine = Math.round(side === 'w' ? w : 100 - w);
         evalEl.textContent = e.mate != null ? `M${Math.abs(e.mate)}` : `${(e.cp ?? 0) >= 0 ? '+' : ''}${((e.cp ?? 0) / 100).toFixed(1)}`;
         const t = new Chess(g.fen()), sans: string[] = []; for (const u of e.pv.slice(0, 6)) { const m = tryMove(t, uciToObj(u)); if (!m) break; sans.push(m.san); }
-        engEl.innerHTML = sans.length ? `Meilleur coup : <b>${esc(sans[0])}</b>${sans.length > 1 ? ` (${esc(sans.join(' '))})` : ''}. Tes chances : ${mine} %.` : `Tes chances : ${mine} %.`;
+        engEl.innerHTML = `<span class="xodds"><b>${mine} %</b> de chances pour toi</span>${sans.length ? `<span>Meilleur coup <b>${esc(sans[0])}</b>${sans.length > 1 ? `, puis ${esc(sans.slice(1).join(' '))}` : ''}</span>` : ''}`;
         if (e.best) board.overlay({ arrows: [{ from: e.best.slice(0, 2), to: e.best.slice(2, 4), cls: 'engine' }] });
-      } catch { if (!closed && my === ticket) engEl.textContent = "Le moteur n'a pas pu démarrer sur cet appareil."; }
+      } catch { if (!closed && my === ticket) engEl.textContent = "Le moteur n'a pas pu démarrer. Recharge la page pour réessayer."; }
     }, 250);
   }
   const to = (k: number, animate = false) => { cur = Math.max(0, Math.min(path.length, k)); draw(animate); };
@@ -80,15 +80,42 @@ export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; 
   };
 }
 
-/** Bouton commun à tous les écrans qui proposent l'explorateur. */
-export const exploreButton = (id = 'bExplore') => `<button class="btn" id="${id}">${icon('search')}Explorer</button>`;
+/* ---------- bouton de la barre du haut : le même sur tous les écrans où il y a une position ---------- */
+type ToolState = 'hidden' | 'locked' | 'ready' | 'on';
+let tool: { el: HTMLButtonElement; state: ToolState; why: string; toggle: (() => void) | null } | null = null;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+function toast(msg: string) {
+  let t = document.getElementById('toast'); if (!t) { t = document.createElement('p'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t!.hidden = true; }, 2600);
+}
+/** À appeler une fois, avec le bouton de la barre du haut. */
+export function mountTool(el: HTMLButtonElement) {
+  tool = { el, state: 'hidden', why: '', toggle: null };
+  el.addEventListener('click', () => { if (!tool) return; if (tool.state === 'locked') toast(tool.why); else tool.toggle?.(); });
+}
+export function setTool(state: ToolState, toggle: (() => void) | null = null, why = '') {
+  if (!tool) return; Object.assign(tool, { state, toggle, why });
+  tool.el.hidden = state === 'hidden'; tool.el.setAttribute('aria-pressed', String(state === 'on'));
+  tool.el.setAttribute('aria-disabled', String(state === 'locked')); tool.el.title = state === 'locked' ? why : state === 'on' ? "Fermer l'explorateur" : 'Explorer les variantes';
+  tool.el.setAttribute('aria-label', tool.el.title);
+}
+
+export type ExplorerOpts = Omit<Parameters<typeof createExplorer>[2], 'close'>;
 /**
- * Ouvre l'explorateur à la place du panneau `main` (dans `panel`), et le referme sur « Fermer » :
- * `onClose` remet l'écran d'origine dans son état. Renvoie l'explorateur, à qui l'écran délègue son échiquier.
+ * L'explorateur d'un écran : il s'ouvre à la place du panneau `main` (dans `panel`) par le bouton de la barre du haut,
+ * et se referme par ce même bouton ou par la croix. `opts()` donne la position du moment ; `onClose` remet l'écran en état.
  */
-export function openExplorer(board: Board, main: HTMLElement, panel: HTMLElement, opts: Omit<Parameters<typeof createExplorer>[2], 'close'>, onClose: () => void): Explorer {
-  main.hidden = true; panel.hidden = false;
-  const x = createExplorer(board, panel, { ...opts, close: () => { x.destroy(); panel.hidden = true; panel.innerHTML = ''; main.hidden = false; onClose(); } });
-  if (panel.getBoundingClientRect().top < 0) panel.scrollIntoView({ block: 'start' });
-  return x;
+export function explorerSlot(board: Board, main: () => HTMLElement, panel: () => HTMLElement, opts: () => ExplorerOpts, onClose: () => void) {
+  let x: Explorer | null = null;
+  const close = () => { if (!x) return; x.destroy(); x = null; const p = panel(); p.hidden = true; p.innerHTML = ''; main().hidden = false; onClose(); setTool('ready', open); };
+  const open = () => { const p = panel(); main().hidden = true; p.hidden = false;
+    x = createExplorer(board, p, { ...opts(), close }); setTool('on', close);
+    if (p.getBoundingClientRect().top < 0) p.scrollIntoView({ block: 'start' }); };
+  return {
+    /** Indique si l'explorateur est proposé maintenant, et sinon pourquoi. */
+    available(on: boolean, why = '') { if (x && !on) close(); if (!x) setTool(on ? 'ready' : 'locked', on ? open : null, why); },
+    active: () => x,
+    close,
+    destroy() { x?.destroy(); x = null; setTool('hidden'); },
+  };
 }

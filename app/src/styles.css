@@ -408,6 +408,19 @@ body.focus main{display:block;padding:0 var(--pad)}
 .xline .m{cursor:pointer}
 .explorer .actions{position:static;margin-top:0;padding-top:4px}
 
+/* bouton de l'explorateur, dans la barre du haut de chaque écran avec une position */
+.xtool{flex:none;display:grid;place-items:center;width:40px;height:40px;margin-left:6px;border:0;border-radius:12px;background:var(--c-soft);color:var(--c-soft-ink)}
+.xtool .ic{width:20px;height:20px}
+.xtool[aria-pressed="true"]{background:var(--c-pri);color:var(--c-on-pri)}
+.xtool[aria-disabled="true"]{opacity:.45}
+.toast{position:fixed;left:50%;top:calc(var(--top) + env(safe-area-inset-top) + 6px);z-index:50;transform:translateX(-50%);width:max-content;max-width:calc(100% - 32px);margin:0;padding:10px 14px;border-radius:12px;background:var(--ink);color:var(--surface);font-size:14px;font-weight:500;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.xhead{display:flex;align-items:center;gap:10px}
+.xhead b{font:700 20px/1.2 var(--f-title);letter-spacing:-.01em}
+.xhead .ev{margin-left:auto;font-size:14px;font-weight:600;color:var(--c-mute)}
+.xclose{margin:-6px -10px -6px 0}
+.xeng{display:flex;flex-direction:column;gap:2px;min-height:44px;color:var(--c-mute)}
+.xeng b{color:var(--c-ink)}
+.xodds b{font-size:16px}
 @media(min-width:600px){
   .tboard{margin:0}
   .tboard .board{border-radius:10px}

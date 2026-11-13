@@ -8,7 +8,7 @@ import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
 import { markActive, save, store, woodCur, woodHistory, type WoodCur } from './store';
 import { getToken, syncSoon } from './api';
-import { exploreButton, openExplorer, sanTokens, type Explorer } from './explorer';
+import { explorerSlot, sanTokens } from './explorer';
 
 export const GO = '#/wood/go';
 /** Début d'une variante, pour l'affichage (les lignes du moteur sont longues). */
@@ -69,22 +69,19 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
   const coach = $('#coach', root), actions = $('#actions', root), meta = $('#meta', root);
   let F: Fault, game = new Chess(), last: Move | null = null, tries = 0, solved = false, hintLevel = 0, ended = false;
   let since = Date.now(); const elapsed = () => cyc.elapsed + (ended ? 0 : Date.now() - since);
-  let X: Explorer | null = null;
-  const board = new Board($('#board', root), { movable: () => X ? X.movable() : solved || ended ? null : F.side, onMove: m => X ? X.onMove(m) : attempt(m) });
-  /** Explorateur : la meilleure suite, la réfutation de ton coup, ou tes propres coups, évalués par le moteur. */
-  function explore() {
-    X = openExplorer(board, $('#ex', root), $('#xp', root), { fen: F.fen, orient: F.side, lines: [
-      { label: 'Meilleure suite', sans: [F.best.san, ...sanTokens(F.best.suite)] },
-      { label: 'Ton coup dans la partie', sans: [F.played.san, ...sanTokens(F.played.refut)] }] },
-      () => { X = null; board.set(game, F.side, last); });
-  }
+  const xa = () => XS.active();
+  const board = new Board($('#board', root), { movable: () => xa() ? xa()!.movable() : solved || ended ? null : F.side, onMove: m => xa() ? xa()!.onMove(m) : attempt(m) });
+  /** Explorateur (bouton de la barre du haut) : la meilleure suite, la réfutation de ton coup, ou tes propres coups. */
+  const XS = explorerSlot(board, () => $('#ex', root), () => $('#xp', root), () => ({ fen: F.fen, orient: F.side, lines: [
+    { label: 'Meilleure suite', sans: [F.best.san, ...sanTokens(F.best.suite)] },
+    { label: 'Ton coup dans la partie', sans: [F.played.san, ...sanTokens(F.played.refut)] }] }), () => board.set(game, F.side, last));
   const sub = () => header(cyc.label, one ? `Contre ${F.opp}, coup ${F.move_no}` : `Position ${cyc.i + 1} sur ${cyc.ids.length}`, fmtTime(elapsed()));
   const numbered = (san: string) => `${F.move_no}${F.side === 'w' ? '.' : '…'}${san}`;
   const tick = setInterval(() => { if (!ended) sub(); }, 1000);
   const hold = () => { cyc.elapsed = elapsed(); since = Date.now(); if (!one) store.state.woodCur = cyc; save(); };
 
   function load() {
-    if (X) { X.destroy(); X = null; $('#xp', root).hidden = true; $('#ex', root).hidden = false; }
+    XS.available(false, 'Trouve le coup, ou affiche la solution, pour explorer la position.');
     while (cyc.i < cyc.ids.length && !faults.has(cyc.ids[cyc.i])) cyc.i++;   // position disparue du stock : on passe
     if (cyc.i >= cyc.ids.length) return finish();
     F = faults.get(cyc.ids[cyc.i])!; game = new Chess(F.fen); last = null; tries = 0; solved = false; hintLevel = 0;
@@ -105,10 +102,9 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
         <p>Tu as joué <b>${esc(numbered(p.san))}</b>${p.refut ? `, puni par <b>${esc(short(p.refut, 3))}</b>` : ''}.</p>
         <p class="odds"><span>Chances de gain</span><b>${Math.round(p.wp_before)} %</b>${icon('arrow')}<b class="down">${Math.round(p.wp_after)} %</b></p></div>`;
     actions.className = 'actions';
-    const xbtn = exploreButton();
-    actions.innerHTML = one ? `<a class="btn pri" href="${one.back}">Revenir à la partie</a>${xbtn}<button class="btn" id="bAgain1">Refaire</button>`
-      : `<button class="btn pri" id="bNext">${cyc.i + 1 < cyc.ids.length ? 'Position suivante' : 'Terminer le cycle'}</button>${xbtn}<a class="btn" href="https://www.chess.com/game/live/${encodeURIComponent(F.game)}" target="_blank" rel="noopener">Voir la partie</a>`;
-    $('#bExplore', actions).onclick = explore;
+    actions.innerHTML = one ? `<a class="btn pri" href="${one.back}">Revenir à la partie</a><button class="btn" id="bAgain1">Refaire</button>`
+      : `<button class="btn pri" id="bNext">${cyc.i + 1 < cyc.ids.length ? 'Position suivante' : 'Terminer le cycle'}</button><a class="btn" href="https://www.chess.com/game/live/${encodeURIComponent(F.game)}" target="_blank" rel="noopener">Voir la partie</a>`;
+    XS.available(true);
     const again = actions.querySelector<HTMLButtonElement>('#bAgain1'); if (again) { again.onclick = () => { since = Date.now(); load(); }; return; }
     $('#bNext', actions).onclick = next;
   }
@@ -141,5 +137,5 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
   const onHide = () => { if (document.hidden && !ended) hold(); else since = Date.now(); };
   document.addEventListener('visibilitychange', onHide);
   load();
-  return () => { X?.destroy(); clearInterval(tick); document.removeEventListener('visibilitychange', onHide); board.destroy(); if (!ended) { hold(); syncSoon(); } };
+  return () => { XS.destroy(); clearInterval(tick); document.removeEventListener('visibilitychange', onHide); board.destroy(); if (!ended) { hold(); syncSoon(); } };
 }

@@ -9,7 +9,7 @@ import { $, esc, icon, plural } from '../ui/dom';
 import { BR, markActive, refreshDevs, save, store } from './store';
 import { syncSoon } from './api';
 import { lineUrl, nextUrl, remaining, session } from './session';
-import { exploreButton, openExplorer, type Explorer } from './explorer';
+import { explorerSlot } from './explorer';
 
 const PRAISE = ['Exact.', 'Bien joué.', "C'est la ligne.", 'Juste.', 'Parfait.'];
 type Step = 'ok' | 'bad';
@@ -33,17 +33,14 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   let errs = 0, wrongHere = 0, hintLevel = 0, locked = false, finished = false, lastNote: string | null = null;
   const steps: (Step | undefined)[] = []; let timer: ReturnType<typeof setTimeout> | undefined;
 
-  let X: Explorer | null = null;
+  const xa = () => XS.active();
   const board = new Board($('#board', root), {
-    movable: () => X ? X.movable() : mode === 'drill' && !locked && !finished && game.turn() === side ? side : null,
-    onMove: m => X ? X.onMove(m) : userMove(m),
+    movable: () => xa() ? xa()!.movable() : mode === 'drill' && !locked && !finished && game.turn() === side ? side : null,
+    onMove: m => xa() ? xa()!.onMove(m) : userMove(m),
   });
-  /** Explorateur depuis la position affichée : la suite de la ligne, ou tes propres coups évalués par le moteur. */
-  function explore() {
-    X = openExplorer(board, $('#tmain', root), $('#xp', root), { fen: game.fen(), orient: side, lines: ply < moves.length ? [{ label: 'Suite de la ligne', sans: moves.slice(ply).map(m => m.san) }] : [] },
-      () => { X = null; show(); });
-  }
-  const bindExplore = () => { const b = actions.querySelector<HTMLButtonElement>('#bExplore'); if (b) b.onclick = explore; };
+  /** Explorateur (bouton de la barre du haut) depuis la position affichée : la suite de la ligne, ou tes propres coups. */
+  const XS = explorerSlot(board, () => $('#tmain', root), () => $('#xp', root),
+    () => ({ fen: game.fen(), orient: side, lines: ply < moves.length ? [{ label: 'Suite de la ligne', sans: moves.slice(ply).map(m => m.san) }] : [] }), () => show());
   const show = (animate = false) => board.set(game, side, last, animate);
   const apply = (i: number) => { last = tryMove(game, uciToObj(moves[i].uci)); };
   const num = (i: number) => `${Math.floor(i / 2) + 1}${i % 2 ? '…' : '.'}`;
@@ -71,9 +68,9 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     ply = target; show(forward); paintMoves();
     if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(sys.resume)}</p><p class="why">Avance avec les flèches, à l'écran ou au clavier. Les coups soulignés portent un commentaire.</p>`);
     else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)}${esc(moves[ply - 1].san)}`, note ? `<p>${esc(note)}</p>` : '<p class="why">Coup de la ligne.</p>'); }
-    actions.innerHTML = `${ply >= moves.length ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">Passer au drill</a>` : ''}${exploreButton()}`; bindExplore();
+    actions.innerHTML = ply >= moves.length ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">Passer au drill</a>` : '';
   }
-  const onKey = (e: KeyboardEvent) => { if (mode !== 'explore' || X) return; if (e.key === 'ArrowRight') explTo(ply + 1); if (e.key === 'ArrowLeft') explTo(ply - 1); };
+  const onKey = (e: KeyboardEvent) => { if (mode !== 'explore' || xa()) return; if (e.key === 'ArrowRight') explTo(ply + 1); if (e.key === 'ArrowLeft') explTo(ply - 1); };
 
   /* ---------- Drill ---------- */
   function drillActions() {
@@ -128,7 +125,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     const verdict = errs === 0 ? (isValid(s) ? `Ligne validée. Prochaine révision ${when}.` : 'Encore un passage sans faute et elle est validée.')
       : errs === 1 ? `Presque. Elle revient ${s.ivl ? when : 'tout de suite'}.` : "Le compteur repart à zéro : il faut deux passages sans faute d'affilée.";
     coach.innerHTML = `<div class="done"><p class="big">${errs === 0 ? 'Ligne sans faute' : plural(errs, 'erreur')}</p><p>${verdict}</p>${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`;
-    actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">Terminer</a>` : ''}<a class="btn${next || S || plan ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn${plan ? ' pri' : ''}" href="${listUrl}">${plan ? 'Voir le plan' : 'Liste'}</a>${exploreButton()}`; bindExplore();
+    actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">Terminer</a>` : ''}<a class="btn${next || S || plan ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn${plan ? ' pri' : ''}" href="${listUrl}">${plan ? 'Voir le plan' : 'Liste'}</a>`; XS.available(true);
     $('#bAgain', actions).onclick = e => { e.preventDefault(); remount(); };
   }
   /** Relance la même ligne (l'adresse ne change pas, donc pas de navigation). */
@@ -136,7 +133,8 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
 
   function start() {
     show(); paintStepper(); paintMoves();
-    if (mode === 'explore') return explTo(0);
+    if (mode === 'explore') { XS.available(true); return explTo(0); }
+    XS.available(false, "Termine la ligne pour l'explorer : le moteur te donnerait la réponse.");
     if (fromGame?.a.ply != null) { let t = Math.max(0, Math.min(fromGame.a.ply, moves.length) - 6); if (!isUserPly(t, side)) t = Math.max(0, t - 1); playTo(t); }
     if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 500); } else prompt();
     if (fromGame) coach.insertAdjacentHTML('afterbegin', `<p class="surf fromgame">Contre <b>${esc(fromGame.opp)}</b>, tu as joué <b>${esc(fromGame.a.played)}</b> dans cette ligne. Rejoue-la sans faute pour la corriger.</p>`);
@@ -145,7 +143,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   const onPick = (e: Event) => { const i = (e.target as HTMLElement).closest<HTMLElement>('.m')?.dataset.i; if (mode === 'explore' && i != null) explTo(+i + 1); };
   $('#explnav', root).addEventListener('click', onNav); movesEl.addEventListener('click', onPick); document.addEventListener('keydown', onKey);
   let disposed = false;
-  function dispose() { if (disposed) return; disposed = true; X?.destroy(); clearTimeout(timer); finished = true; board.destroy(); document.removeEventListener('keydown', onKey); }
+  function dispose() { if (disposed) return; disposed = true; XS.destroy(); clearTimeout(timer); finished = true; board.destroy(); document.removeEventListener('keydown', onKey); }
   active = dispose; start();
   return () => active?.();
 }

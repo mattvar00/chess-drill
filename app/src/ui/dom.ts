@@ -21,6 +21,7 @@ const ICONS: Record<string, string> = {
   arrow: '<path d="M5 12h14M13 6l6 6-6 6" stroke-width="2"/>',
   calendar: '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M8 3v4M16 3v4"/>',
   stack: '<path d="M12 4l8 4-8 4-8-4zM4 12l8 4 8-4M4 16l8 4 8-4"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18" stroke-width="2"/>',
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5" stroke-width="2"/>',
   pawn: '<circle cx="12" cy="6.5" r="3"/><path d="M9.5 10.5h5l1 6h-7zM6.5 20.5h11l-1.5-4h-8z"/>',
   chart: '<path d="M4 20V4M4 20h16"/><path d="M7.5 15l3.5-4.5 3 2.5 5-6.5" stroke-width="2"/>',

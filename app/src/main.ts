@@ -15,20 +15,22 @@ import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames } from './app/games';
 import { mountPlan, mountQuiz, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
+import { mountTool, setTool } from './app/explorer';
 
 restoreLook();
 const TABS = [['#/', 'Accueil', 'home'], ['#/rep', 'Répertoire', 'book'], ['#/wood', 'Woodpecker', 'target'], ['#/parties', 'Parties', 'chart']] as const;
 document.getElementById('app')!.innerHTML = `
-  <header class="top" id="top" hidden><a class="back" id="back" aria-label="Retour">${icon('back')}</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><span class="hright" id="hright"></span></header>
+  <header class="top" id="top" hidden><a class="back" id="back" aria-label="Retour">${icon('back')}</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><span class="hright" id="hright"></span><button class="xtool" id="xtool" type="button" hidden>${icon('search')}</button></header>
   <main id="view" tabindex="-1"></main>
   <nav class="tabs surf" id="tabs" aria-label="Sections">${TABS.map(([h, l, i]) => `<a href="${h}"><span class="tp">${icon(i)}</span>${l}</a>`).join('')}</nav>`;
 const view = $('#view'), back = $<HTMLAnchorElement>('#back');
+mountTool($<HTMLButtonElement>('#xtool'));
 let cleanup: (() => void) | null = null;
 
 /** Barre du haut (seulement sur les écrans où l'on revient en arrière) et onglet actif. `right` : contenu à droite du titre. */
 function shell(title: string, sub: string, backHref: string | null, tab: string | null, right = '') {
   $('#title').textContent = title; $('#subtitle').textContent = sub; document.title = title === 'Chess Drill' ? title : `${title} · Chess Drill`;
-  $('#top').hidden = !backHref; if (backHref) back.href = backHref; $('#hright').innerHTML = right;
+  $('#top').hidden = !backHref; if (backHref) back.href = backHref; $('#hright').innerHTML = right; setTool('hidden');
   $('#tabs').hidden = !tab; document.body.classList.toggle('focus', !tab);
   document.querySelectorAll<HTMLAnchorElement>('#tabs a').forEach(a => { if (a.getAttribute('href') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
 }
