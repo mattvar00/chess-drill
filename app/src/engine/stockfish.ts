@@ -14,11 +14,11 @@ const BASE = (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL || '
 export class Engine {
   private w: Worker; private handler: ((s: string) => void) | null = null; private q: Promise<unknown> = Promise.resolve(); private mpv = 1;
   readonly ready: Promise<void>; dead = false; readonly threads: number;
-  constructor(threads = 1) {
+  constructor(threads = 1, startTimeout = 60000) {
     this.threads = threads;
     this.w = new Worker(BASE + (threads > 1 ? 'engine/stockfish-19-lite.js' : 'engine/stockfish-19-lite-single.js'));
     this.ready = new Promise((res, rej) => {
-      const t = setTimeout(() => rej(new Error('moteur : délai dépassé')), 60000);
+      const t = setTimeout(() => rej(new Error('moteur : délai dépassé')), startTimeout);
       this.w.onmessage = e => { const s = String(e.data);
         if (s === 'uciok') { this.w.postMessage('setoption name Hash value ' + (threads > 1 ? 64 : 16)); if (threads > 1) this.w.postMessage('setoption name Threads value ' + threads); this.w.postMessage('isready'); }
         else if (s === 'readyok') { clearTimeout(t); this.w.onmessage = ev => this.handler && this.handler(String(ev.data)); res(); } };
@@ -28,10 +28,12 @@ export class Engine {
   }
   private fail: ((e: Error) => void) | null = null;
   /** Évalue une position (scores du point de vue des Blancs). */
-  eval(fen: string, depth: number, movetime: number, multipv = 1): Promise<EngineResult> {
-    const run = () => this.run(fen, depth, movetime, multipv); const p = this.q.then(run, run); this.q = p.catch(() => {}); return p;
+  eval(fen: string, depth: number, movetime: number, multipv = 1, onInfo?: (r: EngineResult & { depth: number }) => void): Promise<EngineResult> {
+    const run = () => this.run(fen, depth, movetime, multipv, onInfo); const p = this.q.then(run, run); this.q = p.catch(() => {}); return p;
   }
-  private run(fen: string, depth: number, movetime: number, multipv: number): Promise<EngineResult> {
+  /** Interrompt la recherche en cours : elle rend tout de suite son meilleur coup du moment. */
+  stop() { this.w.postMessage('stop'); }
+  private run(fen: string, depth: number, movetime: number, multipv: number, onInfo?: (r: EngineResult & { depth: number }) => void): Promise<EngineResult> {
     return new Promise((res, rej) => {
       if (multipv !== this.mpv) { this.w.postMessage('setoption name MultiPV value ' + multipv); this.mpv = multipv; }
       const lines: Record<number, { cp: number | null; mate: number | null; pv: string[] }> = {}; const stm = fen.split(' ')[1];
@@ -43,6 +45,7 @@ export class Engine {
           let cp: number | null = null, mate: number | null = null; if (m[1] === 'cp') cp = +m[2]; else mate = +m[2];
           if (stm === 'b') { if (cp !== null) cp = -cp; if (mate !== null) mate = -mate; }
           lines[k] = { cp, mate, pv: s.split(' pv ')[1].split(' ') };
+          if (onInfo && k === 1) onInfo({ cp, mate, best: lines[1].pv[0] ?? null, pv: lines[1].pv, alt: null, depth: +((/ depth (\d+)/.exec(s) || [0, 0])[1]) });
         } else if (s.startsWith('bestmove')) { clearTimeout(wd); this.handler = null; const best = s.split(' ')[1]; const l = lines[1], a = lines[2];
           res({ cp: l ? l.cp : 0, mate: l ? l.mate : null, best: best === '(none)' ? null : best, pv: l ? l.pv : [], alt: a ? { uci: a.pv[0], cp: a.cp, mate: a.mate } : null }); }
       };
@@ -58,12 +61,18 @@ export const toEntry = (e: EngineResult, deep = false): EvalEntry => {
 export function laneCount(): number { const hc = navigator.hardwareConcurrency || 2; const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); return Math.max(1, Math.min(mobile ? 2 : 4, hc - 1)); }
 
 let main: Engine | null = null;
+const NO_THREADS = 'cd_engine_single';
 /** Moteur principal (interactif). Multicœur si possible. */
 export async function mainEngine(): Promise<Engine> {
   if (main && !main.dead) { await main.ready; return main; }
-  // La version multicœur ne démarre pas sur le site (aucune réponse du worker) : on s'en tient à la version simple, assez rapide pour l'explorateur.
-  const threads = 1;
-  main = new Engine(threads); try { await main.ready; } catch (e) { main = null; throw e; } return main;
+  // Multicœur quand c'est possible (environ trois fois plus de positions par seconde) ; s'il ne répond pas en 5 s,
+  // on passe à la version simple et on s'en souvient pour ne pas reperdre ce temps au prochain lancement.
+  const want = canThread() && localStorage.getItem(NO_THREADS) !== '1' ? Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1)) : 1;
+  if (want > 1) {
+    const e = new Engine(want, 5000);
+    try { await e.ready; main = e; return e; } catch { e.kill(); localStorage.setItem(NO_THREADS, '1'); }
+  }
+  main = new Engine(1); try { await main.ready; } catch (e) { main = null; throw e; } return main;
 }
 /** Vérification en profondeur ; en cas de plantage, on relance le moteur et on réessaie moins profond. */
 export async function deepEval(fen: string, depth: number, movetime: number): Promise<EvalEntry | null> {

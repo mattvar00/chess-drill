@@ -144,7 +144,7 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
       movesEl.querySelector('.m.cur')?.scrollIntoView({ block: 'nearest' });
       if (!r) { coach.innerHTML = `<p class="lead">Position de départ</p><p class="why">Avance coup par coup ou touche un moment clé. La flèche verte montre le coup qu'il fallait jouer.</p>`; act.innerHTML = ''; return; }
       const mine = r.me === me;
-      coach.innerHTML = `<p class="rvlab">${label(r.k)}<b>${num(r.i)}${esc(r.m.san)}</b>${mine ? '' : '<span class="who">adversaire</span>'}<span class="ev">${evalText(ev[r.i + 1])}</span></p><p>${esc(commentMove({ color: me, ev }, A, r))}</p>`;
+      coach.innerHTML = `<p class="rvlab">${label(r.k)}<b>${num(r.i)}${esc(r.m.san)}</b>${mine ? '' : '<span class="who">adversaire</span>'}<span class="ev">${evalText(ev[r.i + 1], me)}</span></p><p>${esc(commentMove({ color: me, ev }, A, r))}</p>`;
       act.innerHTML = mine && r.loss >= 10 && ev[r.i].b ? `<a class="btn pri" href="#/partie/${encodeURIComponent(g.id)}/refaire/${r.i}">Retrouver le bon coup</a>` : '';
     };
     go = d => { const j = Math.max(0, Math.min(n, i + d)); if (j !== i) { i = j; draw(d === 1); } };

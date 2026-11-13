@@ -27,6 +27,7 @@ export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; 
 
   el.innerHTML = `<div class="explorer">
     <div class="xhead"><b>Explorateur</b><span class="ev" id="xEval"></span><button class="iconbtn xclose" id="xClose" aria-label="Fermer l'explorateur">${icon('close')}</button></div>
+    <div class="xbar" role="img" aria-label="Tes chances de gain"><b id="xBar" style="width:50%"></b></div>
     <p class="xeng" id="xEngine"></p>
     <p class="hint">Joue tes propres coups sur l'échiquier, ou touche un coup d'une variante.</p>
     <div class="explnav">${[['first', 'Position de départ', 'first'], ['prev', 'Coup précédent', 'back'], ['next', 'Coup suivant', 'chev'], ['last', 'Dernier coup', 'last']].map(([to, l, ic]) => `<button class="btn" data-x="${to}" aria-label="${l}">${icon(ic)}</button>`).join('')}</div>
@@ -52,16 +53,24 @@ export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; 
     clearTimeout(timer); const my = ++ticket; evalEl.textContent = '';
     if (g.isGameOver()) { engEl.textContent = g.isCheckmate() ? 'Échec et mat.' : 'Partie nulle.'; return; }
     engEl.textContent = 'Le moteur réfléchit…';
+    const fen = g.fen(); let shown = 0, lastBest = '';
+    // Le résultat s'affiche dès la première profondeur, puis s'affine : pas d'attente avant de voir une évaluation.
+    const show = (e: { cp: number | null; mate: number | null; best: string | null; pv: string[] }) => {
+      if (closed || my !== ticket) return;
+      const sign = o.orient === 'w' ? 1 : -1, w = winPct(e.cp, e.mate), mine = Math.round(o.orient === 'w' ? w : 100 - w), cp = (e.cp ?? 0) * sign, mate = e.mate == null ? null : e.mate * sign;
+      evalEl.textContent = mate != null ? (mate > 0 ? `Mat en ${mate}` : `Mat en ${-mate} contre toi`) : `${cp >= 0 ? '+' : '−'}${Math.abs(cp / 100).toFixed(1)}`;
+      el.querySelector<HTMLElement>('#xBar')!.style.width = mine + '%';
+      const t = new Chess(fen), sans: string[] = []; for (const u of e.pv.slice(0, 6)) { const m = tryMove(t, uciToObj(u)); if (!m) break; sans.push(m.san); }
+      engEl.innerHTML = `<span class="xodds"><b>${mine} %</b> de chances pour toi</span>${sans.length ? `<span>Meilleur coup <b>${esc(sans[0])}</b>${sans.length > 1 ? `, puis ${esc(sans.slice(1).join(' '))}` : ''}</span>` : ''}`;
+      if (e.best && e.best !== lastBest) { lastBest = e.best; board.overlay({ arrows: [{ from: e.best.slice(0, 2), to: e.best.slice(2, 4), cls: 'engine' }] }); }
+    };
     timer = setTimeout(async () => {
       try {
-        const e = await (await mainEngine()).eval(g.fen(), 18, 900, 1); if (closed || my !== ticket) return;
-        const side = o.orient, w = winPct(e.cp, e.mate), mine = Math.round(side === 'w' ? w : 100 - w);
-        evalEl.textContent = e.mate != null ? `M${Math.abs(e.mate)}` : `${(e.cp ?? 0) >= 0 ? '+' : ''}${((e.cp ?? 0) / 100).toFixed(1)}`;
-        const t = new Chess(g.fen()), sans: string[] = []; for (const u of e.pv.slice(0, 6)) { const m = tryMove(t, uciToObj(u)); if (!m) break; sans.push(m.san); }
-        engEl.innerHTML = `<span class="xodds"><b>${mine} %</b> de chances pour toi</span>${sans.length ? `<span>Meilleur coup <b>${esc(sans[0])}</b>${sans.length > 1 ? `, puis ${esc(sans.slice(1).join(' '))}` : ''}</span>` : ''}`;
-        if (e.best) board.overlay({ arrows: [{ from: e.best.slice(0, 2), to: e.best.slice(2, 4), cls: 'engine' }] });
+        const eng = await mainEngine(); eng.stop();   // la recherche de la position précédente s'arrête tout de suite
+        const e = await eng.eval(fen, 22, 2500, 1, r => { const now = Date.now(); if (r.depth >= 6 && now - shown > 150) { shown = now; show(r); } });
+        show(e);
       } catch { if (!closed && my === ticket) engEl.textContent = "Le moteur n'a pas pu démarrer. Recharge la page pour réessayer."; }
-    }, 250);
+    }, 120);
   }
   const to = (k: number, animate = false) => { cur = Math.max(0, Math.min(path.length, k)); draw(animate); };
   el.querySelector('.explnav')!.addEventListener('click', e => { const x = (e.target as HTMLElement).closest<HTMLElement>('[data-x]')?.dataset.x; if (!x) return;

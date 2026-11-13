@@ -184,14 +184,18 @@ export function commentMove(g: Pick<Game, 'color'> & { ev: EvalEntry[] }, A: Rev
   return out.join(' ');
 }
 
-/** Évaluation affichable (point de vue des Blancs) : « +1.2 » ou « M3 ». */
-export const evalText = (x?: EvalEntry) => (!x ? '' : x.m != null ? `M${Math.abs(x.m)}` : `${(x.c ?? 0) >= 0 ? '+' : ''}${((x.c ?? 0) / 100).toFixed(1)}`);
+/** Évaluation affichable, du point de vue de `side` : « +1.2 », « −0.8 », « Mat en 3 ». */
+export function evalText(x: EvalEntry | undefined, side: Color = 'w'): string {
+  if (!x) return ''; const s = side === 'w' ? 1 : -1;
+  if (x.m != null) return x.m * s > 0 ? `Mat en ${Math.abs(x.m)}` : x.m === 0 ? '' : `Mat en ${Math.abs(x.m)} contre toi`;
+  const c = (x.c ?? 0) * s; return `${c >= 0 ? '+' : '−'}${Math.abs(c / 100).toFixed(1)}`;
+}
 
 /* ---------- nom d'ouverture lisible, depuis l'adresse ECO de chess.com ---------- */
 const ECO_FR: [RegExp, string][] = [[/Sicilian Defense/, 'Sicilienne'], [/Queens Gambit Declined/, 'Gambit Dame refusé'], [/Queens Gambit Accepted/, 'Gambit Dame accepté'], [/Queens Gambit/, 'Gambit Dame'], [/Semi Slav Defense/, 'Semi-Slave'], [/Slav Defense/, 'Slave'],
   [/Dutch Defense/, 'Hollandaise'], [/Kings Indian Defense/, 'Est-indienne'], [/Nimzo Indian Defense/, 'Nimzo-indienne'], [/Queens Indian Defense/, 'Ouest-indienne'], [/Grunfeld Defense/, 'Grünfeld'], [/Caro Kann Defense/, 'Caro-Kann'], [/French Defense/, 'Française'],
   [/Queens Pawn Opening/, 'Début du pion dame'], [/Kings Pawn Opening/, 'Début du pion roi'], [/English Opening/, 'Anglaise'], [/Bird Opening/, 'Bird'], [/Modern Defense/, 'Moderne'], [/Pirc Defense/, 'Pirc'], [/Indian Game/, 'Partie indienne'], [/Ruy Lopez Opening/, 'Espagnole'], [/Italian Game/, 'Italienne'],
-  [/Scandinavian Defense/, 'Scandinave'], [/Alekhines Defense/, 'Alekhine'], [/Benoni Defense/, 'Benoni'], [/Catalan Opening/, 'Catalane'], [/London System/, 'Système de Londres'], [/Variation/g, ''], [/Attack/g, 'attaque'], [/Gambit/g, 'gambit'], [/Defense/g, 'défense'], [/Opening/g, ''], [/System/g, 'système']];
+  [/Scandinavian Defense/, 'Scandinave'], [/Old Sicilian/, 'ancienne'], [/Open/, 'ouverte'], [/Closed/, 'fermée'], [/Alekhines Defense/, 'Alekhine'], [/Benoni Defense/, 'Benoni'], [/Catalan Opening/, 'Catalane'], [/London System/, 'Système de Londres'], [/Variation/g, ''], [/Attack/g, 'attaque'], [/Gambit/g, 'gambit'], [/Defense/g, 'défense'], [/Opening/g, ''], [/System/g, 'système']];
 export function ecoName(eco?: string): string {
   if (!eco) return ''; let t: string[]; try { t = decodeURIComponent(eco.split('/').pop() || '').split('-'); } catch { return ''; }
   const cut = t.findIndex(w => /\d\./.test(w)); if (cut > 0) t = t.slice(0, cut);
