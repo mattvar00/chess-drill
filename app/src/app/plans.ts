@@ -1,14 +1,14 @@
-/** Plans : animations pas à pas des idées de chaque ouverture, et plans par structure de pions (avec tes statistiques et un quiz). */
+/** Plans : animations pas à pas des idées de chaque ouverture, et plans par structure de pions (avec tes statistiques, tes parties et tes fautes). */
 import { Chess, tryMove, type Move } from '../core/chess';
 import { STRUCT, STRUCTS, gameStructure, type Structure } from '../core/structures';
 import { structureStats } from '../core/stats';
 import { Board, miniBoard } from '../ui/board';
-import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
 import { PLANS, planBranch, store, type Plan } from './store';
 import { lineUrl } from './session';
 import { gameRow, gameUrl } from './games';
 import { explorerSlot } from './explorer';
+import { startCycle } from './wood';
 
 const chev = icon('chev', 'chev');
 const planRow = (P: Plan) => `<a class="rowi" href="#/plan/${P.id}"><span class="chip ${P.side}"></span><span class="body"><b>${esc(P.title)}</b><small>${esc(P.sub)}, ${plural(P.steps.length, 'étape')}</small></span>${(store.state.planDone as Record<string, unknown> | undefined)?.[P.id] ? icon('check', 'tick') : ''}${chev}</a>`;
@@ -19,7 +19,7 @@ export function viewPlans(root: HTMLElement, ids?: string[]) {
   const list = ids ? PLANS.filter(p => ids.includes(p.id)) : PLANS, cats = [...new Set(list.map(p => p.cat))];
   root.innerHTML = `<p class="intro">Chaque animation montre le plan type d'une ouverture : les ruptures, les cases clés, les pièces à échanger. Tu rejoues d'abord la ligne, puis le plan se déroule étape par étape.</p>
     ${cats.map(c => `<section class="grp"><h2>${esc(c)}</h2><div class="surf card list">${list.filter(p => p.cat === c).map(planRow).join('')}</div></section>`).join('')}
-    <div class="surf card list"><a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>Plans par structure de pions</b><small>Les plans viennent de la structure : les tiens, avec un quiz sur tes positions</small></span>${chev}</a></div>`;
+    <div class="surf card list"><a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>Plans par structure de pions</b><small>Tes structures, ton score dans chacune, et tes fautes à y rejouer</small></span>${chev}</a></div>`;
 }
 
 /* ---------- un plan animé ---------- */
@@ -93,17 +93,20 @@ export function mountStruct(root: HTMLElement, id: string): () => void {
   const s = STRUCT[id]; if (!s) { root.innerHTML = '<section class="empty"><p>Structure inconnue.</p><a class="btn" href="#/structures">Toutes les structures</a></section>'; return () => { /* rien */ }; }
   const o = structureStats(analysed())[id], games = o?.games ?? [], side = games.length ? (games.filter(g => g.color === 'w').length >= games.length / 2 ? 'w' : 'b') : 'w';
   const ex = games[0], st = ex ? gameStructure(ex.sans) : null;
+  const gids = new Set(games.map(g => g.id)), faults = store.faults.filter(f => gids.has(f.game));
   const plan = (c: 'w' | 'b') => `<section class="grp"><h2>${c === 'w' ? 'Plan des Blancs' : 'Plan des Noirs'}${c === side && games.length ? ', ton camp le plus souvent' : ''}</h2><div class="surf card padded"><ol class="plan-list">${(c === 'w' ? s.w : s.b).map(x => `<li>${esc(x)}</li>`).join('')}</ol></div></section>`;
   const anims = s.anim.filter(a => PLANS.some(p => p.id === a));
   root.innerHTML = `${st ? `<div class="trainer struct"><div class="tboard"><div id="board"></div></div><div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">` : '<div><div>'}
     <p class="meta">${ex ? `Position de ta partie contre <b>${esc(ex.opp)}</b>, coup 12. ` : ''}Cases clés : ${esc(s.key)}.</p>
     ${o ? `<div class="surf card stats"><div><b>${o.n}</b><span>${o.n > 1 ? 'parties' : 'partie'}</span></div><div><b>${o.score} %</b><span>de score</span></div><div><b>${Math.round(o.errMe)} / ${Math.round(o.errOp)} %</b><span>coups ratés, toi / eux</span></div></div>` : ''}
-    ${games.length ? `<a class="btn pri block" href="#/structure/${id}/quiz">Quiz : quel est le plan ? (${Math.min(games.length, 10)} positions)</a>` : ''}
+    ${o && o.n >= 3 ? `<p class="insight">${o.delta <= -5 ? `Dans cette structure, tu perds en moyenne ${-o.delta} points de chances entre les coups 8 et 20.` : o.delta >= 5 ? `Dans cette structure, tu gagnes en moyenne ${o.delta} points de chances entre les coups 8 et 20.` : 'Tes chances restent stables entre les coups 8 et 20.'}</p>` : ''}
+    ${faults.length ? `<button class="btn pri block" id="bStFaults">${icon('target')}Rejouer tes ${plural(faults.length, 'faute')} dans cette structure</button>` : ''}
     ${plan(side)}${plan(side === 'w' ? 'b' : 'w')}
     ${anims.length ? `<section class="grp"><h2>Plans animés</h2><div class="surf card list">${anims.map(a => planRow(PLANS.find(p => p.id === a)!)).join('')}</div></section>` : ''}
     ${games.length ? `<section class="grp"><h2>Tes parties dans cette structure</h2><div class="surf card list">${games.slice(0, 15).map(g => gameRow(g, `#/structure/${id}`).replace(gameUrl(g.id, undefined, `#/structure/${id}`), gameUrl(g.id, gameStructure(g.sans)?.ply, `#/structure/${id}`))).join('')}</div></section>` : ''}
     <p class="foot">Coups ratés : part des coups 9 à 25 qui font perdre au moins 10 points de chances de gain.</p>
   ${st ? '</div></div></div>' : '</div></div>'}`;
+  root.querySelector('#bStFaults')?.addEventListener('click', () => startCycle(s.name, faults));
   let board: Board | null = null, XS: ReturnType<typeof explorerSlot> | null = null;
   if (st && ex) {
     const b = board = new Board($('#board', root), { movable: () => XS?.active()?.movable() ?? null, onMove: m => XS?.active()?.onMove(m) });
@@ -111,43 +114,5 @@ export function mountStruct(root: HTMLElement, id: string): () => void {
     XS = explorerSlot(b, () => $('#tmain', root), () => $('#xp', root), () => ({ fen: st.fen, orient: ex.color, lines: [{ label: 'Suite de ta partie', sans: ex.sans.slice(st.ply, st.ply + 10) }] }), show);
     XS.available(true);
   }
-  return () => { XS?.destroy(); board?.destroy(); };
-}
-
-/* ---------- quiz : à la position de ta partie, retrouver le plan de ton camp parmi trois ---------- */
-const shuffle = <T>(a: T[]) => { const b = [...a]; for (let k = b.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); [b[k], b[j]] = [b[j], b[k]]; } return b; };
-export function mountQuiz(root: HTMLElement, id: string, header: (title: string, sub: string) => void): () => void {
-  const s = STRUCT[id], games = s ? (structureStats(analysed())[id]?.games ?? []).slice(0, 10) : [];
-  if (!s || !games.length) { location.replace(`#/structure/${id}`); return () => { /* rien */ }; }
-  let k = 0, ok = 0, board: Board | null = null, XS: ReturnType<typeof explorerSlot> | null = null;
-  const render = () => {
-    XS?.destroy(); XS = null; board?.destroy(); board = null;
-    if (k >= games.length) {
-      header('Quiz terminé', s.name);
-      root.innerHTML = `<div class="endwrap"><section class="endcard"><h1>${ok}/${games.length}</h1><p>${ok === games.length ? 'Tu connais le plan de cette structure.' : 'Relis les plans de la structure, puis revois tes parties à partir de cette position.'}</p>
-        <div class="row"><a class="btn pri" href="#/structure/${id}">Retour à la structure</a></div></section></div>`; return;
-    }
-    const g = games[k], st = gameStructure(g.sans)!, mine = g.color, right = (mine === 'w' ? s.w : s.b)[0];
-    const others = shuffle(STRUCTS.filter(x => x.id !== s.id && x.id !== 'open' && (mine === 'w' ? x.w : x.b)[0] !== right)).slice(0, 2).map(x => (mine === 'w' ? x.w : x.b)[0]);
-    const opts = shuffle([right, ...others]);
-    header('Quel est le plan ?', `Position ${k + 1} sur ${games.length}`);
-    root.innerHTML = `<div class="trainer"><div class="tboard"><div id="board"></div></div><div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">
-      <p class="meta">Contre <b>${esc(g.opp)}</b>, coup 12, tu as les ${mine === 'w' ? 'Blancs' : 'Noirs'}.</p>
-      <div class="coach"><p class="lead">${esc(s.name)}</p><p class="why">Quel est le plan principal de ton camp ?</p></div>
-      <div class="opts">${opts.map((o, j) => `<button class="btn opt" data-j="${j}">${esc(o)}</button>`).join('')}</div>
-      <div id="after"></div></div></div></div>`;
-    const bd = board = new Board($('#board', root), { movable: () => XS?.active()?.movable() ?? null, onMove: m => XS?.active()?.onMove(m) }); bd.set(new Chess(st.fen), mine);
-    const slot = XS = explorerSlot(bd, () => $('#tmain', root), () => $('#xp', root), () => ({ fen: st.fen, orient: mine, lines: [{ label: 'Suite de ta partie', sans: g.sans.slice(st.ply, st.ply + 10) }] }), () => bd.set(new Chess(st.fen), mine));
-    slot.available(false, "Réponds d'abord, puis explore la position.");
-    root.querySelectorAll<HTMLButtonElement>('.opt').forEach(b => b.onclick = () => {
-      const good = opts[+b.dataset.j!] === right; if (good) { ok++; SFX.done(); } else SFX.bad();
-      root.querySelectorAll<HTMLButtonElement>('.opt').forEach(x => { x.disabled = true; if (opts[+x.dataset.j!] === right) x.classList.add('right'); else if (x === b) x.classList.add('wrong'); });
-      $('#after', root).innerHTML = `<p class="lead ${good ? 'ok' : 'bad'}">${good ? 'Exact' : 'Pas tout à fait'}</p><p>Le plan complet de ton camp : ${esc((mine === 'w' ? s.w : s.b).map(x => x.charAt(0).toLowerCase() + x.slice(1)).join(' ; '))}.</p>
-        <div class="actions"><button class="btn pri" id="bNext">${k + 1 < games.length ? 'Position suivante' : 'Voir le résultat'}</button><a class="btn" href="${gameUrl(g.id, st.ply, `#/structure/${id}`)}">Suite de la partie</a></div>`;
-      $('#bNext', root).onclick = () => { k++; render(); scrollTo(0, 0); };
-      slot.available(true);
-    });
-  };
-  render();
   return () => { XS?.destroy(); board?.destroy(); };
 }

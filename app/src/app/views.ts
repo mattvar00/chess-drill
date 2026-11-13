@@ -10,6 +10,9 @@ import { streak, trainedToday } from '../core/streak';
 import { getToken, lastSync } from './api';
 import { lineUrl, startSession } from './session';
 import { duePositions } from '../core/wood';
+import { gameRow } from './games';
+import { startCycle } from './wood';
+import { myWp } from '../core/stats';
 
 const DAY = 864e5;
 const st = (id: string) => store.state.br[id];
@@ -46,6 +49,7 @@ export function viewHome(root: HTMLElement) {
   const headline = due.length ? `${plural(due.length, 'ligne')} à revoir` : fresh.length ? `${plural(fresh.length, 'nouvelle ligne', 'nouvelles lignes')}` : 'Tout est à jour';
   const sub = due.length && fresh.length ? `et ${plural(fresh.length, 'nouvelle', 'nouvelles')} à apprendre` : !pool.length ? 'Rien à revoir aujourd\'hui. Un drill mixte entretient le reste.' : !due.length ? 'à apprendre aujourd\'hui' : '';
   const name = String(store.state.settings.name ?? '').trim(), days = trainingDays(), n = streak(days);
+  const latest = store.games.filter(g => g.st).sort((a, b) => b.t - a.t)[0];
   root.innerHTML = `
     <header class="hello">
       <div><p class="date">${cap(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</p><h1>Bonjour${name ? ' ' + esc(name) : ''}</h1></div>
@@ -72,6 +76,7 @@ export function viewHome(root: HTMLElement) {
     ${devs.length ? `<section class="grp"><h2>${devs.length > 1 ? 'Sorties de répertoire à corriger' : 'Sortie de répertoire à corriger'}</h2><div class="surf card list">${devs.map(g => { const id = refBranch(g, BR)!; const want = (g.a.expected || []).map(e => e.san).join(' ou ');
       return `<a class="rowi" href="${lineUrl(id, 'drill', g.id)}"><span class="chip ${g.color}"></span><span class="body"><b>${esc(BR[id].br.titre)}</b>
         <small>${cap(ago(g.t * 1000))} contre ${esc(g.opp)} : tu as joué ${esc(g.a.played)}${want ? `, la ligne joue ${esc(want)}` : ''}</small></span>${chev}</a>`; }).join('')}</div></section>` : ''}
+    ${latest ? `<section class="grp"><h2>Ta dernière partie</h2><div class="surf card list">${gameRow(latest, '#/')}</div></section>` : ''}
     ${getToken() ? `<p class="foot">${store.games.length ? `${plural(store.games.length, 'partie analysée', 'parties analysées')}` : 'Aucune partie reçue pour l\'instant'}${lastSync() ? `, synchronisé ${ago(lastSync())}` : ''}.</p>`
       : `<div class="surf card list"><a class="rowi" href="#/reglages"><span class="ico">${icon('link')}</span><span class="body"><b>Relier l'app à tes parties</b><small>Entre ton code d'accès pour voir tes sorties de répertoire, tes fautes, et retrouver ta progression sur tous tes appareils.</small></span>${chev}</a></div>`}`;
   $('#bToday', root)?.addEventListener('click', () => { location.hash = startSession('Séance du jour', pool, '#/', first); });
@@ -90,7 +95,7 @@ export function viewBlocs(root: HTMLElement) {
     <div class="surf card list">${blocs.map(b => { const ids = idsOf(b); return `<a class="rowi" href="#/rep/${b.id}"><span class="chip ${b.side}"></span><span class="body"><b>${esc(b.titre)}</b><small>${esc(b.sous)}</small>${progLine(ids)}</span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>
     <section class="grp"><h2>Plans</h2><div class="surf card list">
       <a class="rowi" href="#/plans"><span class="ico">${icon('chart')}</span><span class="body"><b>Plans animés</b><small>${plural(PLANS.length, 'animation')} : ruptures, cases clés, pièces à échanger</small></span>${chev}</a>
-      <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>Plans par structure de pions</b><small>Tes structures, leurs plans, et un quiz sur tes positions</small></span>${chev}</a>
+      <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>Plans par structure de pions</b><small>Tes structures, ton score dans chacune, et tes fautes à y rejouer</small></span>${chev}</a>
     </div></section>
     <details class="help"><summary>Comment ça marche</summary><p>Le drill te fait rejouer une ligne de mémoire ; Voir la ligne la montre avec ses commentaires. L'explorateur, sur chaque position, te laisse essayer tes propres coups avec l'avis du moteur. Deux passages sans faute valident une ligne, qui revient ensuite à intervalles de plus en plus longs. Le tirage favorise les lignes neuves et celles où tu es sorti du répertoire en partie.</p></details>`;
   root.querySelectorAll<HTMLButtonElement>('[data-f]').forEach(b => b.addEventListener('click', () => {
@@ -111,11 +116,33 @@ function lineStatus(br: Branch): string {
   else parts.push('jamais jouée');
   return parts.join(', ');
 }
+/** Tes parties jouées dans un système (d'après la ligne du répertoire suivie le plus longtemps), les plus récentes d'abord. */
+const gamesOfSystem = (sys: System) => store.games.filter(g => { const id = refBranch(g, BR); return !!id && BR[id].sys.id === sys.id; }).sort((a, b) => b.t - a.t);
+/** Ce que tes parties disent de ce système : score, ce que tu fais de la sortie d'ouverture, et tes fautes à retravailler. */
+function inYourGames(sys: System): string {
+  const games = gamesOfSystem(sys), an = games.filter(g => g.st && myWp(g)); if (!games.length) return '';
+  const score = Math.round(100 * games.reduce((a, g) => a + (g.res === 'W' ? 1 : g.res === 'D' ? 0.5 : 0), 0) / games.length);
+  const at = (g: typeof an[number], ply: number) => { const w = myWp(g)!; return w[Math.min(ply, w.length - 1)]; };
+  const avg = (ply: number) => Math.round(an.reduce((a, g) => a + at(g, ply), 0) / an.length);
+  const ids = new Set(games.map(g => g.id)), faults = store.faults.filter(f => ids.has(f.game));
+  const themes: Record<string, number> = {}; for (const f of faults) themes[f.theme] = (themes[f.theme] || 0) + 1;
+  const top = Object.entries(themes).sort((a, b) => b[1] - a[1])[0];
+  const drop = an.length ? avg(40) - avg(20) : 0;
+  return `<section class="grp"><h2>Dans tes parties</h2>
+    <div class="surf card stats"><div><b>${games.length}</b><span>${games.length > 1 ? 'parties' : 'partie'}</span></div><div><b>${score} %</b><span>de score</span></div><div><b>${an.length ? avg(20) + ' %' : '–'}</b><span>de chances au coup 10</span></div></div>
+    ${an.length >= 3 ? `<p class="insight">${drop <= -5 ? `Tu sors bien de l'ouverture, puis tu perds en moyenne ${-drop} points de chances entre les coups 10 et 20 : c'est le plan du milieu de jeu qui te coûte, pas la théorie.` : drop >= 5 ? `Tu gagnes en moyenne ${drop} points de chances entre les coups 10 et 20 : tu connais les plans de ce système.` : 'Tes chances restent stables entre les coups 10 et 20.'}${top ? ` Ta faute la plus fréquente ici : ${top[0].toLowerCase()} (${top[1]}).` : ''}</p>` : ''}
+    ${faults.length ? `<button class="btn block" id="bSysFaults">${icon('target')}Rejouer tes ${plural(faults.length, 'faute')} dans ce système</button>` : ''}
+  </section>`;
+}
 export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   const back = `#/rep/${bloc.id}/${sys.id}`;
+  const played = gamesOfSystem(sys);
   root.innerHTML = `<p class="intro">${esc(sys.resume)}</p>
+    ${inYourGames(sys)}
     <button class="btn pri block" id="bDrill">Drill sur ce système</button>
     ${plansFor(sys.id).length ? `<section class="grp"><h2>Plans animés</h2><div class="surf card list">${plansFor(sys.id).map(P => `<a class="rowi" href="#/plan/${P.id}"><span class="ico">${icon('chart')}</span><span class="body"><b>${esc(P.title)}</b><small>${esc(P.sub)}</small></span>${chev}</a>`).join('')}</div></section>` : ''}
-    <div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id]; return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(br.titre)}</b><small>${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>`;
+    <div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id]; return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(br.titre)}</b><small>${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
+    ${played.length ? `<section class="grp"><h2>Tes dernières parties dans ce système</h2><div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, idsOf(sys), back));
+  root.querySelector('#bSysFaults')?.addEventListener('click', () => { const ids = new Set(gamesOfSystem(sys).map(g => g.id)); startCycle(sys.titre, store.faults.filter(f => ids.has(f.game))); });
 }

@@ -13,7 +13,7 @@ import { endSession, lineUrl, session } from './app/session';
 import { getToken, sync } from './app/api';
 import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames } from './app/games';
-import { mountPlan, mountQuiz, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
+import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountTool, setTool } from './app/explorer';
 
@@ -57,9 +57,6 @@ function route() {
     shell(t, sub, backTo, null); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
   } else if (p[0] === 'plan' && p[1]) {
     endSession(); shell(planTitle(p[1]), 'Plan animé', '#/plans', null); cleanup = mountPlan(view, p[1], q.has('vu'));
-  } else if (p[0] === 'structure' && p[1] && p[2] === 'quiz') {
-    endSession(); shell('Quel est le plan ?', '', `#/structure/${p[1]}`, null);
-    cleanup = mountQuiz(view, p[1], (title, sub) => { $('#title').textContent = title; $('#subtitle').textContent = sub; });
   } else if (p[0] === 'structure' && p[1]) {
     endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/structures', null); cleanup = mountStruct(view, p[1]);
   } else if (p[0] === 'wood' && p[1] === 'go') {

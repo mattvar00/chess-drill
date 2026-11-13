@@ -9,6 +9,7 @@ import { $, esc, icon, plural } from '../ui/dom';
 import { markActive, save, store, woodCur, woodHistory, type WoodCur } from './store';
 import { getToken, syncSoon } from './api';
 import { explorerSlot, sanTokens } from './explorer';
+import { gameUrl } from './games';
 
 export const GO = '#/wood/go';
 /** Début d'une variante, pour l'affichage (les lignes du moteur sont longues). */
@@ -103,7 +104,9 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
         <p class="odds"><span>Chances de gain</span><b>${Math.round(p.wp_before)} %</b>${icon('arrow')}<b class="down">${Math.round(p.wp_after)} %</b></p></div>`;
     actions.className = 'actions';
     actions.innerHTML = one ? `<a class="btn pri" href="${one.back}">Revenir à la partie</a><button class="btn" id="bAgain1">Refaire</button>`
-      : `<button class="btn pri" id="bNext">${cyc.i + 1 < cyc.ids.length ? 'Position suivante' : 'Terminer le cycle'}</button><a class="btn" href="https://www.chess.com/game/live/${encodeURIComponent(F.game)}" target="_blank" rel="noopener">Voir la partie</a>`;
+      : `<button class="btn pri" id="bNext">${cyc.i + 1 < cyc.ids.length ? 'Position suivante' : 'Terminer le cycle'}</button>${store.games.some(g => g.id === F.game) ? `<button class="btn" id="bGame">Voir la partie</button>` : `<a class="btn" href="https://www.chess.com/game/live/${encodeURIComponent(F.game)}" target="_blank" rel="noopener">Voir la partie</a>`}`;
+    // la revue s'ouvre au coup de la faute ; en revenant, le cycle reprend à la position suivante
+    const bg = actions.querySelector<HTMLButtonElement>('#bGame'); if (bg) bg.onclick = () => { const url = gameUrl(F.game, F.ply + 1, GO); cyc.i++; hold(); location.hash = url; };
     XS.available(true);
     const again = actions.querySelector<HTMLButtonElement>('#bAgain1'); if (again) { again.onclick = () => { since = Date.now(); load(); }; return; }
     $('#bNext', actions).onclick = next;
