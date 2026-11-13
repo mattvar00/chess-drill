@@ -1,5 +1,5 @@
 # Analyse des parties chess.com avec Stockfish natif, chaque nuit ou à la demande (bouton « analyser maintenant » de l'app).
-# Secrets du repo : API_URL (https://chess-drill.<compte>.workers.dev), API_TOKEN (= APP_TOKEN du Worker).
+# Secrets du repo : APP_TOKEN (le même que le Worker). Variable du repo : API_URL (https://chess-drill.<sous-domaine>.workers.dev).
 # Variable du repo (optionnelle) : USERS, pseudos séparés par des virgules (défaut : matt_chess00).
 name: Analyse
 on:
@@ -25,7 +25,7 @@ jobs:
       - name: Analyse
         env:
           STOCKFISH: /usr/games/stockfish
-          API_URL: ${{ secrets.API_URL }}
-          API_TOKEN: ${{ secrets.API_TOKEN }}
+          API_URL: ${{ vars.API_URL }}
+          API_TOKEN: ${{ secrets.APP_TOKEN }}
           USERS: ${{ inputs.users || vars.USERS || 'matt_chess00' }}
         run: npx tsx scripts/analyse.ts --days "${{ inputs.days || '3' }}" --depth 16
