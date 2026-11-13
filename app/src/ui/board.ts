@@ -109,3 +109,11 @@ export class Board {
   /** À appeler quand l'écran est quitté en plein glisser. */
   destroy() { this.endDrag(); }
 }
+
+/** Petit échiquier fixe (aperçu d'une position). */
+export function miniBoard(game: Chess, orient: Color): string {
+  const ranks = orient === 'w' ? [8, 7, 6, 5, 4, 3, 2, 1] : [1, 2, 3, 4, 5, 6, 7, 8], files = orient === 'w' ? [0, 1, 2, 3, 4, 5, 6, 7] : [7, 6, 5, 4, 3, 2, 1, 0];
+  let h = '';
+  for (const r of ranks) for (const f of files) { const p = game.get((FILES[f] + r) as never); h += `<i class="${(f + r) % 2 === 1 ? 'd' : 'l'}">${p ? `<img src="${PIECES[p.color + p.type]}" alt="">` : ''}</i>`; }
+  return `<span class="mini" aria-hidden="true">${h}</span>`;
+}

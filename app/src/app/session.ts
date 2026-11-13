@@ -7,8 +7,8 @@ let current: Session | null = null;
 export const session = () => current;
 export const remaining = () => current ? current.pool.filter(id => !current!.done.has(id)) : [];
 /** Démarre une séance et renvoie l'adresse de la première ligne. */
-export function startSession(label: string, pool: string[], back: string): string {
-  current = { label, pool, done: new Set(), back }; return lineUrl(pickNext(pool, weightStates()), 'drill');
+export function startSession(label: string, pool: string[], back: string, first?: string): string {
+  current = { label, pool, done: new Set(), back }; return lineUrl(first && pool.includes(first) ? first : pickNext(pool, weightStates()), 'drill');
 }
 export function nextUrl(after: string): string | null {
   const left = remaining(); return left.length ? lineUrl(pickNext(left, weightStates(), after), 'drill') : null;

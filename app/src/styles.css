@@ -27,8 +27,28 @@ main{max-width:1080px;margin:0 auto;padding:14px 14px calc(var(--tabs) + 24px + 
 main:focus{outline:none}
 body.focus main{padding-bottom:20px}
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;background:var(--panel);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
-.tabs a{flex:1;height:var(--tabs);display:grid;place-items:center;color:var(--mute);font-size:13.5px;border-top:2px solid transparent;margin-top:-1px}
-.tabs a[aria-current]{color:var(--ink);border-top-color:var(--brass);font-weight:600}
+.tabs a{flex:1;height:var(--tabs);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--mute);font-size:12px}
+.tabs a[aria-current]{color:var(--brass);font-weight:600}
+.ic{width:24px;height:24px;flex:none}
+.top .gear{width:44px;height:44px;display:grid;place-items:center;color:var(--mute);margin-right:-8px}
+
+/* accueil */
+.date{margin:2px 0 12px;color:var(--mute);font-size:14px}.date::first-letter{text-transform:uppercase}
+.session{display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center;padding:18px 16px 16px;border-radius:16px;background:linear-gradient(160deg,#27413a,#1b2b27 70%);border:1px solid var(--line)}
+.session h1{font:600 clamp(26px,7.4vw,38px)/1.08 var(--serif);margin:0 0 4px;letter-spacing:-.01em}
+.session p{margin:0;color:var(--mute)}
+.session .nextline{margin-top:10px;font-size:14px}.session .nextline b{color:var(--ink);font-weight:600}
+.session .row{grid-column:1/-1;margin:12px 0 0}
+.mini{display:grid;grid-template-columns:repeat(8,1fr);width:104px;aspect-ratio:1;border-radius:4px;overflow:hidden;box-shadow:0 0 0 2px #0d1513,0 8px 18px rgba(0,0,0,.4)}
+.mini i{position:relative;display:block;aspect-ratio:1}.mini .l{background:var(--light)}.mini .d{background:var(--dark)}
+.mini img{position:absolute;inset:0;width:100%;height:100%}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0}
+.tile{position:relative;display:grid;gap:2px;text-align:left;padding:14px 14px 12px;border-radius:14px;background:var(--panel);border:1px solid var(--line);color:inherit;font:inherit}
+.tile:active{background:var(--raised)}
+.tile .ic{color:var(--brass);position:absolute;right:12px;top:12px}
+.tile b{font:600 30px/1.1 var(--serif);font-variant-numeric:tabular-nums}.tile b span{font-size:17px;color:var(--mute);font-weight:400}
+.tile small{color:var(--mute);font-size:13.5px}
+.tile em{font-style:normal;font-weight:600;margin-top:8px}
 
 /* listes */
 h2{font:600 17px/1.3 var(--serif);margin:26px 0 10px}
@@ -131,7 +151,9 @@ button.card{width:100%;text-align:left;color:inherit;font:inherit}
   .tboard{max-width:min(100%,calc(100dvh - 130px))}
   .moves{max-height:260px}
   .tabs{position:static;max-width:1080px;margin:0 auto;border:0;background:none;justify-content:flex-start;gap:8px;padding:0 14px 30px}
-  .tabs a{flex:none;padding:0 14px;height:40px;border:1px solid var(--line);border-radius:999px;margin:0}
+  .tabs a{flex:none;flex-direction:row;gap:8px;padding:0 14px;height:40px;border:1px solid var(--line);border-radius:999px;font-size:14px}
   .tabs a[aria-current]{border-color:var(--brass)}
+  .tabs .ic{width:18px;height:18px}
+  .session{padding:26px}.mini{width:150px}
 }
 @media(prefers-reduced-motion:reduce){.sq.bad,.sq.good{animation-duration:.01s}.btn:active{transform:none}}

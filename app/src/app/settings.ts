@@ -26,7 +26,7 @@ export function viewSettings(root: HTMLElement) {
   $('#fSync', root).addEventListener('submit', async e => {
     e.preventDefault(); s.user = $<HTMLInputElement>('#iUser', root).value.trim().toLowerCase() || 'matt_chess00'; setToken($<HTMLInputElement>('#iToken', root).value); save();
     status.className = 'status'; status.textContent = 'Synchronisation en cours…';
-    try { const r = await sync(); status.textContent = `Synchronisé : ${plural(r.games, 'nouvelle partie', 'nouvelles parties')}, ${plural(r.lines, 'ligne mise à jour', 'lignes mises à jour')} depuis un autre appareil.`; }
+    try { const r = await sync(); status.textContent = `Synchronisé : ${plural(r.games, 'nouvelle partie', 'nouvelles parties')}${r.lines ? ', progression mise à jour depuis un autre appareil' : ''}.`; }
     catch (err) { status.className = 'status err'; status.textContent = (err as Error).message; }
   });
   $('#cSound', root).addEventListener('change', e => { s.sound = (e.target as HTMLInputElement).checked; setSound(s.sound !== false); save(); });

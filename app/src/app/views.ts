@@ -2,7 +2,9 @@
 import { isDue, isValid } from '../core/schedule';
 import { recentDeviations, refBranch, todayPool } from '../core/drill';
 import type { Bloc, Branch, System } from '../core/types';
-import { esc, plural, $ } from '../ui/dom';
+import { esc, plural, $, icon } from '../ui/dom';
+import { miniBoard } from '../ui/board';
+import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, REP, store } from './store';
 import { getToken, lastSync } from './api';
 import { lineUrl, startSession } from './session';
@@ -17,24 +19,42 @@ const go = (label: string, pool: string[], back: string) => { location.hash = st
 const bar = (done: number, total: number) => `<span class="prog" role="img" aria-label="${done} sur ${total} validées"><b style="width:${total ? Math.round(100 * done / total) : 0}%"></b></span>`;
 const ago = (t: number) => { const d = Math.floor((Date.now() - t) / DAY); return d <= 0 ? "aujourd'hui" : d === 1 ? 'hier' : `il y a ${d} jours`; };
 
-export function viewToday(root: HTMLElement) {
-  const { due, fresh } = todayPool(REP, store.state.br), pool = [...due, ...fresh];
-  const devs = recentDeviations(store.games, store.state.fixed, BR);
-  const headline = due.length ? `${plural(due.length, 'ligne')} à revoir` : fresh.length ? `${plural(fresh.length, 'nouvelle ligne', 'nouvelles lignes')} à apprendre` : 'Tout est à jour';
-  const sub = due.length && fresh.length ? `et ${plural(fresh.length, 'nouvelle', 'nouvelles')} à apprendre`
-    : !pool.length ? 'Aucune ligne à revoir aujourd\'hui. Un drill mixte entretient le reste.' : '';
+/** Aperçu d'une ligne : la position atteinte au bout de la ligne. */
+function preview(id: string): string {
+  const { br, bloc } = BR[id], g = new Chess(); for (const m of br.moves) if (!tryMove(g, uciToObj(m.uci))) break;
+  return miniBoard(g, bloc.side);
+}
+/** Bilan des 7 derniers jours de parties analysées. */
+function week() {
+  const since = Date.now() / 1000 - 7 * 86400, gs = store.games.filter(g => g.t >= since && g.st && g.st.acc != null);
+  if (!gs.length) return null;
+  return { n: gs.length, acc: Math.round(gs.reduce((a, g) => a + (g.st!.acc || 0), 0) / gs.length), wins: gs.filter(g => g.res === 'W').length, blunders: gs.reduce((a, g) => a + g.st!.blunder, 0) };
+}
+export function viewHome(root: HTMLElement) {
+  const { due, fresh } = todayPool(REP, store.state.br), pool = [...due, ...fresh], first = pool[0];
+  const devs = recentDeviations(store.games, store.state.fixed, BR), w = week();
+  const valid = validCount(ALL_IDS), posDue = duePositions(store.faults, store.state.fault);
+  const headline = due.length ? `${plural(due.length, 'ligne')} à revoir` : fresh.length ? `${plural(fresh.length, 'nouvelle ligne', 'nouvelles lignes')}` : 'Tout est à jour';
+  const sub = due.length && fresh.length ? `et ${plural(fresh.length, 'nouvelle', 'nouvelles')} à apprendre` : !pool.length ? 'Rien à revoir aujourd\'hui. Un drill mixte entretient le reste.' : !due.length ? 'à apprendre aujourd\'hui' : '';
   root.innerHTML = `
-    <section class="hero">
-      <h1>${headline}</h1>${sub ? `<p>${sub}</p>` : ''}
+    <p class="date">${new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+    <section class="session">
+      <div class="stext"><h1>${headline}</h1>${sub ? `<p>${sub}</p>` : ''}${first ? `<p class="nextline">On commence par <b>${esc(BR[first].br.titre)}</b></p>` : ''}</div>
+      ${first ? preview(first) : ''}
       <div class="row">${pool.length ? '<button class="btn pri" id="bToday">Commencer la séance</button>' : ''}<button class="btn" id="bMix">Drill mixte</button></div>
     </section>
-    ${devs.length ? `<h2>Sorties de répertoire récentes</h2>${devs.map(g => { const id = refBranch(g, BR)!; const want = (g.a.expected || []).map(e => e.san).join(' ou ');
+    <div class="tiles">
+      <a class="tile" href="#/rep">${icon('book')}<b>${valid}<span>/${ALL_IDS.length}</span></b><small>lignes validées</small><em>Répertoire</em></a>
+      ${store.faults.length ? `<button class="tile" id="bWood">${icon('target')}<b>${posDue || store.faults.length}</b><small>${posDue ? `position${posDue > 1 ? 's' : ''} à revoir` : 'positions en stock'}</small><em>Woodpecker</em></button>`
+        : `<a class="tile" href="#/wood">${icon('target')}<b>0</b><small>position pour l'instant</small><em>Woodpecker</em></a>`}
+    </div>
+    ${w ? `<h2>Tes 7 derniers jours</h2><div class="stats"><div><b>${w.n}</b><span>${w.n > 1 ? 'parties' : 'partie'}, ${w.wins} gagnée${w.wins > 1 ? 's' : ''}</span></div><div><b>${w.acc} %</b><span>de précision</span></div><div><b>${w.blunders}</b><span>gaffe${w.blunders > 1 ? 's' : ''}</span></div></div>` : ''}
+    ${devs.length ? `<h2>Sorties de répertoire à corriger</h2>${devs.map(g => { const id = refBranch(g, BR)!; const want = (g.a.expected || []).map(e => e.san).join(' ou ');
       return `<a class="card" href="${lineUrl(id, 'drill', g.id)}"><span class="chip ${g.color}"></span><span class="body"><b>${esc(BR[id].br.titre)}</b>
         <small>Contre ${esc(g.opp)}, ${ago(g.t * 1000)} : tu as joué ${esc(g.a.played)}${want ? `, la ligne joue ${esc(want)}` : ''}</small></span></a>`; }).join('')}` : ''}
-    ${store.faults.length ? `<h2>Tactique</h2><button class="card" id="bWood"><span class="body"><b>${Math.min(10, store.faults.length)} positions tirées de tes fautes</b><small>${(d => d ? `${plural(d, 'position')} à revoir aujourd'hui` : `${plural(store.faults.length, 'position')} en stock, les plus utiles d'abord`)(duePositions(store.faults, store.state.fault))}</small></span></button>` : ''}
     ${getToken() ? `<p class="foot">${store.games.length ? `${plural(store.games.length, 'partie analysée', 'parties analysées')}` : 'Aucune partie reçue pour l\'instant'}${lastSync() ? `, synchronisé ${ago(lastSync())}` : ''}.</p>`
-      : `<a class="card link" href="#/reglages"><span class="body"><b>Relier l'app à tes parties</b><small>Entre ton code d'accès pour voir tes sorties de répertoire et retrouver ta progression sur tous tes appareils.</small></span></a>`}`;
-  $('#bToday', root)?.addEventListener('click', () => go('Séance du jour', pool, '#/'));
+      : `<a class="card link" href="#/reglages"><span class="body"><b>Relier l'app à tes parties</b><small>Entre ton code d'accès pour voir tes sorties de répertoire, tes fautes et retrouver ta progression sur tous tes appareils.</small></span></a>`}`;
+  $('#bToday', root)?.addEventListener('click', () => { location.hash = startSession('Séance du jour', pool, '#/', first); });
   $('#bMix', root).addEventListener('click', () => go('Drill mixte', ALL_IDS, '#/'));
   $('#bWood', root)?.addEventListener('click', startPriority);
 }

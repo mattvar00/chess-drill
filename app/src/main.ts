@@ -1,27 +1,27 @@
 /** Point d'entrée : coquille de l'app et navigation par adresse (#/…), pour que le bouton retour du téléphone fonctionne. */
 import './styles.css';
-import { $, esc } from './ui/dom';
+import { $, esc, icon } from './ui/dom';
 import { setSound } from './ui/sound';
 import { BR, REP, loadStore, store } from './app/store';
-import { viewBloc, viewBlocs, viewSystem, viewToday } from './app/views';
+import { viewBloc, viewBlocs, viewHome, viewSystem } from './app/views';
 import { mountTrainer } from './app/trainer';
 import { viewSettings } from './app/settings';
 import { mountExercise, viewWood } from './app/wood';
 import { endSession, session } from './app/session';
 import { getToken, sync } from './app/api';
 
-const TABS = [['#/', "Aujourd'hui"], ['#/rep', 'Répertoire'], ['#/wood', 'Woodpecker'], ['#/reglages', 'Réglages']] as const;
+const TABS = [['#/', 'Accueil', 'home'], ['#/rep', 'Répertoire', 'book'], ['#/wood', 'Woodpecker', 'target']] as const;
 document.getElementById('app')!.innerHTML = `
-  <header class="top"><a class="back" id="back" aria-label="Retour">‹</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div></header>
+  <header class="top"><a class="back" id="back" aria-label="Retour">‹</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><a class="gear" id="gear" href="#/reglages" aria-label="Réglages">${icon('sliders')}</a></header>
   <main id="view" tabindex="-1"></main>
-  <nav class="tabs" id="tabs" aria-label="Sections">${TABS.map(([h, l]) => `<a href="${h}">${l}</a>`).join('')}</nav>`;
+  <nav class="tabs" id="tabs" aria-label="Sections">${TABS.map(([h, l, i]) => `<a href="${h}">${icon(i)}<span>${l}</span></a>`).join('')}</nav>`;
 const view = $('#view'), back = $<HTMLAnchorElement>('#back');
 let cleanup: (() => void) | null = null;
 
 function shell(title: string, sub: string, backHref: string | null, tab: string | null) {
   $('#title').textContent = title; $('#subtitle').textContent = sub; document.title = `${title} · Chess Drill`;
   back.hidden = !backHref; if (backHref) back.href = backHref;
-  $('#tabs').hidden = !tab; document.body.classList.toggle('focus', !tab);
+  $('#tabs').hidden = !tab; document.body.classList.toggle('focus', !tab); $('#gear').hidden = !tab || !!backHref;
   document.querySelectorAll<HTMLAnchorElement>('#tabs a').forEach(a => { if (a.getAttribute('href') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
 }
 function route() {
@@ -43,8 +43,8 @@ function route() {
     else if (bloc) { shell(bloc.titre, bloc.sous, '#/rep', '#/rep'); viewBloc(view, bloc); }
     else if (p[0] === 'rep') { shell('Répertoire', '', null, '#/rep'); viewBlocs(view); }
     else if (p[0] === 'wood') { shell('Woodpecker', '', null, '#/wood'); viewWood(view); }
-    else if (p[0] === 'reglages') { shell('Réglages', '', null, '#/reglages'); viewSettings(view); }
-    else { shell("Aujourd'hui", new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }), null, '#/'); viewToday(view); }
+    else if (p[0] === 'reglages') { shell('Réglages', '', '#/', '#/reglages'); viewSettings(view); }
+    else { shell('Chess Drill', '', null, '#/'); viewHome(view); }
   }
   window.scrollTo(0, 0);
 }
