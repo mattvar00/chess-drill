@@ -5,7 +5,7 @@ import { isUserPly, theoryStart } from '../core/drill';
 import type { Game } from '../core/types';
 import { Board } from '../ui/board';
 import { SFX } from '../ui/sound';
-import { $, esc, plural } from '../ui/dom';
+import { $, esc, icon, plural } from '../ui/dom';
 import { BR, markActive, refreshDevs, save, store } from './store';
 import { syncSoon } from './api';
 import { lineUrl, nextUrl, remaining, session } from './session';
@@ -21,9 +21,8 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   root.innerHTML = `<div class="trainer">
     <div class="tboard"><div id="board"></div><div class="stepper" id="stepper"></div></div>
     <div class="tside">
-      <div class="modes"><a href="${lineUrl(id, 'explore')}" class="${mode === 'explore' ? 'on' : ''}">Explorer</a><a href="${lineUrl(id, 'drill')}" class="${mode === 'drill' ? 'on' : ''}">Drill</a></div>
       <div class="coach" id="coach" aria-live="polite"></div>
-      <div class="explnav" id="explnav" ${mode === 'explore' ? '' : 'hidden'}><button data-to="first" aria-label="Début">⏮</button><button data-to="prev" aria-label="Coup précédent">‹</button><button data-to="next" aria-label="Coup suivant">›</button><button data-to="last" aria-label="Fin">⏭</button></div>
+      <div class="explnav" id="explnav" ${mode === 'explore' ? '' : 'hidden'}>${[['first', 'Début', 'first'], ['prev', 'Coup précédent', 'back'], ['next', 'Coup suivant', 'chev'], ['last', 'Fin', 'last']].map(([to, l, i]) => `<button class="btn" data-to="${to}" aria-label="${l}">${icon(i)}</button>`).join('')}</div>
       <div class="moves" id="moves"></div>
       <div class="actions" id="actions"></div>
     </div></div>`;
@@ -62,15 +61,15 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     target = Math.max(0, Math.min(moves.length, target)); const forward = target === ply + 1;
     game = new Chess(); last = null; for (let i = 0; i < target; i++) apply(i);
     ply = target; show(forward); paintMoves();
-    if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(sys.resume)}</p><p class="why">Avance avec › ou les flèches du clavier. Les coups soulignés portent un commentaire.</p>`);
-    else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)} ${esc(moves[ply - 1].san)}`, note ? `<p>${esc(note)}</p>` : '<p class="why">Coup de la ligne.</p>'); }
+    if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(sys.resume)}</p><p class="why">Avance avec les flèches, à l'écran ou au clavier. Les coups soulignés portent un commentaire.</p>`);
+    else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)}${esc(moves[ply - 1].san)}`, note ? `<p>${esc(note)}</p>` : '<p class="why">Coup de la ligne.</p>'); }
     actions.innerHTML = ply >= moves.length ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">Passer au drill</a>` : '';
   }
   const onKey = (e: KeyboardEvent) => { if (mode !== 'explore') return; if (e.key === 'ArrowRight') explTo(ply + 1); if (e.key === 'ArrowLeft') explTo(ply - 1); };
 
   /* ---------- Drill ---------- */
   function drillActions() {
-    actions.innerHTML = `<button class="btn" id="bHint">Indice</button>${Object.keys(br.notes).length && ply < theoryStart(br.notes, side) ? '<button class="btn" id="bSkip">Aller à la théorie</button>' : ''}<a class="btn" href="${lineUrl(id, 'drill')}" id="bRestart">Recommencer</a>`;
+    actions.innerHTML = `<button class="btn" id="bHint">${icon('bulb')}Indice</button><a class="btn" href="${lineUrl(id, 'drill')}" id="bRestart">${icon('restart')}Recommencer</a>${Object.keys(br.notes).length && ply < theoryStart(br.notes, side) ? '<button class="btn" id="bSkip">Aller à la théorie</button>' : ''}`;
     $('#bHint', actions).onclick = hint; const sk = $('#bSkip', actions); if (sk) sk.onclick = skip;
     $('#bRestart', actions).onclick = e => { e.preventDefault(); remount(); };
   }
@@ -79,7 +78,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     const key = br.notes[ply] ? ' <span class="tag">coup clé</span>' : '', turn = `<i class="stm ${side}"></i>À toi de jouer`;
     if (ply <= 1) say('you', turn + key, `<p class="why">${esc(sys.resume)}</p>`);
     else { const ok = steps[ply - 2] === 'ok';
-      say('you', turn + key, `${ok ? `<p class="okline">✓ ${esc(moves[ply - 2].san)}, réponse ${esc(moves[ply - 1].san)}</p>` : ''}${lastNote ? `<p class="why">${esc(lastNote)}</p>` : ok ? '' : '<p class="why">Continue la ligne.</p>'}`); }
+      say('you', turn + key, `${ok ? `<p class="okline">${icon('check')}${num(ply - 2)}${esc(moves[ply - 2].san)}, réponse ${num(ply - 1)}${esc(moves[ply - 1].san)}</p>` : ''}${lastNote ? `<p class="why">${esc(lastNote)}</p>` : ok ? '' : '<p class="why">Continue la ligne.</p>'}`); }
     drillActions();
   }
   function miss() { if (steps[ply] !== 'bad') { steps[ply] = 'bad'; errs++; } paintStepper(); }
@@ -87,7 +86,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     const want = moves[ply];
     if (uciOf(m) === want.uci) {
       last = tryMove(game, m); steps[ply] ??= 'ok'; lastNote = br.notes[ply] || null; wrongHere = 0; hintLevel = 0;
-      say('ok', `✓ ${esc(want.san)}`, lastNote ? `<p>${esc(lastNote)}</p>` : `<p class="why">${PRAISE[ply % PRAISE.length]}</p>`);
+      say('ok', `${icon('check')}${num(ply)}${esc(want.san)}`, lastNote ? `<p>${esc(lastNote)}</p>` : `<p class="why">${PRAISE[ply % PRAISE.length]}</p>`);
       ply++; show(true); board.flash(m.to, 'good'); paintMoves(); paintStepper();
       if (ply >= moves.length) return finish();
       locked = true; timer = setTimeout(reply, 450);
@@ -131,7 +130,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     if (mode === 'explore') return explTo(0);
     if (fromGame?.a.ply != null) { let t = Math.max(0, Math.min(fromGame.a.ply, moves.length) - 6); if (!isUserPly(t, side)) t = Math.max(0, t - 1); playTo(t); }
     if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 500); } else prompt();
-    if (fromGame) coach.insertAdjacentHTML('afterbegin', `<p class="fromgame">Contre <b>${esc(fromGame.opp)}</b>, tu as joué <b>${esc(fromGame.a.played)}</b> dans cette ligne. Rejoue-la sans faute pour la corriger.</p>`);
+    if (fromGame) coach.insertAdjacentHTML('afterbegin', `<p class="surf fromgame">Contre <b>${esc(fromGame.opp)}</b>, tu as joué <b>${esc(fromGame.a.played)}</b> dans cette ligne. Rejoue-la sans faute pour la corriger.</p>`);
   }
   const onNav = (e: Event) => { const to = (e.target as HTMLElement).closest('button')?.dataset.to; if (to) explTo(to === 'first' ? 0 : to === 'last' ? moves.length : ply + (to === 'next' ? 1 : -1)); };
   const onPick = (e: Event) => { const i = (e.target as HTMLElement).closest<HTMLElement>('.m')?.dataset.i; if (mode === 'explore' && i != null) explTo(+i + 1); };

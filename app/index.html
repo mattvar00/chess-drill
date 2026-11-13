@@ -1,15 +1,22 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-palette="marine" data-mode="sombre">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#14201d">
+<meta name="theme-color" content="#0B1626">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
 <title>Chess Drill</title>
+<script>
+/* Apparence choisie, appliquée avant le premier affichage pour éviter un éclair de la palette par défaut. */
+try { var l = JSON.parse(localStorage.getItem('cd_look') || '{}') || {}, r = document.documentElement;
+  if (/^(cobalt|marine|bordeaux)$/.test(l.palette)) r.dataset.palette = l.palette;
+  if (/^(clair|sombre|auto)$/.test(l.mode)) r.dataset.mode = l.mode === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'sombre' : 'clair') : l.mode;
+} catch (e) {}
+</script>
 </head>
 <body><div id="app"></div><script type="module" src="/src/main.ts"></script></body>
 </html>
