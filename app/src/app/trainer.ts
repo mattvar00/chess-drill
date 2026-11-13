@@ -6,11 +6,13 @@ import type { Game } from '../core/types';
 import { Board } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
-import { BR, markActive, refreshDevs, save, store } from './store';
+import { BR, markActive, markPlan, refreshDevs, save, store } from './store';
 import { syncSoon } from './api';
 import { lineUrl, nextUrl, remaining, session } from './session';
 import { explorerSlot } from './explorer';
 
+/** Nom de la séance de lignes du plan du jour. */
+export const PLAN_LINES = 'Plan du jour';
 const PRAISE = ['Exact.', 'Bien joué.', "C'est la ligne.", 'Juste.', 'Parfait.'];
 type Step = 'ok' | 'bad';
 /** Nettoyage de la ligne affichée (une seule à la fois). */
@@ -121,6 +123,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     if (fromGame && errs === 0) { store.state.fixed[fromGame.id] = true; refreshDevs(); }
     if (plan) (store.state.planDone ??= {})[plan] = { errs, at: Date.now() };
     markActive(); syncSoon(); S?.done.add(id); paintStepper();
+    if (S?.label === PLAN_LINES && !remaining().length) markPlan('lines');
     const when = s.ivl <= 1 ? 'demain' : `dans ${s.ivl} jours`, next = S ? nextUrl(id) : null, left = remaining().length;
     const verdict = errs === 0 ? (isValid(s) ? `Ligne validée. Prochaine révision ${when}.` : 'Encore un passage sans faute et elle est validée.')
       : errs === 1 ? `Presque. Elle revient ${s.ivl ? when : 'tout de suite'}.` : "Le compteur repart à zéro : il faut deux passages sans faute d'affilée.";

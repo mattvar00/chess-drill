@@ -7,7 +7,7 @@ import { Chess, tryMove, uciOf, uciToObj, type Move } from '../core/chess';
 import { winPct } from '../core/winpct';
 import type { Color } from '../core/types';
 import { mainEngine } from '../engine/stockfish';
-import type { Board } from '../ui/board';
+import { Board } from '../ui/board';
 import { esc, icon } from '../ui/dom';
 
 export interface ExplorerLine { label: string; sans: string[] }
@@ -127,4 +127,13 @@ export function explorerSlot(board: Board, main: () => HTMLElement, panel: () =>
     close,
     destroy() { x?.destroy(); x = null; setTool('hidden'); },
   };
+}
+
+/** Explorateur libre, depuis la position de départ : un échiquier, tes coups, l'avis du moteur. */
+export function mountFreeExplorer(root: HTMLElement, back: string): () => void {
+  root.innerHTML = '<div class="trainer"><div class="tboard"><div id="board"></div></div><div class="tside"><div id="xp"></div></div></div>';
+  let x: Explorer | null = null;
+  const board = new Board(root.querySelector<HTMLElement>('#board')!, { movable: () => x?.movable() ?? null, onMove: m => x?.onMove(m) });
+  x = createExplorer(board, root.querySelector<HTMLElement>('#xp')!, { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', orient: 'w', lines: [], close: () => { location.hash = back; } });
+  return () => { x?.destroy(); board.destroy(); };
 }

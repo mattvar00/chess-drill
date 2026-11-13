@@ -2,7 +2,7 @@
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { buildFault, type Fault } from '../core/analysis';
 import { CLASS, NOTABLE, commentMove, ecoName, evalText, reviewGame, type ReviewClass } from '../core/review';
-import { profile, structureStats } from '../core/stats';
+import { AXES, byColor, phaseAccuracy, playerCard, profile, structureStats, type AxisKey, type Profile } from '../core/stats';
 import { STRUCT, gameStructure } from '../core/structures';
 import type { Game } from '../core/types';
 import { Board } from '../ui/board';
@@ -35,9 +35,29 @@ export function gameRow(g: Game, back?: string) {
     <span class="body"><b>${esc(g.opp)} <span class="dim">${g.oppElo || ''}</span></b><small>${[ecoName(g.eco), day(g.t), TC[g.tc] ?? g.tc].filter(Boolean).map(esc).join(', ')}</small></span>
     ${g.st?.acc != null ? `<span class="acc" title="Ta précision">${g.st.acc}</span>` : ''}<span class="res res-${g.res}">${RES[g.res]}</span>${chev}</a>`;
 }
+/** Profil de la période et de la cadence choisies, avec les fautes les plus fréquentes. */
+function scopeProfile(list: Game[]) {
+  const byGame = new Map<string, Fault[]>(); for (const f of store.faults) (byGame.get(f.game) ?? byGame.set(f.game, []).get(f.game)!).push(f);
+  return profile(list, ids => { const c: Record<string, number> = {}; for (const id of ids) for (const f of byGame.get(id) ?? []) c[f.theme] = (c[f.theme] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 3); });
+}
+/** Le chiffre qui explique chaque note de la carte. */
+function axisFacts(pr: Profile): Record<AxisKey, string> {
+  const o = pr.opening, t = pr.tactics, c = pr.clock, ti = pr.tilt, fr = (n: number) => String(n).replace('.', ',');
+  return {
+    ouverture: o.coverage == null ? '' : `${o.coverage} % de tes parties restent dans ton répertoire`,
+    tactique: t ? `${t.acc} % de précision, ${fr(t.blunders)} gaffe${t.blunders >= 2 ? 's' : ''} par partie` : '',
+    conversion: pr.conversion?.rate != null ? `${pr.conversion.rate} % de positions gagnantes converties` : '',
+    resilience: pr.resilience?.rate != null ? `${pr.resilience.rate} % de positions perdantes sauvées` : '',
+    horloge: c.fastShare != null ? `${c.fastShare} % de tes coups joués en moins de 3 secondes` : '',
+    rythme: ti ? `${fr(ti.perDay)} parties par jour joué, jusqu'à ${ti.maxDay} en une journée` : '',
+  };
+}
+const axisName = (k: AxisKey) => AXES.find(a => a[0] === k)![1];
+const article = (k: AxisKey) => (k === 'ouverture' || k === 'horloge' ? "l'" : k === 'rythme' ? 'le ' : 'la ') + axisName(k).toLowerCase();
+
 export function viewGames(root: HTMLElement) {
   if (!store.games.length) {
-    root.innerHTML = `<header class="pagehead"><h1>Parties</h1></header><section class="empty"><p>${getToken() ? 'Tes parties apparaissent ici après la première analyse de nuit.' : 'Relie l\'app à tes parties pour voir tes statistiques et revoir chaque partie coup par coup.'}</p></section>
+    root.innerHTML = `<header class="pagehead"><h1>Progrès</h1></header><section class="empty"><p>${getToken() ? 'Tes parties apparaissent ici après la première analyse de nuit.' : 'Relie l\'app à tes parties pour voir tes statistiques et revoir chaque partie coup par coup.'}</p></section>
       ${getToken() ? '' : '<a class="btn pri block" href="#/reglages">Relier l\'app à tes parties</a>'}`; return;
   }
   const tcs = [...new Set(store.games.map(g => g.tc))].filter(t => TC[t]);
@@ -46,30 +66,32 @@ export function viewGames(root: HTMLElement) {
   const periods: (readonly [number, string])[] = [...PERIODS.filter(([d]) => ageDays > d), [0, 'Tout']];
   if (!periods.some(([d]) => d === period)) period = 0;
   if (cadence !== 'all' && !tcs.includes(cadence)) cadence = 'all';
-  const list = inScope(), byGame = new Map<string, Fault[]>(); for (const f of store.faults) (byGame.get(f.game) ?? byGame.set(f.game, []).get(f.game)!).push(f);
-  const pr = profile(list, ids => { const c: Record<string, number> = {}; for (const id of ids) for (const f of byGame.get(id) ?? []) c[f.theme] = (c[f.theme] || 0) + 1; return Object.entries(c).sort((a, b) => b[1] - a[1]).slice(0, 3); });
+  const list = inScope(), pr = scopeProfile(list), card = playerCard(pr), facts = axisFacts(pr), ph = phaseAccuracy(list);
   const S = structureStats(list), weak = Object.entries(S).filter(([, o]) => o.n >= 3 && o.errMe - o.errOp > 2).sort((a, b) => (b[1].errMe - b[1].errOp) * b[1].n - (a[1].errMe - a[1].errOp) * a[1].n)[0];
-  const t = pr.tactics, o = pr.opening, c = pr.clock, ti = pr.tilt;
   const seg = (name: string, opts: readonly (readonly [string | number, string])[], cur: string | number) => `<div class="seg" role="group" aria-label="${name === 'period' ? 'Période' : 'Cadence'}">${opts.map(([v, l]) => `<button type="button" data-${name}="${v}" aria-pressed="${v === cur}">${l}</button>`).join('')}</div>`;
-  const elo = Object.entries(pr.elo).filter(([, p]) => p.length >= 3);
+  const elo = Object.entries(pr.elo).filter(([, p]) => p.length >= 3).sort((a, b) => b[1].length - a[1].length);
+  const colorBar = (c: 'w' | 'b') => { const r = byColor(list, c); return !r.n ? '' : `<div class="wdl"><div class="wdl-h"><b>Avec les ${c === 'w' ? 'Blancs' : 'Noirs'}</b><span>${r.w} gagnée${r.w > 1 ? 's' : ''}, ${r.d} nulle${r.d > 1 ? 's' : ''}, ${r.l} perdue${r.l > 1 ? 's' : ''}</span></div>
+    <div class="wdl-bar" role="img" aria-label="${Math.round(100 * r.w / r.n)} % de victoires">${r.w ? `<i class="w" style="flex:${r.w}"></i>` : ''}${r.d ? `<i class="d" style="flex:${r.d}"></i>` : ''}${r.l ? `<i class="l" style="flex:${r.l}"></i>` : ''}</div></div>`; };
+  const phase = (l: string, v: number | null) => v == null ? '' : `<span>${l}</span><span class="prog"><b style="width:${v}%"></b></span><b>${v}</b>`;
   root.innerHTML = `
-    <header class="pagehead"><h1>Parties</h1><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
+    <header class="pagehead"><h1>Progrès</h1><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
     ${periods.length > 1 ? seg('period', periods, period) : ''}
     ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
     ${list.length ? `
-    <div class="surf card stats"><div><b>${pr.winRate ?? '–'} %</b><span>de victoires</span></div><div><b>${t ? t.acc + ' %' : '–'}</b><span>de précision</span></div><div><b>${o.coverage == null ? '–' : o.coverage + ' %'}</b><span>dans ton répertoire</span></div></div>
-    ${elo.map(([tc, p]) => `<section class="grp"><h2>Elo en ${(TC[tc] ?? tc).toLowerCase()}</h2><div class="surf card padded"><div class="elohead"><b>${p[p.length - 1].e}</b><span class="${p[p.length - 1].e >= p[0].e ? 'up' : 'down'}">${p[p.length - 1].e >= p[0].e ? '+' : ''}${p[p.length - 1].e - p[0].e} sur la période</span></div>${eloChart(p)}</div></section>`).join('')}
-    <section class="grp"><h2>Ton profil</h2><div class="surf card list axes">
-      ${axis('Ouverture', o.coverage == null ? '–' : o.coverage + ' %', 'de parties restées dans ton répertoire', o.coverage, `${plural(o.devs, 'sortie')}, ${plural(o.gaps, 'trou')}${o.wp10 != null ? `. Au coup 10, tu as en moyenne ${o.wp10} % de chances.` : '.'}`)}
-      ${t ? axis('Tactique', t.acc + ' %', 'de précision moyenne', t.acc, `${String(t.blunders).replace('.', ',')} gaffe${t.blunders >= 2 ? 's' : ''} et ${String(t.mistakes).replace('.', ',')} erreur${t.mistakes >= 2 ? 's' : ''} par partie.${t.themes.length ? ` Fautes les plus fréquentes : ${t.themes.map(([k, v]) => `${k.toLowerCase()} (${v})`).join(', ')}.` : ''}`) : ''}
-      ${pr.conversion ? axis('Conversion', pr.conversion.rate == null ? '–' : pr.conversion.rate + ' %', `de positions gagnantes converties, sur ${plural(pr.conversion.n, 'partie')}`, pr.conversion.rate, 'Une position gagnante, c\'est au moins 80 % de chances à un moment de la partie.') : ''}
-      ${pr.resilience ? axis('Résilience', pr.resilience.rate == null ? '–' : pr.resilience.rate + ' %', `de positions perdantes sauvées, sur ${plural(pr.resilience.n, 'partie')}`, pr.resilience.rate, 'Perdante : 20 % de chances ou moins. Entre 20 et 30 % sauvées, c\'est habituel à ce niveau.', 60) : ''}
-      ${c.avgMove != null ? axis('Horloge', String(c.avgMove).replace('.', ',') + ' s', 'par coup en moyenne', c.fastShare, `${c.fastShare} % de tes coups joués en moins de 3 s.${c.fastBlunders != null ? ` ${c.fastBlunders} % de tes gaffes jouées en moins de 3 s, ${c.slowBlunders} % après 15 s ou plus.` : ''}${c.timeouts ? ` ${plural(c.timeouts, 'défaite')} au temps.` : ''}`) : ''}
-      ${ti ? axis('Rythme', String(ti.perDay).replace('.', ',') + ' par jour', `de parties les jours où tu joues, ${ti.maxDay} au plus`, ti.maxDay, ti.afterTwoL ? `Après deux défaites d'affilée, tu gagnes ${ti.wrAfterTwoL} % des parties (${ti.afterTwoL}), contre ${pr.winRate} % en général.${ti.longSessions && ti.wrLongTail != null ? ` Au-delà de la 10ᵉ partie d'une session : ${ti.wrLongTail} %.` : ''}` : 'Pas encore de série de deux défaites.', 40) : ''}
-    </div></section>
-    <section class="grp"><h2>Structures de pions</h2><div class="surf card list">
-      <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>${weak ? `À travailler : ${esc(STRUCT[weak[0]].name)}` : 'Tes structures'}</b><small>${weak ? `${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires` : 'Leurs plans, ton score, et tes fautes à y rejouer'}</small></span>${chev}</a>
-    </div></section>
+    ${card.overall != null ? `<a class="pcard" href="#/profil" aria-label="Ta carte joueur : note globale ${card.overall} sur 100. Voir le détail">
+      <div class="pcard-top"><div class="pcard-note"><b>${card.overall}</b><span>Note globale sur 100</span></div>
+        <div class="pcard-elo">${elo.slice(0, 2).map(([tc, p], k) => `<span class="${k ? 'out' : ''}">${TC[tc] ?? tc} ${p[p.length - 1].e}</span>`).join('')}</div></div>
+      <div class="pcard-id"><b>${esc(String(store.state.settings.user || ''))}</b><span>${esc(card.type)}${card.best && card.worst ? ` : fort sur ${article(card.best)}, à travailler sur ${article(card.worst)}` : ''}</span></div>
+      <div class="pcard-grid">${AXES.map(([k, l]) => `<div><b>${card.scores[k] ?? '–'}</b><span>${l}</span></div>`).join('')}</div>
+      <span class="pcard-more">Voir le radar et le détail${icon('chev')}</span></a>` : ''}
+    ${elo.map(([tc, p]) => `<section class="surf card padded tile"><div class="elohead"><div><span class="label">Elo en ${(TC[tc] ?? tc).toLowerCase()}</span><b>${p[p.length - 1].e}</b></div><span class="res ${p[p.length - 1].e >= p[0].e ? 'res-W' : 'res-L'}">${p[p.length - 1].e >= p[0].e ? '+' : '−'}${Math.abs(p[p.length - 1].e - p[0].e)} sur la période</span></div>${eloChart(p)}</section>`).join('')}
+    ${card.worst && facts[card.worst] ? `<a class="tile hot" href="#/profil"><span class="label">Ton point faible</span><b>${cap(article(card.worst))}</b><span>${facts[card.worst]}.</span></a>` : ''}
+    <section class="surf card padded tile"><h2>Résultats par couleur</h2>${colorBar('w')}${colorBar('b')}</section>
+    ${ph.o != null || ph.m != null ? `<section class="surf card padded tile"><h2>Précision par phase</h2><div class="phases">${phase('Ouverture', ph.o)}${phase('Milieu', ph.m)}${phase('Finale', ph.f)}</div></section>` : ''}
+    ${pr.tactics?.themes.length ? `<section class="surf card padded tile"><h2>Tes fautes les plus fréquentes</h2><div class="keys">${pr.tactics.themes.map(([k, v]) => `<span class="cnt c-book">${esc(k)} <b>${v}</b></span>`).join('')}</div></section>` : ''}
+    <div class="surf card list">
+      <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>${weak ? `À travailler : ${esc(STRUCT[weak[0]].name)}` : 'Tes structures de pions'}</b><small>${weak ? `${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires` : 'Leurs plans, ton score, et tes fautes à y rejouer'}</small></span>${chev}</a>
+    </div>
     <section class="grp"><h2>Tes parties</h2><div class="surf card list" id="glist">${list.slice(0, shown).map(g => gameRow(g)).join('')}</div>
       ${list.length > shown ? `<button class="btn block" id="bMore">Afficher ${Math.min(30, list.length - shown)} parties de plus</button>` : ''}</section>`
     : `<p class="empty">Aucune partie sur cette période.</p>`}`;
@@ -77,6 +99,33 @@ export function viewGames(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('[data-tc]').forEach(b => b.onclick = () => { cadence = b.dataset.tc!; shown = 30; viewGames(root); });
   root.querySelectorAll<HTMLElement>('.chart.elo').forEach(el => bindChart(el));
   const more = root.querySelector<HTMLButtonElement>('#bMore'); if (more) more.onclick = () => { shown += 30; const y = scrollY; viewGames(root); scrollTo(0, y); };
+}
+const cap = (s: string) => s.replace(/^l'|^la |^le /, m => m).replace(/^./, c => c.toUpperCase());
+
+/** Détail de la carte joueur : le radar des six notes, puis chaque axe avec ce qui l'explique. */
+export function viewProfile(root: HTMLElement) {
+  const list = inScope(), pr = scopeProfile(list), card = playerCard(pr), facts = axisFacts(pr), t = pr.tactics, o = pr.opening, c = pr.clock, ti = pr.tilt;
+  if (card.overall == null) { root.innerHTML = '<section class="empty"><p>Pas encore assez de parties sur cette période pour établir ton profil.</p></section>'; return; }
+  const cx = 170, cy = 150, R = 104, pt = (i: number, r: number) => { const a = -Math.PI / 2 + (i * Math.PI) / 3; return [cx + r * Math.cos(a), cy + r * Math.sin(a)].map(v => v.toFixed(1)).join(','); };
+  const ring = (f: number) => `<polygon class="rd-grid" points="${AXES.map((_, i) => pt(i, R * f)).join(' ')}"/>`;
+  const lab = [[170, 18], [286, 80], [286, 212], [170, 274], [52, 212], [52, 80]];
+  root.innerHTML = `
+    <section class="surf card padded"><div class="elohead"><span class="label">${esc(card.type)}</span><span class="dim">Note globale <b class="rd-all">${card.overall}</b></span></div>
+      <svg class="radar" viewBox="0 0 340 300" role="img" aria-label="Profil sur six axes : ${AXES.map(([k, l]) => `${l.toLowerCase()} ${card.scores[k] ?? 'inconnu'}`).join(', ')}">
+        ${[1, 0.75, 0.5, 0.25].map(ring).join('')}${AXES.map((_, i) => `<line class="rd-grid" x1="${cx}" y1="${cy}" x2="${pt(i, R).split(',')[0]}" y2="${pt(i, R).split(',')[1]}"/>`).join('')}
+        <polygon class="rd-area" points="${AXES.map(([k], i) => pt(i, R * (card.scores[k] ?? 0) / 100)).join(' ')}"/>
+        ${AXES.map(([k], i) => { const [x, y] = pt(i, R * (card.scores[k] ?? 0) / 100).split(','); return `<circle class="rd-dot" cx="${x}" cy="${y}" r="4"/>`; }).join('')}
+        ${AXES.map(([k, l], i) => `<text class="rd-l" x="${lab[i][0]}" y="${lab[i][1]}">${l}</text><text class="rd-v" x="${lab[i][0]}" y="${lab[i][1] + 17}">${card.scores[k] ?? '–'}</text>`).join('')}
+      </svg></section>
+    <section class="grp"><h2>Axe par axe</h2><div class="surf card list axes">
+      ${axis('Ouverture', String(card.scores.ouverture ?? '–'), facts.ouverture, card.scores.ouverture, `${plural(o.devs, 'sortie')}, ${plural(o.gaps, 'trou')}${o.wp10 != null ? `. Au coup 10, tu as en moyenne ${o.wp10} % de chances.` : '.'}`)}
+      ${t ? axis('Tactique', String(card.scores.tactique), facts.tactique, card.scores.tactique, `${String(t.mistakes).replace('.', ',')} erreur${t.mistakes >= 2 ? 's' : ''} par partie.${t.themes.length ? ` Fautes les plus fréquentes : ${t.themes.map(([k, v]) => `${k.toLowerCase()} (${v})`).join(', ')}.` : ''}`) : ''}
+      ${pr.conversion?.rate != null ? axis('Conversion', String(card.scores.conversion), facts.conversion, card.scores.conversion, `Sur ${plural(pr.conversion.n, 'partie')} où tu as eu au moins 80 % de chances à un moment.`) : ''}
+      ${pr.resilience?.rate != null ? axis('Résilience', String(card.scores.resilience), facts.resilience, card.scores.resilience, `Sur ${plural(pr.resilience.n, 'partie')} où tu es tombé à 20 % de chances ou moins. Entre 20 et 30 % sauvées, c'est habituel à ce niveau.`) : ''}
+      ${card.scores.horloge != null ? axis('Horloge', String(card.scores.horloge), facts.horloge, card.scores.horloge, `${String(c.avgMove).replace('.', ',')} s par coup en moyenne.${c.fastBlunders != null ? ` ${c.fastBlunders} % de tes gaffes jouées en moins de 3 s, ${c.slowBlunders} % après 15 s ou plus.` : ''}${c.timeouts ? ` ${plural(c.timeouts, 'défaite')} au temps.` : ''}`) : ''}
+      ${ti && card.scores.rythme != null ? axis('Rythme', String(card.scores.rythme), facts.rythme, card.scores.rythme, ti.afterTwoL ? `Après deux défaites d'affilée, tu gagnes ${ti.wrAfterTwoL} % des parties (${ti.afterTwoL}), contre ${pr.winRate} % en général.${ti.longSessions && ti.wrLongTail != null ? ` Au-delà de la 10ᵉ partie d'une session : ${ti.wrLongTail} %.` : ''}` : 'Pas encore de série de deux défaites.') : ''}
+    </div></section>
+    <p class="foot">Chaque note est sur 100, sur une échelle fixe (pas un classement par rapport aux autres joueurs). La note globale est leur moyenne. ${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ''}.</p>`;
 }
 
 /* ---------- revue d'une partie ---------- */

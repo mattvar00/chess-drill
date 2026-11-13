@@ -26,7 +26,7 @@ for (const P of PLANS) {
 export const plansFor = (sysId: string) => PLANS.filter(p => p.sys.includes(sysId));
 
 /** Cycle Woodpecker en cours (repris après une fermeture de l'app) et cycles terminés. */
-export interface WoodCur { ids: string[]; i: number; solved: number; elapsed: number; label: string }
+export interface WoodCur { ids: string[]; i: number; solved: number; elapsed: number; label: string; back?: string; plan?: boolean }
 export interface WoodCycle { date: number; time: number; solved: number; n: number; label: string }
 export const store = { state: emptyState() as AppState, games: [] as Game[], faults: [] as Fault[], devs: {} as Record<string, number> };
 export const woodHistory = () => ((store.state.wood ?? []) as WoodCycle[]).filter(c => c && typeof c.date === 'number' && typeof c.time === 'number');
@@ -62,3 +62,8 @@ export async function addFaults(faults: Fault[]) {
 /** Jours où tu t'es entraîné (pour la série). */
 export const trainingDays = () => (Array.isArray(store.state.settings.days) ? store.state.settings.days : []) as string[];
 export function markActive() { store.state.settings.days = addDay(trainingDays()); save(); }
+
+/** Plan du jour : étapes faites aujourd'hui (« tac », « lines », « review »). Il repart de zéro chaque matin. */
+const today = () => new Date().toLocaleDateString('sv');
+export const planDone = (): string[] => { const p = store.state.settings.plan as { day: string; done: string[] } | undefined; return p?.day === today() && Array.isArray(p.done) ? p.done : []; };
+export function markPlan(step: string) { const d = planDone(); if (!d.includes(step)) { store.state.settings.plan = { day: today(), done: [...d, step] }; save(); } }

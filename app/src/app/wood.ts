@@ -6,7 +6,7 @@ import { costliestFaults, duePositions, fmtTime, matPhrase, priorityFaults, them
 import { Board, miniBoard } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
-import { markActive, save, store, woodCur, woodHistory, type WoodCur } from './store';
+import { markActive, markPlan, save, store, woodCur, woodHistory, type WoodCur } from './store';
 import { getToken, syncSoon } from './api';
 import { explorerSlot, sanTokens } from './explorer';
 import { gameUrl } from './games';
@@ -15,8 +15,9 @@ export const GO = '#/wood/go';
 /** Début d'une variante, pour l'affichage (les lignes du moteur sont longues). */
 const short = (line: string, n = 6) => { const t = line.split(' '); return t.slice(0, n).join(' ') + (t.length > n ? ' …' : ''); };
 const byId = () => new Map(store.faults.map(f => [f.id, f]));
-export function startCycle(label: string, faults: Fault[]) {
-  if (!faults.length) return; store.state.woodCur = { ids: faults.map(f => f.id), i: 0, solved: 0, elapsed: 0, label } satisfies WoodCur; save();
+/** `back` : où revenir à la fin du cycle. `plan` : c'est l'étape tactique du plan du jour. */
+export function startCycle(label: string, faults: Fault[], back = '#/wood', plan = false) {
+  if (!faults.length) return; store.state.woodCur = { ids: faults.map(f => f.id), i: 0, solved: 0, elapsed: 0, label, back, plan } satisfies WoodCur; save();
   if (location.hash === GO) window.dispatchEvent(new HashChangeEvent('hashchange')); else location.hash = GO;
 }
 export const startPriority = () => startCycle('Positions prioritaires', priorityFaults(store.faults, store.state.fault, 10));
@@ -25,14 +26,13 @@ const row = (id: string, ic: string, title: string, sub: string) => `<button cla
 export function viewWood(root: HTMLElement) {
   const all = store.faults, cur = woodCur(), hist = woodHistory(), due = duePositions(all, store.state.fault);
   if (!all.length) {
-    root.innerHTML = `<header class="pagehead"><h1>Woodpecker</h1></header>
-      <section class="empty"><p>${getToken() ? 'Tes fautes apparaissent ici dès que tes parties sont analysées, chaque nuit.' : 'Les exercices viennent de tes propres parties : chaque position est un coup qui t\'a coûté cher.'}</p></section>
+    root.innerHTML = `<section class="empty"><p>${getToken() ? 'Tes fautes apparaissent ici dès que tes parties sont analysées, chaque nuit.' : 'Les exercices viennent de tes propres parties : chaque position est un coup qui t\'a coûté cher.'}</p></section>
       ${getToken() ? '' : '<a class="btn pri block" href="#/reglages">Relier l\'app à tes parties</a>'}`; return;
   }
   const month = costliestFaults(all, 30, 30), n = Math.min(10, all.length), prio = priorityFaults(all, store.state.fault, n);
   const shown = (cur && byId().get(cur.ids[cur.i])) || prio[0];
   root.innerHTML = `
-    <header class="pagehead"><h1>Woodpecker</h1>
+    <header class="pagehead">
       <div class="sumrow"><p>${plural(all.length, 'position tirée', 'positions tirées')} de tes parties</p>${due ? `<p class="duetxt">${due} à revoir</p>` : ''}</div></header>
     <section class="surf today">
       <div class="today-top">
@@ -132,10 +132,11 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     const done = { date: Date.now(), time: cyc.elapsed, solved: cyc.solved, n: cyc.ids.length, label: cyc.label };
     const prev = [...woodHistory()].reverse().find(c => c.label === done.label && c.n === done.n);
     store.state.wood = [...woodHistory(), done]; store.state.woodCur = undefined; save(); syncSoon();
-    header('Cycle terminé', done.label);
+    header('Cycle terminé', done.label); XS.destroy();
     root.innerHTML = `<div class="endwrap"><section class="endcard"><h1>${done.solved}/${done.n} du premier coup</h1><p>En ${fmtTime(done.time)}${prev ? `. La fois précédente : ${prev.solved}/${prev.n} en ${fmtTime(prev.time)}` : ''}.</p>
-      <div class="row"><button class="btn pri" id="bAgain">Refaire ce cycle</button><a class="btn" href="#/wood">Retour</a></div></section></div>`;
-    $('#bAgain', root).onclick = () => startCycle(done.label, cyc.ids.map(id => faults.get(id)).filter((f): f is Fault => !!f));
+      <div class="row">${cyc.plan ? `<a class="btn pri" href="${cyc.back ?? '#/'}">Continuer le plan du jour</a><button class="btn" id="bAgain">Refaire</button>` : `<button class="btn pri" id="bAgain">Refaire ce cycle</button><a class="btn" href="${cyc.back ?? '#/wood'}">Retour</a>`}</div></section></div>`;
+    if (cyc.plan) markPlan('tac');
+    $('#bAgain', root).onclick = () => startCycle(done.label, cyc.ids.map(id => faults.get(id)).filter((f): f is Fault => !!f), cyc.back, cyc.plan);
   }
   const onHide = () => { if (document.hidden && !ended) hold(); else since = Date.now(); };
   document.addEventListener('visibilitychange', onHide);
