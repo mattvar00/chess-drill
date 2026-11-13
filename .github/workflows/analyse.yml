@@ -1,0 +1,31 @@
+# Analyse des parties chess.com avec Stockfish natif, chaque nuit ou à la demande (bouton « analyser maintenant » de l'app).
+# Secrets du repo : API_URL (https://chess-drill.<compte>.workers.dev), API_TOKEN (= APP_TOKEN du Worker).
+# Variable du repo (optionnelle) : USERS, pseudos séparés par des virgules (défaut : matt_chess00).
+name: Analyse
+on:
+  schedule:
+    - cron: '17 3 * * *'   # 3h17 UTC
+  workflow_dispatch:
+    inputs:
+      users: { description: 'Pseudos chess.com (virgules)', required: false, default: '' }
+      days: { description: 'Fenêtre en jours', required: false, default: '3' }
+concurrency: { group: analyse, cancel-in-progress: false }
+jobs:
+  analyse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults: { run: { working-directory: app } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci
+      - name: Stockfish
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq stockfish && echo quit | /usr/games/stockfish | head -1
+      - name: Analyse
+        env:
+          STOCKFISH: /usr/games/stockfish
+          API_URL: ${{ secrets.API_URL }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+          USERS: ${{ inputs.users || vars.USERS || 'matt_chess00' }}
+        run: npx tsx scripts/analyse.ts --days "${{ inputs.days || '3' }}" --depth 16
