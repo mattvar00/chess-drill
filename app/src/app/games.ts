@@ -103,10 +103,9 @@ export function viewGames(root: HTMLElement) {
     ${periods.length > 1 ? seg('period', periods, period) : ''}
     ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
     ${list.length ? `
-    ${card.overall != null ? `<a class="pcard" href="#/profil" aria-label="Ta carte joueur : note globale ${card.overall} sur 100. Voir le détail">
-      <div class="pcard-top"><div class="pcard-note"><b>${card.overall}</b><span>Note globale sur 100</span></div>
+    ${card.overall != null ? `<a class="pcard" href="#/profil" aria-label="Ta carte joueur. Voir le détail">
+      <div class="pcard-top"><div class="pcard-id"><b>${esc(String(store.state.settings.user || ''))}</b><span>${esc(card.type)}${card.best && card.worst ? ` : fort sur ${article(card.best)}, à travailler sur ${article(card.worst)}` : ''}</span></div>
         <div class="pcard-elo">${elo.slice(0, 2).map(([tc, p], k) => `<span class="${k ? 'out' : ''}">${TC[tc] ?? tc} ${p[p.length - 1].e}</span>`).join('')}</div></div>
-      <div class="pcard-id"><b>${esc(String(store.state.settings.user || ''))}</b><span>${esc(card.type)}${card.best && card.worst ? ` : fort sur ${article(card.best)}, à travailler sur ${article(card.worst)}` : ''}</span></div>
       <div class="pcard-grid">${AXES.map(([k, l]) => `<div><b>${card.scores[k] ?? '–'}</b><span>${l}</span></div>`).join('')}</div>
       <span class="pcard-more">Voir le radar et le détail${icon('chev')}</span></a>` : ''}
     <div class="tiles">${tiles.join('')}</div>
@@ -133,7 +132,7 @@ export function viewProfile(root: HTMLElement) {
   const ring = (f: number) => `<polygon class="rd-grid" points="${AXES.map((_, i) => pt(i, R * f)).join(' ')}"/>`;
   const lab = [[170, 18], [286, 80], [286, 212], [170, 274], [52, 212], [52, 80]];
   root.innerHTML = `
-    <section class="surf card padded"><div class="elohead"><span class="label">${esc(card.type)}</span><span class="dim">Note globale <b class="rd-all">${card.overall}</b></span></div>
+    <section class="surf card padded"><div class="elohead"><span class="label">${esc(card.type)}</span></div>
       <svg class="radar" viewBox="0 0 340 300" role="img" aria-label="Profil sur six axes : ${AXES.map(([k, l]) => `${l.toLowerCase()} ${card.scores[k] ?? 'inconnu'}`).join(', ')}">
         ${[1, 0.75, 0.5, 0.25].map(ring).join('')}${AXES.map((_, i) => `<line class="rd-grid" x1="${cx}" y1="${cy}" x2="${pt(i, R).split(',')[0]}" y2="${pt(i, R).split(',')[1]}"/>`).join('')}
         <polygon class="rd-area" points="${AXES.map(([k], i) => pt(i, R * (card.scores[k] ?? 0) / 100)).join(' ')}"/>
