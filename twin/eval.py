@@ -17,11 +17,6 @@ from pathlib import Path
 
 import chess
 import chess.engine
-import numpy as np
-import torch
-
-
-torch.set_num_threads(os.cpu_count() or 2)
 
 
 def key(fen: str) -> str:

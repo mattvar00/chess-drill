@@ -5,7 +5,7 @@ name: Jumeau, entraînement
 on:
   push:
     branches: [main]
-    paths: ['twin/**', '.github/workflows/twin-train.yml']
+    paths: ['twin/**', '!twin/eval.py', '.github/workflows/twin-train.yml']
   workflow_dispatch:
     inputs:
       user: { description: 'Pseudo chess.com', required: false, default: 'matt_chess00' }
