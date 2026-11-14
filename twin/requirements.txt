@@ -1,0 +1,4 @@
+chess==1.11.2
+numpy>=1.26
+requests>=2.31
+zstandard>=0.22

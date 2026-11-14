@@ -1,0 +1,48 @@
+# Jumeau numérique : entraîne un réseau qui joue comme toi et le compare au moteur et à ton livre.
+# Se lance quand le dossier twin/ change, ou à la main (onglet Actions). Rapport et modèle : branche « twin-results ».
+name: Jumeau, entraînement
+on:
+  push:
+    branches: [main]
+    paths: ['twin/**', '.github/workflows/twin-train.yml']
+  workflow_dispatch:
+    inputs:
+      user: { description: 'Pseudo chess.com', required: false, default: 'matt_chess00' }
+      lichess_games: { description: 'Parties Lichess pour le pré-entraînement', required: false, default: '60000' }
+      pre_epochs: { description: 'Époques de pré-entraînement', required: false, default: '2' }
+      fine_epochs: { description: "Époques d'affinage sur tes coups", required: false, default: '6' }
+permissions: { contents: write }
+concurrency: { group: twin-train, cancel-in-progress: true }
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    defaults: { run: { working-directory: twin } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Dépendances
+        run: |
+          pip install -q torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -q -r requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
+          nproc; free -g | head -2
+      - name: Données
+        run: python data.py --user "${{ inputs.user || 'matt_chess00' }}" --out "$RUNNER_TEMP/data" --test-days 14 --lichess-month 2025-06 --lichess-games "${{ inputs.lichess_games || '60000' }}" --elo-lo 1300 --elo-hi 2050
+      - name: Entraînement
+        run: python train.py --data "$RUNNER_TEMP/data" --out "$RUNNER_TEMP/model" --pre-epochs "${{ inputs.pre_epochs || '2' }}" --fine-epochs "${{ inputs.fine_epochs || '6' }}"
+      - name: Évaluation
+        env: { STOCKFISH: /usr/games/stockfish }
+        run: python eval.py --data "$RUNNER_TEMP/data" --model "$RUNNER_TEMP/model" --out "$RUNNER_TEMP/report" --depth 11
+      - uses: actions/upload-artifact@v4
+        with: { name: jumeau-reseau, path: "${{ runner.temp }}/report\n${{ runner.temp }}/model" }
+      - name: Publier sur la branche twin-results
+        working-directory: ${{ runner.temp }}
+        run: |
+          git clone -q --depth 1 --branch twin-results "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" pub || (mkdir pub && cd pub && git init -q && git checkout -q -b twin-results)
+          mkdir -p pub/model && cp report/* pub/ && cp model/*.pt model/train-log.json pub/model/
+          cp report/report-net.md "pub/report-net-$(date -u +%F).md"
+          cd pub && git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Jumeau : réseau entraîné le $(date -u +%F)"
+          git push -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:twin-results
