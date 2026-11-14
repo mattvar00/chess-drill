@@ -83,7 +83,7 @@ export class Board {
     const a = this.sq(from), b = this.sq(to), img = b?.querySelector('img'); if (!a || !b || !img) return;
     const ra = a.getBoundingClientRect(), rb = b.getBoundingClientRect(), dx = ra.left - rb.left, dy = ra.top - rb.top; if (!dx && !dy) return;
     img.style.transition = 'none'; img.style.transform = `translate(${dx}px,${dy}px)`; img.style.zIndex = '5'; void img.offsetWidth;
-    img.style.transition = 'transform 150ms ease-out'; img.style.transform = 'translate(0,0)'; setTimeout(() => { img.style.zIndex = ''; }, 170);
+    img.style.transition = 'transform 110ms ease-out'; img.style.transform = 'translate(0,0)'; setTimeout(() => { img.style.zIndex = ''; }, 130);
   }
 
   private select(sq: string) { this.sel = sq; this.legal = this.game.moves({ square: sq as never, verbose: true }); }
@@ -102,6 +102,7 @@ export class Board {
     unlockAudio(); const side = this.o.movable(); if (!side) return;
     if (this.sel && this.sel !== sq && this.legal.some(m => m.to === sq)) { ev.preventDefault(); this.play(sq); return; }
     const p = this.game.get(sq as never);
+    if (this.sel && (!p || p.color !== side) && ev.pointerType !== 'mouse') { const s2 = this.nearest(ev.clientX, ev.clientY, this.el.getBoundingClientRect()); if (s2) { ev.preventDefault(); this.play(s2); return; } }
     if (!p || p.color !== side) { this.sel = null; this.legal = []; this.marks(); return; }
     ev.preventDefault(); const wasSel = this.sel === sq; this.select(sq); this.marks();
     const e = this.sq(sq)!, img = e.querySelector('img'); if (!img) return; const r = e.getBoundingClientRect();
@@ -112,6 +113,18 @@ export class Board {
   /** Pose la pièce tenue sous le doigt : une transformation seulement (pas de recalcul de mise en page). */
   private place() { const d = this.drag; if (d) d.ghost.style.transform = `translate3d(${d.x - d.w / 2}px,${d.y - d.w / 2}px,0) scale(1.15)`; }
   /** Case sous un point de l'écran, calculée depuis la géométrie du plateau. */
+  /**
+   * Case d'arrivée la plus proche du doigt parmi les coups légaux, si le doigt en est assez près (moins de `r` case).
+   * Au toucher, le doigt tombe souvent à cheval sur deux cases : on prend la bonne plutôt que de rater le coup.
+   */
+  private nearest(x: number, y: number, box: DOMRect, r = 0.8): string | null {
+    const fx = ((x - box.left) / box.width) * 8, fy = ((y - box.top) / box.height) * 8; let best: string | null = null, d0 = r;
+    for (const m of this.legal) {
+      const f = m.to.charCodeAt(0) - 97, rk = +m.to[1], cx = (this.orient === 'w' ? f : 7 - f) + 0.5, cy = (this.orient === 'w' ? 8 - rk : rk - 1) + 0.5;
+      const d = Math.hypot(fx - cx, fy - cy); if (d < d0) { d0 = d; best = m.to; }
+    }
+    return best;
+  }
   private at(x: number, y: number, box = this.el.getBoundingClientRect()): string | null {
     const c = Math.floor(((x - box.left) / box.width) * 8), r = Math.floor(((y - box.top) / box.height) * 8);
     if (c < 0 || c > 7 || r < 0 || r > 7) return null;
@@ -128,7 +141,9 @@ export class Board {
     const d = this.drag; this.drag = null; if (d) { d.ghost.remove(); d.img.style.opacity = ''; if (d.hover) this.sq(d.hover)?.classList.remove('hover'); } return d;
   }
   private onUp = (ev: PointerEvent) => {
-    const d = this.endDrag(); if (!d) return; const to = this.at(ev.clientX, ev.clientY, d.box);
+    const d = this.endDrag(); if (!d) return; let to = this.at(ev.clientX, ev.clientY, d.box);
+    // pièce lâchée à côté d'une case jouable : on la pose sur la plus proche
+    if (d.moved && to !== d.from && !(to && this.legal.some(m => m.to === to))) to = this.nearest(ev.clientX, ev.clientY, d.box, 0.75) ?? to;
     if (to && to !== d.from && this.legal.some(m => m.to === to)) { this.dropped = d.moved; this.play(to); return; }
     if (to === d.from && !d.moved && d.wasSel) { this.sel = null; this.legal = []; }
     this.marks();

@@ -31,14 +31,14 @@ export function viewSettings(root: HTMLElement) {
     <section class="grp"><h2>Son</h2><div class="surf card padded">
       <label class="check"><input type="checkbox" id="cSound" ${s.sound === false ? '' : 'checked'}> Bruit des pièces et signal de fin de ligne</label>
       <p class="flabel" id="lSnd">Son des pièces</p>
-      <div class="sndlist" role="radiogroup" aria-labelledby="lSnd">${SOUND_SETS.map(([v, l]) => `<label class="check"><input type="radio" name="sndset" value="${v}" ${(s.soundSet ?? 'sfx') === v ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+      <div class="sndlist" role="radiogroup" aria-labelledby="lSnd">${SOUND_SETS.map(([v, l]) => `<label class="check"><input type="radio" name="sndset" value="${v}" ${(s.soundSet ?? 'classique') === v ? 'checked' : ''}> ${l}</label>`).join('')}</div>
       <div class="row"><button type="button" class="btn" id="bHearMove">Écouter un coup</button><button type="button" class="btn" id="bHearCap">Écouter une prise</button></div>
-      <div id="perso" class="stackc" ${(s.soundSet ?? 'sfx') === 'perso' ? '' : 'hidden'}>
+      <div id="perso" class="stackc" ${(s.soundSet ?? 'classique') === 'perso' ? '' : 'hidden'}>
         <p class="hint">Choisis un fichier audio court pour un coup et un pour une prise. Ils restent sur cet appareil.</p>
         <label class="btn">Son d'un coup${persoSound('Move') ? ' (choisi)' : ''}<input type="file" id="fMove" accept="audio/*" hidden></label>
         <label class="btn">Son d'une prise${persoSound('Capture') ? ' (choisi)' : ''}<input type="file" id="fCap" accept="audio/*" hidden></label>
       </div>
-      <p class="hint">Les sons Lichess sont de Enigmahack, sous licence AGPLv3+.</p>
+      <p class="hint">Sons « classique » : PyChess (GPLv3). Sons Lichess : Enigmahack (AGPLv3+).</p>
     </div></section>
     <section class="grp"><h2>Ancienne version</h2><div class="surf card padded stackc">
       <p class="hint">Dans l'ancienne app, ouvre les réglages et exporte tes données, puis choisis le fichier ici. Seule la progression des lignes est reprise ; pour chaque ligne, le passage le plus récent est conservé.</p>

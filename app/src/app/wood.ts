@@ -143,7 +143,7 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
       last = tryMove(game, m); board.set(game, F.side, last, true); board.flash(m.to, 'good');
       coach.innerHTML = `<p class="lead"><span class="okb">${icon('check')}</span>${esc(fmtLine(L.sans.slice(0, k + 1)))}</p><p class="why">Bien. Continue : ${plural(mine() - (k / 2 + 1), 'coup')} encore.</p>`;
       const reply = L.sans[k + 1]; k += 2;
-      setTimeout(() => { if (solved || ended) return; last = tryMove(game, reply); board.set(game, F.side, last, true); }, 450);
+      setTimeout(() => { if (solved || ended) return; last = tryMove(game, reply); board.set(game, F.side, last, true); }, 250);
       return;
     }
     if (k > 0) tries++;

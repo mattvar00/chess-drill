@@ -96,7 +96,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
       say('ok', `${icon('check')}${num(ply)}${esc(want.san)}`, lastNote ? `<p>${esc(lastNote)}</p>` : `<p class="why">${PRAISE[ply % PRAISE.length]}</p>`);
       ply++; show(true); board.flash(m.to, 'good'); paintMoves(); paintStepper();
       if (ply >= moves.length) return finish();
-      locked = true; timer = setTimeout(reply, 450);
+      locked = true; timer = setTimeout(reply, 220);
     } else {
       miss(); wrongHere++; show(); board.flash(m.to, 'bad');
       const plan = br.notes[ply]?.replace(/^[^:]*:\s*/, '');
@@ -115,7 +115,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     board.hint(hintLevel >= 2 ? [uci.slice(0, 2), uci.slice(2, 4)] : [uci.slice(0, 2)]);
   }
   function playTo(target: number) { while (ply < target) { steps[ply] ??= 'ok'; apply(ply); ply++; } show(); paintMoves(); paintStepper(); }
-  function skip() { playTo(theoryStart(br.notes, side)); if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 300); } else prompt(); }
+  function skip() { playTo(theoryStart(br.notes, side)); if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 220); } else prompt(); }
 
   function finish() {
     if (finished) return; finished = true; locked = true; SFX.done();
@@ -139,7 +139,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     if (mode === 'explore') { XS.available(true); return explTo(0); }
     XS.available(false, "Termine la ligne pour l'explorer : le moteur te donnerait la réponse.");
     if (fromGame?.a.ply != null) { let t = Math.max(0, Math.min(fromGame.a.ply, moves.length) - 6); if (!isUserPly(t, side)) t = Math.max(0, t - 1); playTo(t); }
-    if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 500); } else prompt();
+    if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 350); } else prompt();
     if (fromGame) coach.insertAdjacentHTML('afterbegin', `<p class="surf fromgame">Contre <b>${esc(fromGame.opp)}</b>, tu as joué <b>${esc(fromGame.a.played)}</b> dans cette ligne. Rejoue-la sans faute pour la corriger.</p>`);
   }
   const onNav = (e: Event) => { const to = (e.target as HTMLElement).closest('button')?.dataset.to; if (to) explTo(to === 'first' ? 0 : to === 'last' ? moves.length : ply + (to === 'next' ? 1 : -1)); };

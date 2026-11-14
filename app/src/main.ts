@@ -94,7 +94,7 @@ function route() {
 }
 
 async function boot() {
-  await loadStore(); const s = store.state.settings; setSound(s.sound !== false); setSoundSet(String(s.soundSet ?? 'sfx'));
+  await loadStore(); const s = store.state.settings; setSound(s.sound !== false); setSoundSet(String(s.soundSet ?? 'classique'));
   if (s.palette || s.mode || s.board) applyLook({ palette: s.palette, mode: s.mode, board: s.board });
   window.addEventListener('hashchange', route); route();
   // Nouvelles parties et progression des autres appareils : on rafraîchit l'écran d'accueil si quelque chose est arrivé.

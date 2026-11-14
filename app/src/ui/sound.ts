@@ -4,23 +4,24 @@ let ac: AudioContext | null = null; let enabled = true;
 export const setSound = (on: boolean) => { enabled = on; };
 
 /**
- * Jeux de sons pour les coups. « sfx », « piano » et « nes » : fichiers de Lichess (AGPLv3+, voir public/sound/LICENSE.md).
+ * Jeux de sons pour les coups. « classique » : pièces sur un plateau en bois, enregistrées (PyChess, GPLv3).
+ * « sfx », « piano » et « nes » : fichiers de Lichess (AGPLv3+). Voir public/sound/LICENSE.md.
  * « bois » : synthèse maison. « perso » : tes propres fichiers, gardés sur cet appareil seulement.
  */
-export const SOUND_SETS = [['sfx', 'Lichess, effets'], ['piano', 'Lichess, piano'], ['nes', 'Lichess, 8 bits'], ['bois', 'Bois (synthèse)'], ['perso', 'Tes fichiers']] as const;
+export const SOUND_SETS = [['classique', 'Classique : bois, enregistré'], ['sfx', 'Lichess, effets'], ['piano', 'Lichess, piano'], ['nes', 'Lichess, 8 bits'], ['bois', 'Synthèse'], ['perso', 'Tes fichiers']] as const;
 export type SoundSet = typeof SOUND_SETS[number][0];
 const PERSO = 'cd_sound_';
-let set: SoundSet = 'sfx';
+let set: SoundSet = 'classique';
 const bufs = new Map<string, AudioBuffer | null>();
 /** Fichier perso (adresse « data: ») pour « Move » ou « Capture », ou vide. */
 export const persoSound = (k: 'Move' | 'Capture') => { try { return localStorage.getItem(PERSO + k) || ''; } catch { return ''; } };
 export function setPersoSound(k: 'Move' | 'Capture', dataUrl: string) { try { if (dataUrl) localStorage.setItem(PERSO + k, dataUrl); else localStorage.removeItem(PERSO + k); } catch { /* stockage plein ou bloqué */ } bufs.delete('perso' + k); preload(); }
-export function setSoundSet(s: string) { set = (SOUND_SETS.some(x => x[0] === s) ? s : 'sfx') as SoundSet; preload(); }
+export function setSoundSet(s: string) { set = (SOUND_SETS.some(x => x[0] === s) ? s : 'classique') as SoundSet; preload(); }
 function preload() {
   const a = ac; if (!a || set === 'bois') return;
   for (const k of ['Move', 'Capture', 'Check'] as const) {
     const id = set + k; if (bufs.has(id)) continue; bufs.set(id, null);
-    const url = set === 'perso' ? (k === 'Check' ? persoSound('Move') : persoSound(k)) : `./sound/${set}/${k}.mp3`; if (!url) continue;
+    const url = set === 'perso' ? (k === 'Check' ? persoSound('Move') : persoSound(k)) : `./sound/${set}/${k}.${set === 'classique' ? 'wav' : 'mp3'}`; if (!url) continue;
     fetch(url).then(r => r.arrayBuffer()).then(b => a.decodeAudioData(b)).then(d => { bufs.set(id, d); }).catch(() => { bufs.delete(id); });
   }
 }
