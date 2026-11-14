@@ -1,5 +1,6 @@
-# Jumeau numérique : entraîne un réseau qui joue comme toi et le compare au moteur et à ton livre.
-# Se lance quand le dossier twin/ change, ou à la main (onglet Actions). Rapport et modèle : branche « twin-results ».
+# Jumeau numérique : entraîne des réseaux qui jouent comme toi et les compare au moteur et à ton livre.
+# Données, puis deux entraînements en parallèle (réseau maison, Maia-2 affiné), puis l'évaluation.
+# Se lance quand le dossier twin/ change, ou à la main (onglet Actions). Rapport et réseau maison : branche « twin-results ».
 name: Jumeau, entraînement
 on:
   push:
@@ -8,13 +9,33 @@ on:
   workflow_dispatch:
     inputs:
       user: { description: 'Pseudo chess.com', required: false, default: 'matt_chess00' }
+      lichess_month: { description: 'Mois de la base Lichess pour le pré-entraînement', required: false, default: '2025-07' }
       lichess_games: { description: 'Parties Lichess pour le pré-entraînement', required: false, default: '60000' }
-      pre_epochs: { description: 'Époques de pré-entraînement', required: false, default: '2' }
-      fine_epochs: { description: "Époques d'affinage sur tes coups", required: false, default: '6' }
+      maia_minutes: { description: "Minutes d'affinage de Maia-2", required: false, default: '200' }
 permissions: { contents: write }
 concurrency: { group: twin-train, cancel-in-progress: true }
+env:
+  RESULTS_RAW: https://raw.githubusercontent.com/${{ github.repository }}/twin-results
 jobs:
-  train:
+  data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults: { run: { working-directory: twin } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Dépendances
+        run: |
+          pip install -q torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -q -r requirements.txt
+      - name: Données
+        run: python data.py --user "${{ inputs.user || 'matt_chess00' }}" --out "$RUNNER_TEMP/data" --test-days 14 --lichess-month "${{ inputs.lichess_month || '2025-07' }}" --lichess-games "${{ inputs.lichess_games || '60000' }}" --elo-lo 1300 --elo-hi 2050
+      - uses: actions/upload-artifact@v4
+        with: { name: jumeau-donnees, path: "${{ runner.temp }}/data", retention-days: 3 }
+
+  maison:
+    needs: data
     runs-on: ubuntu-latest
     timeout-minutes: 345
     defaults: { run: { working-directory: twin } }
@@ -26,23 +47,82 @@ jobs:
         run: |
           pip install -q torch --index-url https://download.pytorch.org/whl/cpu
           pip install -q -r requirements.txt
-          sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
-          nproc; free -g | head -2
-      - name: Données
-        run: python data.py --user "${{ inputs.user || 'matt_chess00' }}" --out "$RUNNER_TEMP/data" --test-days 14 --lichess-month 2025-06 --lichess-games "${{ inputs.lichess_games || '60000' }}" --elo-lo 1300 --elo-hi 2050
+      - uses: actions/download-artifact@v4
+        with: { name: jumeau-donnees, path: "${{ runner.temp }}/data" }
+      - name: Réseau du run précédent
+        run: |
+          mkdir -p "$RUNNER_TEMP/old"
+          curl -sfL "$RESULTS_RAW/model/generic.pt" -o "$RUNNER_TEMP/old/generic.pt" || echo "pas de réseau pré-entraîné précédent"
+          curl -sfL "$RESULTS_RAW/model/twin.pt" -o "$RUNNER_TEMP/old/twin.pt" || echo "pas de jumeau précédent"
       - name: Entraînement
-        run: python train.py --data "$RUNNER_TEMP/data" --out "$RUNNER_TEMP/model" --pre-epochs "${{ inputs.pre_epochs || '2' }}" --fine-epochs "${{ inputs.fine_epochs || '6' }}"
+        run: python train.py --data "$RUNNER_TEMP/data" --out "$RUNNER_TEMP/model" --preds "$RUNNER_TEMP/preds" --init "$RUNNER_TEMP/old/generic.pt" --prev "$RUNNER_TEMP/old/twin.pt" --pre-epochs 2 --pre-lr 1e-3 --fine-epochs 6
+      - uses: actions/upload-artifact@v4
+        with: { name: jumeau-maison, path: "${{ runner.temp }}/model\n${{ runner.temp }}/preds" }
+
+  maia:
+    needs: data
+    runs-on: ubuntu-latest
+    timeout-minutes: 345
+    defaults: { run: { working-directory: twin } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Dépendances
+        run: |
+          pip install -q torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -q -r requirements.txt
+          pip install -q --no-deps maia2==0.10.0
+          pip install -q einops gdown pyyaml pandas pyzstd tqdm
+      - uses: actions/download-artifact@v4
+        with: { name: jumeau-donnees, path: "${{ runner.temp }}/data" }
+      - name: Affinage de Maia-2
+        run: python maia_ft.py --data "$RUNNER_TEMP/data" --out "$RUNNER_TEMP/maia" --preds "$RUNNER_TEMP/preds" --minutes "${{ inputs.maia_minutes || '200' }}"
+      - name: Garder le modèle affiné
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/maia/base"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: jumeau-maia, path: "${{ runner.temp }}/maia\n${{ runner.temp }}/preds", if-no-files-found: ignore }
+
+  evaluation:
+    needs: [data, maison, maia]
+    if: ${{ !cancelled() && needs.data.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults: { run: { working-directory: twin } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Dépendances
+        run: |
+          pip install -q -r requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
+      - uses: actions/download-artifact@v4
+        with: { name: jumeau-donnees, path: "${{ runner.temp }}/data" }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: jumeau-maison, path: "${{ runner.temp }}/maison" }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: jumeau-maia, path: "${{ runner.temp }}/maia" }
       - name: Évaluation
         env: { STOCKFISH: /usr/games/stockfish }
-        run: python eval.py --data "$RUNNER_TEMP/data" --model "$RUNNER_TEMP/model" --out "$RUNNER_TEMP/report" --depth 11
+        run: |
+          mkdir -p "$RUNNER_TEMP/preds"
+          cp "$RUNNER_TEMP"/maison/preds/*.json "$RUNNER_TEMP"/maia/preds/*.json "$RUNNER_TEMP/preds/" 2>/dev/null || true
+          ls "$RUNNER_TEMP/preds"
+          python eval.py --data "$RUNNER_TEMP/data" --preds "$RUNNER_TEMP/preds" --out "$RUNNER_TEMP/report" --depth 11
       - uses: actions/upload-artifact@v4
-        with: { name: jumeau-reseau, path: "${{ runner.temp }}/report\n${{ runner.temp }}/model" }
+        with: { name: jumeau-rapport, path: "${{ runner.temp }}/report" }
       - name: Publier sur la branche twin-results
         working-directory: ${{ runner.temp }}
         run: |
           git clone -q --depth 1 --branch twin-results "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" pub || (mkdir pub && cd pub && git init -q && git checkout -q -b twin-results)
-          mkdir -p pub/model && cp report/* pub/ && cp model/*.pt model/train-log.json pub/model/
+          mkdir -p pub/model && cp report/* pub/
+          if [ -f maison/model/twin.pt ]; then cp maison/model/*.pt maison/model/train-log.json pub/model/; fi
           cp report/report-net.md "pub/report-net-$(date -u +%F).md"
           cd pub && git add -A
-          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Jumeau : réseau entraîné le $(date -u +%F)"
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Jumeau : réseaux entraînés le $(date -u +%F)"
           git push -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:twin-results
