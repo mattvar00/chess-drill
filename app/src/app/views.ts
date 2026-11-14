@@ -20,7 +20,8 @@ const st = (id: string) => store.state.br[id];
 const validCount = (ids: string[]) => ids.filter(id => isValid(st(id))).length;
 const idsOf = (b: Bloc | System) => 'systemes' in b ? b.systemes.flatMap(s => s.branches.map(x => x.id)) : b.branches.map(x => x.id);
 const go = (label: string, pool: string[], back: string) => { location.hash = startSession(label, pool, back); };
-const ago = (t: number) => { const d = Math.floor((Date.now() - t) / DAY); return d <= 0 ? "aujourd'hui" : d === 1 ? 'hier' : `il y a ${d} jours`; };
+/** « aujourd'hui », « hier », « il y a 3 jours » : en jours de calendrier, pas en tranches de 24 heures. */
+const ago = (t: number) => { const a = new Date(t), b = new Date(); a.setHours(0, 0, 0, 0); b.setHours(0, 0, 0, 0); const d = Math.round((b.getTime() - a.getTime()) / DAY); return d <= 0 ? "aujourd'hui" : d === 1 ? 'hier' : `il y a ${d} jours`; };
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const chev = icon('chev', 'chev');
 const dueLines = (ids: string[]) => ids.filter(id => st(id)?.runs && isDue(st(id))).length;
