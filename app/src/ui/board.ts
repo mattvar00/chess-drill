@@ -13,7 +13,7 @@ export interface BoardOpts {
   movable(): Color | null;
 }
 /** Glisser en cours. `box` : le plateau mesuré au toucher, pour trouver la case sous le doigt sans interroger le DOM à chaque mouvement. */
-interface Drag { from: string; ghost: HTMLElement; img: HTMLElement; w: number; moved: boolean; wasSel: boolean; x0: number; y0: number; box: DOMRect; lift: number; hover: string | null; x: number; y: number; raf: number }
+interface Drag { from: string; ghost: HTMLElement; img: HTMLElement; w: number; moved: boolean; wasSel: boolean; x0: number; y0: number; box: DOMRect; hover: string | null; x: number; y: number }
 
 export class Board {
   private game = new Chess(); private orient: Color = 'w'; private built: Color | null = null;
@@ -106,13 +106,11 @@ export class Board {
     ev.preventDefault(); const wasSel = this.sel === sq; this.select(sq); this.marks();
     const e = this.sq(sq)!, img = e.querySelector('img'); if (!img) return; const r = e.getBoundingClientRect();
     const ghost = img.cloneNode() as HTMLElement; ghost.className = 'ghost'; ghost.style.width = ghost.style.height = r.width + 'px'; document.body.appendChild(ghost); img.style.opacity = '0.35';
-    // au doigt, la pièce flotte un peu au-dessus pour rester visible ; à la souris, elle reste sous le curseur
-    const lift = ev.pointerType === 'touch' ? r.width * 0.55 : 0;
-    this.drag = { from: sq, ghost, img, w: r.width, moved: false, wasSel, x0: ev.clientX, y0: ev.clientY, box: this.el.getBoundingClientRect(), lift, hover: null, x: ev.clientX, y: ev.clientY, raf: 0 }; this.place();
+    this.drag = { from: sq, ghost, img, w: r.width, moved: false, wasSel, x0: ev.clientX, y0: ev.clientY, box: this.el.getBoundingClientRect(), hover: null, x: ev.clientX, y: ev.clientY }; this.place();
     window.addEventListener('pointermove', this.onMove, { passive: false }); window.addEventListener('pointerup', this.onUp); window.addEventListener('pointercancel', this.onCancel);
   }
   /** Pose la pièce tenue sous le doigt : une transformation seulement (pas de recalcul de mise en page). */
-  private place() { const d = this.drag; if (!d) return; d.raf = 0; d.ghost.style.transform = `translate3d(${d.x - d.w / 2}px,${d.y - d.w / 2 - (d.moved ? d.lift : 0)}px,0) scale(1.15)`; }
+  private place() { const d = this.drag; if (d) d.ghost.style.transform = `translate3d(${d.x - d.w / 2}px,${d.y - d.w / 2}px,0) scale(1.15)`; }
   /** Case sous un point de l'écran, calculée depuis la géométrie du plateau. */
   private at(x: number, y: number, box = this.el.getBoundingClientRect()): string | null {
     const c = Math.floor(((x - box.left) / box.width) * 8), r = Math.floor(((y - box.top) / box.height) * 8);
@@ -121,16 +119,16 @@ export class Board {
   }
   private onMove = (ev: PointerEvent) => {
     const d = this.drag; if (!d) return; ev.preventDefault(); if (!d.moved && Math.hypot(ev.clientX - d.x0, ev.clientY - d.y0) > 6) d.moved = true;
-    d.x = ev.clientX; d.y = ev.clientY; if (!d.raf) d.raf = requestAnimationFrame(() => this.place());
-    const s = this.at(d.x, d.y - (d.moved ? d.lift : 0), d.box), h = s && this.legal.some(m => m.to === s) ? s : null;
+    d.x = ev.clientX; d.y = ev.clientY; this.place();
+    const s = this.at(d.x, d.y, d.box), h = s && this.legal.some(m => m.to === s) ? s : null;
     if (h !== d.hover) { if (d.hover) this.sq(d.hover)?.classList.remove('hover'); if (h) this.sq(h)?.classList.add('hover'); d.hover = h; }
   };
   private endDrag() {
     window.removeEventListener('pointermove', this.onMove); window.removeEventListener('pointerup', this.onUp); window.removeEventListener('pointercancel', this.onCancel);
-    const d = this.drag; this.drag = null; if (d) { cancelAnimationFrame(d.raf); d.ghost.remove(); d.img.style.opacity = ''; if (d.hover) this.sq(d.hover)?.classList.remove('hover'); } return d;
+    const d = this.drag; this.drag = null; if (d) { d.ghost.remove(); d.img.style.opacity = ''; if (d.hover) this.sq(d.hover)?.classList.remove('hover'); } return d;
   }
   private onUp = (ev: PointerEvent) => {
-    const d = this.endDrag(); if (!d) return; const to = this.at(ev.clientX, ev.clientY - (d.moved ? d.lift : 0), d.box);
+    const d = this.endDrag(); if (!d) return; const to = this.at(ev.clientX, ev.clientY, d.box);
     if (to && to !== d.from && this.legal.some(m => m.to === to)) { this.dropped = d.moved; this.play(to); return; }
     if (to === d.from && !d.moved && d.wasSel) { this.sel = null; this.legal = []; }
     this.marks();

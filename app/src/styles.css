@@ -595,3 +595,42 @@ body.focus main{display:block;padding:0 var(--pad)}
 @media(max-width:380px){.xtool span{display:none}.xtool{padding:0;width:40px}}
 body.focus.withtabs main{padding-bottom:calc(var(--tabs) + 28px + env(safe-area-inset-bottom))}
 @media(min-width:900px){body.withtabs #app{padding-left:150px}}
+
+/* ---------- téléphone, exercice ou drill en cours : tout tient dans l'écran, seul le texte défile ---------- */
+@media(max-width:899px){
+  body.fit main,body.fit .top:not([hidden])+main{flex:none;min-height:0;height:calc(100dvh - var(--top) - env(safe-area-inset-top));overflow:hidden;display:flex;flex-direction:column;padding:0}
+  body.fit .trainer{flex:1;min-height:0;display:flex;flex-direction:column}
+  body.fit .trainer{min-height:0}
+  body.fit .tboard{flex:none;margin:0}
+  body.fit .tboard .board{width:min(100%,calc(100dvh - var(--top) - 250px));min-width:0}
+  body.fit .tside{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:12px var(--pad) 0;gap:8px}
+  body.fit .actions{padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+  body.fit .coach{min-height:0}
+}
+.rowi.isdone .mini{opacity:.5}
+
+/* ---------- revue, façon coach : bande de coups, plateau et barre d'évaluation, bulle, barre d'outils sous le pouce ---------- */
+@media(max-width:899px){ body.fit .tabs{display:none} body.fit.withtabs main{padding-bottom:0} }
+.mstrip{display:flex;gap:2px;overflow-x:auto;padding:6px var(--pad) 8px;scrollbar-width:none;-webkit-mask-image:linear-gradient(90deg,transparent 0,#000 12px,#000 calc(100% - 24px),transparent)}
+.mstrip::-webkit-scrollbar{display:none}
+.mc{flex:none;display:inline-flex;align-items:center;gap:3px;height:32px;padding:0 9px;border:0;border-radius:8px;background:none;color:var(--c-ink);font:600 14px var(--f-text)}
+.mc .n{color:var(--c-mute);font-weight:500}
+.mc i{font-style:normal;font-size:12px;color:var(--k)}
+.mc[class*=" c-"]{color:var(--k)}
+.mc.cur{background:var(--c-ink);color:var(--ground)}.mc.cur .n{color:inherit;opacity:.7}.mc.cur i{color:inherit}
+.bwrap{display:flex}
+.bwrap>.board{flex:1;min-width:0}
+@media(max-width:899px){body.fit .bwrap>.board{flex:none}}
+.evbar{flex:none;width:8px;display:flex;flex-direction:column;justify-content:flex-end;background:#2A3550}
+.evbar b{display:block;height:50%;background:#F3F5F8;transition:height .25s ease-out}
+.coachb{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:18px;background:var(--surface)}
+.rvside{display:flex;flex-direction:column;gap:14px}
+.rvbar{z-index:6;display:grid;grid-template-columns:56px minmax(0,1fr) 56px;gap:8px;background:var(--ground)}
+.rvbar .btn{min-height:48px;padding:0 10px}
+.rvbar #mid{display:grid}.rvbar #mid .btn{width:100%}
+.rvbar .ic{width:22px;height:22px}
+@media(max-width:899px){
+  body.fit .review .tboard .board{width:min(calc(100vw - 8px),calc(100dvh - var(--top) - 290px))}
+  body.fit .review .bwrap{justify-content:center}
+}
+@media(min-width:900px){ .review .mstrip{padding-left:0;padding-right:0} .rvbar{position:static} }

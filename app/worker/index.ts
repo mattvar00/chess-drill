@@ -1,7 +1,8 @@
 /**
  * Worker : sert l'app (assets) et l'API sous /api/*.
  *  - /api/chesscom/*  proxy CORS vers api.chess.com (public, mis en cache)
- *  - le reste exige « Authorization: Bearer <APP_TOKEN> » (un seul compte pour l'instant : « me »)
+ *  - l'import des analyses, « analyser maintenant » et l'ajout de pseudos suivis exigent « Authorization: Bearer <APP_TOKEN> » (le job d'analyse)
+ *  - le reste est ouvert, sans code (choix de Matthieu, nov. 2026) : un seul compte pour l'instant (« me »)
  */
 import type { Fault, GameStats } from '../src/core/analysis';
 import type { Game, EvalEntry } from '../src/core/types';
@@ -9,7 +10,7 @@ import { winPct } from '../src/core/winpct';
 
 export interface Env {
   ASSETS: Fetcher; DB: D1Database;
-  APP_TOKEN: string;                       // secret : code d'accès de l'app et du job d'analyse
+  APP_TOKEN: string;                       // secret : réservé au job d'analyse (import des résultats)
   GH_TOKEN?: string;                       // secret : jeton GitHub (actions:write) pour « analyser maintenant »
   GH_REPO?: string; GH_WORKFLOW?: string;  // ex. mattvar00/chess-drill, analyse.yml
 }
@@ -78,7 +79,8 @@ async function api(req: Request, env: Env, ctx: ExecutionContext, url: URL): Pro
   const p = url.pathname, q = url.searchParams;
   if (p.startsWith('/api/chesscom/') && req.method === 'GET') return chesscom(url, ctx);
   if (p === '/api/health') return json({ ok: true });
-  const account = authed(req, env); if (!account) return err('non autorisé', 401);
+  const account = 'me';
+  if (req.method === 'POST' && (p === '/api/ingest' || p === '/api/analyse-now' || p === '/api/follows') && !authed(req, env)) return err('non autorisé', 401);
   const user = lower(q.get('user')), since = +(q.get('since') || 0);
 
   if (p === '/api/follows' && req.method === 'GET')

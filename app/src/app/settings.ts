@@ -1,8 +1,8 @@
-/** Réglages : apparence, code d'accès et synchronisation, son, reprise de la progression de l'ancienne version. */
+/** Réglages : apparence, pseudo et synchronisation, son, reprise de la progression de l'ancienne version. */
 import { $, esc, plural } from '../ui/dom';
 import { setSound } from '../ui/sound';
 import type { BranchState } from '../core/types';
-import { getToken, lastSync, setToken, sync } from './api';
+import { lastSync, sync } from './api';
 import { BR, save, store } from './store';
 import { BOARDS, MODES, PALETTES, applyLook, look, shownMode } from './theme';
 
@@ -23,8 +23,7 @@ export function viewSettings(root: HTMLElement) {
       <form id="fSync" class="form">
         <label for="iName">Prénom</label><input id="iName" autocomplete="given-name" value="${esc(s.name ?? '')}">
         <label for="iUser">Pseudo chess.com</label><input id="iUser" autocomplete="off" autocapitalize="none" spellcheck="false" value="${esc(s.user || 'matt_chess00')}">
-        <label for="iToken">Code d'accès</label><input id="iToken" type="password" autocomplete="current-password" placeholder="64 caractères" value="${esc(getToken())}">
-        <p class="hint">Le code relie cet appareil au serveur : parties analysées chaque nuit et progression commune à tous tes appareils.</p>
+        <p class="hint">Tes parties sont analysées chaque nuit, et ta progression est la même sur tous tes appareils.</p>
         <button class="btn pri" type="submit">Enregistrer et synchroniser</button>
         <p class="status" id="syncStatus" role="status">${lastSync() ? `Dernière synchronisation le ${new Date(lastSync()).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}.` : ''}</p>
       </form>
@@ -39,8 +38,7 @@ export function viewSettings(root: HTMLElement) {
     </div></section>`;
   const status = $('#syncStatus', root);
   $('#fSync', root).addEventListener('submit', async e => {
-    e.preventDefault(); s.name = $<HTMLInputElement>('#iName', root).value.trim(); s.user = $<HTMLInputElement>('#iUser', root).value.trim().toLowerCase() || 'matt_chess00'; setToken($<HTMLInputElement>('#iToken', root).value); save();
-    if (!getToken()) { status.className = 'status'; status.textContent = 'Enregistré.'; return; }
+    e.preventDefault(); s.name = $<HTMLInputElement>('#iName', root).value.trim(); s.user = $<HTMLInputElement>('#iUser', root).value.trim().toLowerCase() || 'matt_chess00'; save();
     status.className = 'status'; status.textContent = 'Synchronisation en cours…';
     try { const r = await sync(); status.textContent = `Synchronisé : ${plural(r.games, 'nouvelle partie', 'nouvelles parties')}${r.lines ? ', progression mise à jour depuis un autre appareil' : ''}.`; }
     catch (err) { status.className = 'status err'; status.textContent = (err as Error).message; }

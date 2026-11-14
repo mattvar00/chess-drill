@@ -14,34 +14,30 @@ function tone(f: number, dur: number, type: OscillatorType = 'triangle', vol = 0
   o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
 }
 /**
- * Pièce posée sur un plateau en bois : un claquement très court (bruit filtré sur quelques résonances du bois)
- * et un petit choc grave. `pitch` décale les résonances (une prise sonne un peu plus sec).
+ * Pièce posée sur un plateau : un « toc » de bois très court. Synthèse modale : quelques résonances (sinusoïdes)
+ * qui s'éteignent en quelques millisecondes, plus une attaque de bruit d'une milliseconde. Pas de grave : l'énergie
+ * reste entre 300 Hz et 1 kHz pour un coup, plus haut et un peu plus long pour une prise, comme sur les sites d'échecs.
  */
-let noise: AudioBuffer | null = null;
-function wood(vol = 0.5, delay = 0, pitch = 1) {
+let click: AudioBuffer | null = null;
+function tock(modes: readonly (readonly [number, number, number])[], vol = 0.5, delay = 0, attack = 0.25) {
   const a = enabled ? unlockAudio() : null; if (!a) return; const t = a.currentTime + delay;
-  if (!noise) { noise = a.createBuffer(1, Math.floor(a.sampleRate * 0.12), a.sampleRate); const d = noise.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; }
-  const out = a.createGain(); out.gain.value = vol * 1.8; out.connect(a.destination);
-  // claquement : le bruit passe par trois résonances étroites, chacune s'éteint vite
-  const src = a.createBufferSource(); src.buffer = noise;
-  const env = a.createGain(); env.gain.setValueAtTime(1, t); env.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
-  src.connect(env);
-  for (const [f, q, g] of [[720, 9, 0.9], [1650, 12, 0.6], [3300, 14, 0.25]] as const) {
-    const bp = a.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * pitch; bp.Q.value = q;
-    const gg = a.createGain(); gg.gain.value = g * 3; env.connect(bp); bp.connect(gg); gg.connect(out);
+  const out = a.createGain(); out.gain.value = vol; out.connect(a.destination);
+  for (const [f, decay, g] of modes) {   // fréquence (Hz), extinction (s), poids
+    const o = a.createOscillator(), og = a.createGain(); o.type = 'sine'; o.frequency.value = f;
+    og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(g, t + 0.0015); og.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    o.connect(og); og.connect(out); o.start(t); o.stop(t + decay + 0.01);
   }
-  src.start(t); src.stop(t + 0.07);
-  // choc : une note grave qui tombe en quelques millisecondes
-  const o = a.createOscillator(), og = a.createGain(); o.type = 'sine';
-  o.frequency.setValueAtTime(190 * pitch, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.06);
-  og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(0.5, t + 0.003); og.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
-  o.connect(og); og.connect(out); o.start(t); o.stop(t + 0.1);
+  if (!click) { click = a.createBuffer(1, Math.floor(a.sampleRate * 0.004), a.sampleRate); const d = click.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2); }
+  const n = a.createBufferSource(), hp = a.createBiquadFilter(), ng = a.createGain(); n.buffer = click; hp.type = 'bandpass'; hp.frequency.value = 2200; hp.Q.value = 0.8; ng.gain.value = attack;
+  n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t);
 }
+const MOVE = [[560, 0.022, 0.9], [830, 0.016, 0.6], [1240, 0.010, 0.35], [380, 0.018, 0.25]] as const;
+const TAKE = [[1350, 0.045, 0.8], [1880, 0.035, 0.55], [2650, 0.025, 0.3], [900, 0.03, 0.35]] as const;
 export const SFX = {
-  move: () => wood(0.5),
-  capture: () => { wood(0.6, 0, 1.15); wood(0.35, 0.045, 0.95); },
-  check: () => { wood(0.55); tone(988, 0.1, 'sine', 0.05, 0.03); },
-  castle: () => { wood(0.45); wood(0.45, 0.1, 1.05); },
+  move: () => tock(MOVE, 1.5),
+  capture: () => { tock(TAKE, 0.65, 0, 0.4); tock(MOVE, 0.7, 0.012); },
+  check: () => { tock(MOVE, 1.5); tone(988, 0.1, 'sine', 0.05, 0.03); },
+  castle: () => { tock(MOVE, 1.4); tock(MOVE, 1.2, 0.09); },
   bad: () => { tone(220, 0.14, 'triangle', 0.07); tone(196, 0.16, 'triangle', 0.06, 0.08); },
   done: () => [523, 659, 784].forEach((f, i) => tone(f, 0.16, 'sine', 0.07, i * 0.09)),
   forMove(m: Pick<Move, 'san' | 'flags' | 'captured'>) {

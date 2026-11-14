@@ -7,7 +7,6 @@ import { miniBoard, miniFen } from '../ui/board';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
 import { dayKey, streak, trainedToday } from '../core/streak';
-import { getToken, lastSync } from './api';
 import { lineUrl, startSession } from './session';
 import { duePositions, priorityFaults } from '../core/wood';
 import { gameRow, gameUrl } from './games';
@@ -88,14 +87,12 @@ export function viewHome(root: HTMLElement) {
     ${weekStrip(days)}
     ${hero}
     ${next && !did.length && next.key === 'tac' && cold && cold.rest - cold.first >= 5 ? `<p class="hint">À faire avant de jouer : tu gagnes ${cold.first} % de tes 3 premières parties d'une session, ${cold.rest} % des suivantes.</p>` : ''}
-    ${later.length ? `<section class="grp"><h2>Ensuite</h2><div class="surf card list">${later.map(s => `<button class="rowi" data-step="${steps.indexOf(s)}">${small(s.thumb)}<span class="body"><b>${esc(s.title)}</b><small>${esc(s.sub)}</small></span><span class="dim">${s.min} min</span>${chev}</button>`).join('')}</div></section>` : ''}
-    ${next && did.length ? `<p class="doneline">${icon('check', 'tick')}<span>Déjà fait aujourd'hui : ${did.map(s => esc(s.title.toLowerCase())).join(', ')}</span></p>` : ''}
+    ${later.length || (next && did.length) ? `<section class="grp"><h2>${next ? 'Le reste de la séance' : 'Ta séance'}</h2><div class="surf card list">${[...later, ...did].map(s => `<button class="rowi${s.done ? ' isdone' : ''}" data-step="${steps.indexOf(s)}">${small(s.thumb)}<span class="body"><b>${esc(s.title)}</b><small>${s.done ? 'Fait. Touche pour le refaire' : esc(s.sub)}</small></span>${s.done ? icon('check', 'tick') : `<span class="dim">${s.min} min</span>`}${chev}</button>`).join('')}</div></section>` : ''}
     ${last ? `<section class="grp"><h2>Tes dernières parties</h2>
       <div class="surf card list"><a class="rowi sess" href="#/progres"><span class="body"><b>${cap(ago(last.t * 1000))}, ${plural(last.games.length, 'partie')}</b><small>${[res('W') ? plural(res('W'), 'gagnée') : '', res('D') ? plural(res('D'), 'nulle') : '', res('L') ? plural(res('L'), 'perdue') : ''].filter(Boolean).join(', ')}</small></span>
         <span class="dots" aria-hidden="true">${last.games.slice(-12).map(g => `<i class="${g.res}"></i>`).join('')}</span>${chev}</a>
       ${[...last.games].reverse().slice(0, 2).map(g => gameRow(g, '#/')).join('')}</div></section>` : ''}
-    ${next ? `<a class="quiet" href="#/entrainer">Choisir moi-même</a>` : ''}
-    ${getToken() ? '' : `<div class="surf card list"><a class="rowi" href="#/reglages"><span class="body"><b>Relier l'app à tes parties</b><small>Entre ton code d'accès : le plan du jour s'appuiera sur tes propres parties, et ta progression suivra sur tous tes appareils.</small></span>${chev}</a></div>`}`;
+    ${next ? `<a class="quiet" href="#/entrainer">Choisir moi-même</a>` : ''}`;
   root.querySelectorAll<HTMLButtonElement>('[data-step]').forEach(b => b.addEventListener('click', () => steps[+b.dataset.step!].go()));
   $('#bGo', root)?.addEventListener('click', () => next!.go());
 }

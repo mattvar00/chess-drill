@@ -10,7 +10,7 @@ import { mountTrainer } from './app/trainer';
 import { viewSettings } from './app/settings';
 import { mountExercise, viewWood } from './app/wood';
 import { endSession, lineUrl, session } from './app/session';
-import { getToken, sync } from './app/api';
+import { sync } from './app/api';
 import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile } from './app/games';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
@@ -34,11 +34,13 @@ let cleanup: (() => void) | null = null;
  * `kind` : « board » pour un écran avec échiquier (mise en page large, onglets toujours là pour changer d'endroit),
  * « session » pour un exercice ou un drill en cours (plein écran, une croix pour quitter, comme une leçon Duolingo).
  */
-function shell(title: string, sub: string, backHref: string | null, tab: string | null, right = '', kind: 'page' | 'board' | 'session' = 'page') {
+function shell(title: string, sub: string, backHref: string | null, tab: string | null, right = '', kind: 'page' | 'board' | 'review' | 'session' = 'page') {
   $('#title').textContent = title; $('#subtitle').textContent = sub; document.title = title === 'Chess Drill' ? title : `${title} · Chess Drill`;
   $('#top').hidden = !backHref; if (backHref) back.href = backHref; $('#hright').innerHTML = right; setTool('hidden');
   const quit = kind === 'session'; back.innerHTML = icon(quit ? 'close' : 'back'); back.setAttribute('aria-label', quit ? 'Quitter' : 'Retour'); back.classList.toggle('quit', quit);
-  $('#tabs').hidden = quit || !tab; document.body.classList.toggle('focus', kind !== 'page'); document.body.classList.toggle('withtabs', !quit && !!tab);
+  // revue et sessions : sur téléphone, tout tient dans l'écran (pas d'onglets en bas, la barre de navigation de l'écran les remplace)
+  const fit = quit || kind === 'review';
+  $('#tabs').hidden = !tab || quit; document.body.classList.toggle('focus', kind !== 'page'); document.body.classList.toggle('withtabs', !quit && !!tab); document.body.classList.toggle('fit', fit);
   document.querySelectorAll<HTMLAnchorElement>('#tabs a').forEach(a => { if (a.getAttribute('href') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
 }
 function route() {
@@ -61,7 +63,7 @@ function route() {
     }, { fault: f, back: backTo });
   } else if (p[0] === 'partie' && p[1]) {
     endSession(); const id = decodeURIComponent(p[1]), r = q.get('r'), backTo = r && r.startsWith('#/') ? r : PROG, [t, sub] = reviewTitle(id);
-    shell(t, sub, backTo, PROG, '', 'board'); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
+    shell(t, sub, backTo, PROG, '', 'review'); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
   } else if (p[0] === 'plan' && p[1]) {
     endSession(); shell(planTitle(p[1]), 'Plan animé', '#/plans', TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
   } else if (p[0] === 'structure' && p[1]) {
@@ -97,7 +99,7 @@ async function boot() {
   window.addEventListener('hashchange', route); route();
   // Nouvelles parties et progression des autres appareils : on rafraîchit l'écran d'accueil si quelque chose est arrivé.
   // (seulement sur les écrans de liste : une revue ou un exercice en cours n'est pas interrompu)
-  if (getToken()) sync().then(r => { if ((r.games || r.lines) && /^(#\/?)?(rep|wood|parties|progres|entrainer|structures|plans)?$/.test(location.hash)) route(); }).catch(() => { /* hors ligne : l'app reste utilisable */ });
+  sync().then(r => { if ((r.games || r.lines) && /^(#\/?)?(rep|wood|parties|progres|entrainer|structures|plans)?$/.test(location.hash)) route(); }).catch(() => { /* hors ligne : l'app reste utilisable */ });
   if (import.meta.env.PROD && 'serviceWorker' in navigator) void navigator.serviceWorker.register('./sw.js');
 }
 boot().catch(e => { view.innerHTML = `<p class="status err">L'app n'a pas pu démarrer : ${esc((e as Error).message)}</p>`; });

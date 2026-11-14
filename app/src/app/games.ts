@@ -9,7 +9,7 @@ import { Board } from '../ui/board';
 import { advantageChart, bindChart, eloChart, setAdvantageCursor } from '../ui/charts';
 import { $, esc, icon, plural } from '../ui/dom';
 import { BR, store } from './store';
-import { fullGame, getToken } from './api';
+import { fullGame } from './api';
 import { lineUrl } from './session';
 import { refBranch } from '../core/drill';
 import { explorerSlot } from './explorer';
@@ -57,8 +57,7 @@ const article = (k: AxisKey) => (k === 'ouverture' || k === 'horloge' ? "l'" : k
 
 export function viewGames(root: HTMLElement) {
   if (!store.games.length) {
-    root.innerHTML = `<header class="pagehead"><h1>Progrès</h1></header><section class="empty"><p>${getToken() ? 'Tes parties apparaissent ici après la première analyse de nuit.' : 'Relie l\'app à tes parties pour voir tes statistiques et revoir chaque partie coup par coup.'}</p></section>
-      ${getToken() ? '' : '<a class="btn pri block" href="#/reglages">Relier l\'app à tes parties</a>'}`; return;
+    root.innerHTML = `<header class="pagehead"><h1>Progrès</h1></header><section class="empty"><p>Tes parties apparaissent ici après la première analyse de nuit.</p></section>`; return;
   }
   const tcs = [...new Set(store.games.map(g => g.tc))].filter(t => TC[t]);
   // On ne propose une période que si elle laisse de côté des parties : sinon elle afficherait la même chose que « Tout ».
@@ -175,13 +174,14 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
     const marks = A.R.filter(r => ['mistake', 'blunder', 'miss', 'brilliant'].includes(r.k)).map(r => ({ i: r.i + 1, cls: r.k, label: `${num(r.i)}${r.m.san} : ${CLASS[r.k][0].toLowerCase()}${r.me === me ? '' : " de l'adversaire"}` }));
     const counts = (['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'inacc', 'mistake', 'miss', 'blunder'] as ReviewClass[]).filter(k => A.counts[k]);
     root.innerHTML = `<div class="trainer review">
-      <div class="tboard"><div id="board"></div></div>
-      <div class="tside"><div id="xp" hidden></div><div id="rv">
-        <div class="explnav" id="nav">${[['first', 'Début', 'first'], ['prev', 'Coup précédent', 'back'], ['next', 'Coup suivant', 'chev'], ['last', 'Fin', 'last']].map(([to, l, ic]) => `<button class="btn" data-to="${to}" aria-label="${l}">${icon(ic)}</button>`).join('')}</div>
-        <div class="coach rvcoach" id="coach" aria-live="polite"></div>
-        ${A.key.length ? `<section class="grp"><h2>Moments clés</h2><div class="keys scrollx">${A.key.map(r => `<button class="key c-${r.k}" data-k="${r.i + 1}"><i>${CLASS[r.k][1]}</i>${num(r.i)}${esc(r.m.san)}<span class="sr">, ${CLASS[r.k][0].toLowerCase()}${r.me === me ? '' : " de l'adversaire"}</span></button>`).join('')}</div></section>` : ''}
+      <div class="tboard">
+        <div class="mstrip" id="strip" role="list" aria-label="Coups de la partie"><button class="mc" data-i="0" role="listitem">Départ</button>${A.R.map(r => `<button class="mc${NOTABLE.includes(r.k) ? ' c-' + r.k : ''}" data-i="${r.i + 1}" role="listitem">${r.i % 2 === 0 ? `<span class="n">${r.i / 2 + 1}.</span>` : ''}${esc(r.m.san)}${NOTABLE.includes(r.k) ? `<i>${CLASS[r.k][1]}</i>` : ''}</button>`).join('')}</div>
+        <div class="bwrap"><div class="evbar" aria-hidden="true"><b id="evb"></b></div><div id="board"></div></div>
+      </div>
+      <div class="tside"><div id="xp" hidden></div><div id="rv" class="rvside">
+        <div class="coachb" id="coach" aria-live="polite"></div>
+        ${A.key.length ? `<section class="grp"><h2>Moments clés</h2><div class="keys">${A.key.map(r => `<button class="key c-${r.k}" data-k="${r.i + 1}"><i>${CLASS[r.k][1]}</i>${num(r.i)}${esc(r.m.san)}<span class="sr">, ${CLASS[r.k][0].toLowerCase()}${r.me === me ? '' : " de l'adversaire"}</span></button>`).join('')}</div></section>` : ''}
         <div class="advcard">${advantageChart(mineWp, marks, j => j ? `${num(j - 1)}${A.M[j - 1].san} : ${Math.round(mineWp[j])} % pour toi` : `Départ : ${Math.round(mineWp[0])} %`)}</div>
-        <details class="help allmoves"><summary>Tous les coups</summary><div class="moves rvmoves" id="moves">${A.R.map(r => `${r.i % 2 === 0 ? `<span class="n">${r.i / 2 + 1}.</span>` : ''}<span class="m${NOTABLE.includes(r.k) ? ' c-' + r.k : ''}" data-i="${r.i + 1}">${esc(r.m.san)}${NOTABLE.includes(r.k) ? `<sup>${CLASS[r.k][1]}</sup>` : ''}</span> `).join('')}</div></details>
         <section class="grp"><h2>Bilan</h2><div class="surf card">
           <div class="stats"><div><b>${A.acc[me] ?? '–'}</b><span>ta précision</span></div><div><b>${A.acc[me === 'w' ? 'b' : 'w'] ?? '–'}</b><span>${esc(g.opp)} (${g.oppElo})</span></div>
             <div><b>${(['o', 'm', 'e'] as const).map(p => A.phAcc[p] ?? '–').join(' / ')}</b><span>ouverture, milieu, finale</span></div></div>
@@ -192,8 +192,9 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
           ${st && STRUCT[st.id] ? `<a class="rowi" href="#/structure/${st.id}"><span class="ico">${icon('pawn')}</span><span class="body"><b>${esc(STRUCT[st.id].name)}</b><small>Structure de la partie au 12ᵉ coup : ses plans</small></span>${chev}</a>` : ''}
           ${g.url?.startsWith('http') ? `<a class="rowi" href="${esc(g.url)}" target="_blank" rel="noopener"><span class="ico">${icon('link')}</span><span class="body"><b>Voir sur chess.com</b></span>${chev}</a>` : ''}
         </div>
+        <div class="actions rvbar" id="rvbar"><button class="btn" data-to="prev" aria-label="Coup précédent">${icon('back')}</button><span id="mid"></span><button class="btn" data-to="next" aria-label="Coup suivant">${icon('chev')}</button></div>
       </div></div></div>`;
-    const coach = $('#coach', root), movesEl = $('#moves', root), chart = root.querySelector<HTMLElement>('.chart.adv')!;
+    const coach = $('#coach', root), movesEl = $('#strip', root), mid = $('#mid', root), evb = $('#evb', root), chart = root.querySelector<HTMLElement>('.chart.adv')!;
     board = new Board($('#board', root), { movable: () => XS?.active()?.movable() ?? null, onMove: m => XS?.active()?.onMove(m) });
     /** Explorateur depuis la position affichée : la suite du moteur, celle de la partie, ou tes propres coups. */
     const exploreOpts = () => {
@@ -210,20 +211,25 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
         badge: r && !['good', 'excellent', 'book'].includes(r.k) ? { sq: r.m.to, text: CLASS[r.k][1], cls: r.k, label: CLASS[r.k][0] } : null,
       });
       setAdvantageCursor(chart, i);
-      movesEl.querySelectorAll('.m').forEach(el => el.classList.toggle('cur', +(el as HTMLElement).dataset.i! === i));
-      movesEl.querySelector('.m.cur')?.scrollIntoView({ block: 'nearest' });
+      movesEl.querySelectorAll('.mc').forEach(el => el.classList.toggle('cur', +(el as HTMLElement).dataset.i! === i));
+      const cur = movesEl.querySelector<HTMLElement>('.mc.cur'); if (cur) movesEl.scrollTo({ left: cur.offsetLeft - movesEl.clientWidth / 2 + cur.offsetWidth / 2, behavior: 'smooth' });
+      evb.style.height = `${Math.round(mineWp[i])}%`;
+      // bouton du milieu : retrouver le bon coup sur ta faute, sinon aller au moment clé suivant
+      const nextKey = A.key.find(k => k.i + 1 > i), retry = r && r.me === me && r.loss >= 10 && ev[r.i].b;
+      mid.innerHTML = retry ? `<a class="btn pri" href="#/partie/${encodeURIComponent(g.id)}/refaire/${r!.i}">Retrouver le bon coup</a>`
+        : nextKey ? `<button class="btn" data-k="${nextKey.i + 1}">Moment clé suivant</button>` : '';
+      mid.querySelector<HTMLButtonElement>('[data-k]')?.addEventListener('click', e => to(+(e.currentTarget as HTMLElement).dataset.k!));
       if (!r) { coach.innerHTML = `<p class="rvlab"><b>Position de départ</b></p><p class="why">Avance coup par coup ou touche un moment clé. La flèche verte montre le coup qu'il fallait jouer.</p>`; return; }
       const mine = r.me === me, my = (w: number) => Math.round(me === 'w' ? w : 100 - w);
       // les chances (de ton point de vue) quand le coup change quelque chose, l'évaluation sinon
       const side = r.loss >= 5 ? `<span class="chg">${my(A.wpW[r.i])} %${icon('arrow')}<b class="${my(A.wpW[r.i + 1]) < my(A.wpW[r.i]) ? 'down' : 'up'}">${my(A.wpW[r.i + 1])} %</b></span>` : `<span class="ev">${evalText(ev[r.i + 1], me)}</span>`;
-      coach.innerHTML = `<p class="rvlab">${label(r.k)}<b>${num(r.i)}${esc(r.m.san)}</b>${mine ? '' : '<span class="who">adversaire</span>'}${side}</p><p class="rvtext">${esc(commentMove({ color: me, ev }, A, r, true))}</p>
-        ${mine && r.loss >= 10 && ev[r.i].b ? `<a class="btn small" href="#/partie/${encodeURIComponent(g.id)}/refaire/${r.i}">Retrouver le bon coup</a>` : ''}`;
+      coach.innerHTML = `<p class="rvlab">${label(r.k)}<b>${num(r.i)}${esc(r.m.san)}</b>${mine ? '' : '<span class="who">adversaire</span>'}${side}</p><p class="rvtext">${esc(commentMove({ color: me, ev }, A, r, true))}</p>`;
     };
     go = d => { const j = Math.max(0, Math.min(n, i + d)); if (j !== i) { i = j; draw(d === 1); } };
     const to = (j: number) => { i = Math.max(0, Math.min(n, j)); draw(); };
-    $('#nav', root).addEventListener('click', e => { const t = (e.target as HTMLElement).closest('button')?.dataset.to; if (t) t === 'first' ? to(0) : t === 'last' ? to(n) : go(t === 'next' ? 1 : -1); });
-    movesEl.addEventListener('click', e => { const j = (e.target as HTMLElement).closest<HTMLElement>('.m')?.dataset.i; if (j) to(+j); });
-    root.querySelectorAll<HTMLButtonElement>('[data-k]').forEach(b => b.onclick = () => to(+b.dataset.k!));
+    $('#rvbar', root).addEventListener('click', e => { const t = (e.target as HTMLElement).closest<HTMLElement>('[data-to]')?.dataset.to; if (t) go(t === 'next' ? 1 : -1); });
+    movesEl.addEventListener('click', e => { const j = (e.target as HTMLElement).closest<HTMLElement>('.mc')?.dataset.i; if (j) to(+j); });
+    root.querySelectorAll<HTMLButtonElement>('.keys [data-k]').forEach(b => b.onclick = () => to(+b.dataset.k!));
     bindChart(chart, to);
     XS = explorerSlot(board, () => $('#rv', root), () => $('#xp', root), exploreOpts, () => draw());
     XS.available(true);

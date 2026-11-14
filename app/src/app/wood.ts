@@ -9,7 +9,7 @@ import { Board, miniBoard } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
 import { markActive, markPlan, save, store, woodCur, woodHistory, type WoodCur } from './store';
-import { getToken, syncSoon } from './api';
+import { syncSoon } from './api';
 import { explorerSlot, sanTokens } from './explorer';
 import { gameUrl } from './games';
 
@@ -28,8 +28,7 @@ const row = (id: string, ic: string, title: string, sub: string) => `<button cla
 export function viewWood(root: HTMLElement) {
   const all = store.faults, cur = woodCur(), hist = woodHistory(), due = duePositions(all, store.state.fault);
   if (!all.length) {
-    root.innerHTML = `<section class="empty"><p>${getToken() ? 'Tes fautes apparaissent ici dès que tes parties sont analysées, chaque nuit.' : 'Les exercices viennent de tes propres parties : chaque position est un coup qui t\'a coûté cher.'}</p></section>
-      ${getToken() ? '' : '<a class="btn pri block" href="#/reglages">Relier l\'app à tes parties</a>'}`; return;
+    root.innerHTML = `<section class="empty"><p>Tes fautes apparaissent ici dès que tes parties sont analysées, chaque nuit.</p></section>`; return;
   }
   const month = costliestFaults(all, 30, 30), n = Math.min(10, all.length), prio = priorityFaults(all, store.state.fault, n);
   const shown = (cur && byId().get(cur.ids[cur.i])) || prio[0];
