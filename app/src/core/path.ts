@@ -35,5 +35,3 @@ export function unitsOf(bloc: Bloc, st: Record<string, BranchState | undefined>,
   return bloc.systemes.filter(s => s.branches.length && s.statut !== 'plan').map(s => unitOf(bloc, s, st, meet, now))
     .sort((a, b) => b.meet - a.meet || bloc.systemes.indexOf(a.sys) - bloc.systemes.indexOf(b.sys));
 }
-/** XP d'une ligne finie : 10 sans faute, 5 avec une erreur, 2 sinon. */
-export const lineXp = (errs: number) => (errs === 0 ? 10 : errs === 1 ? 5 : 2);

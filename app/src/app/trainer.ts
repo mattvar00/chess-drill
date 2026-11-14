@@ -1,13 +1,12 @@
 /** Travail d'une ligne du répertoire : Drill (de mémoire) ou Voir la ligne (ligne commentée). */
 import { Chess, tryMove, uciOf, uciToObj, type Move } from '../core/chess';
 import { isValid, scheduleBranch } from '../core/schedule';
-import { lineXp } from '../core/path';
 import { isUserPly, theoryStart } from '../core/drill';
 import type { Game } from '../core/types';
 import { Board } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
-import { BR, addXp, markActive, markPlan, refreshDevs, save, setLastLesson, store } from './store';
+import { BR, markActive, markPlan, refreshDevs, save, setLastLesson, store } from './store';
 import { syncSoon } from './api';
 import { lineUrl, nextUrl, remaining, session } from './session';
 import { explorerSlot } from './explorer';
@@ -121,21 +120,20 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
 
   function finish() {
     if (finished) return; finished = true; locked = true; SFX.done();
-    const s = store.state.br[id] = scheduleBranch(store.state.br[id], errs), xp = lineXp(errs);
-    addXp(xp); if (S) { S.xp += xp; if (errs === 0) S.clean++; }
+    const s = store.state.br[id] = scheduleBranch(store.state.br[id], errs);
+    if (S && errs === 0) S.clean++;
     if (fromGame && errs === 0) { store.state.fixed[fromGame.id] = true; refreshDevs(); }
     if (plan) (store.state.planDone ??= {})[plan] = { errs, at: Date.now() };
     markActive(); syncSoon(); S?.done.add(id); paintStepper();
     // fin d'une leçon du chemin : bonus sans faute, puis le bilan (le pion avance)
     if (S?.lesson && !remaining().length) {
-      const bonus = S.clean === S.pool.length ? 10 : 0; if (bonus) addXp(bonus);
-      setLastLesson({ ...S.lesson, xp: S.xp + bonus, bonus, clean: S.clean, lines: S.pool.length, best: S.best, ms: Date.now() - S.t0 });
+      setLastLesson({ ...S.lesson, clean: S.clean, lines: S.pool.length, best: S.best, ms: Date.now() - S.t0 });
     }
     if (S?.label === PLAN_LINES && !remaining().length) markPlan('lines');
     const when = s.ivl <= 1 ? 'demain' : `dans ${s.ivl} jours`, next = S ? nextUrl(id) : null, left = remaining().length;
     const verdict = errs === 0 ? (isValid(s) ? `Ligne validée. Prochaine révision ${when}.` : 'Encore un passage sans faute et elle est validée.')
       : errs === 1 ? `Presque. Elle revient ${s.ivl ? when : 'tout de suite'}.` : "Le compteur repart à zéro : il faut deux passages sans faute d'affilée.";
-    coach.innerHTML = `<div class="done"><p class="big"><span class="xpb">+${xp} XP</span>${errs === 0 ? 'Ligne sans faute' : plural(errs, 'erreur')}</p><p>${verdict}</p>${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`;
+    coach.innerHTML = `<div class="done"><p class="big">${errs === 0 ? 'Ligne sans faute' : plural(errs, 'erreur')}</p><p>${verdict}</p>${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`;
     actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S || plan ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn${plan ? ' pri' : ''}" href="${listUrl}">${plan ? 'Voir le plan' : 'Liste'}</a>`; XS.available(true);
     $('#bAgain', actions).onclick = e => { e.preventDefault(); remount(); };
   }

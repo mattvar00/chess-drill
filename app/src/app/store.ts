@@ -66,11 +66,7 @@ export function markActive() { store.state.settings.days = addDay(trainingDays()
 /** Plan du jour : étapes faites aujourd'hui (« tac », « lines », « review »). Il repart de zéro chaque matin. */
 const today = () => new Date().toLocaleDateString('sv');
 export const planDone = (): string[] => { const p = store.state.settings.plan as { day: string; done: string[] } | undefined; return p?.day === today() && Array.isArray(p.done) ? p.done : []; };
-/** XP du jour et objectif quotidien. */
-export const XP_GOAL = 30;
-export const xpToday = (): number => { const x = store.state.settings.xp as { day: string; n: number } | undefined; return x?.day === today() ? x.n : 0; };
-export function addXp(n: number) { store.state.settings.xp = { day: today(), n: xpToday() + n }; save(); }
 /** Bilan de la dernière leçon finie, pour l'écran qui suit. */
-export let lastLesson: { bloc: string; sys: string; rank: number; doneBefore: number; xp: number; bonus: number; clean: number; lines: number; best: number; ms: number } | null = null;
+export let lastLesson: { bloc: string; sys: string; rank: number; doneBefore: number; clean: number; lines: number; best: number; ms: number } | null = null;
 export const setLastLesson = (l: typeof lastLesson) => { lastLesson = l; };
 export function markPlan(step: string) { const d = planDone(); if (!d.includes(step)) { store.state.settings.plan = { day: today(), done: [...d, step] }; save(); } }

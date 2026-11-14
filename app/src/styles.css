@@ -723,7 +723,7 @@ body.focus.withtabs main{padding-bottom:calc(var(--tabs) + 28px + env(safe-area-
 .psq{position:absolute;top:0;transform:translateX(-50%);display:grid;place-items:center;width:64px;height:64px;border:0;border-radius:16px;padding:0;background:var(--gold);box-shadow:0 5px 0 var(--gold-d);color:#0B1626;cursor:pointer}
 .psq .ic{width:26px;height:26px;stroke-width:3}
 .psq img{width:52px;height:52px;filter:drop-shadow(0 4px 6px rgba(0,0,0,.4))}
-.psq.crack{overflow:hidden;background:linear-gradient(118deg,var(--gold) 47%,#0B1626 47.5% 49.5%,var(--gold) 50%)}
+
 .psq.cur{background:#C8D3E6;box-shadow:0 5px 0 #8FA0BC,0 0 0 5px var(--accent-text)}
 .psq.lock{background:#1E2C45;box-shadow:0 5px 0 #121D30;cursor:default}
 .psq.goal.lock{width:72px;height:72px;background:radial-gradient(circle,rgba(247,225,26,.28),rgba(247,225,26,.06));box-shadow:inset 0 0 0 2px rgba(247,225,26,.5)}
@@ -794,3 +794,28 @@ body.focus.withtabs main{padding-bottom:calc(var(--tabs) + 28px + env(safe-area-
 .flinks{display:flex;justify-content:center;gap:18px;flex-wrap:wrap}
 .flinks .quiet{margin-top:0}
 button.quiet{border:0;background:none;width:100%}
+/* ---------- chemin par sections, sur un échiquier à peine visible ---------- */
+.pboard{display:flex;flex-direction:column;gap:14px;margin:0 calc(-1*var(--pad));padding:4px var(--pad) 8px;
+  background-color:transparent;background-image:conic-gradient(rgba(255,255,255,.035) 25%,transparent 0 50%,rgba(255,255,255,.035) 0 75%,transparent 0);background-size:104px 104px}
+.psec{display:flex;flex-direction:column}
+.pband{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:12px 16px;border:0;border-radius:16px;background:var(--surface);color:var(--ink);text-align:left;font:inherit;position:relative}
+.pband span{display:flex;flex-direction:column;min-width:0}
+.pband small{font-size:12px;font-weight:600;opacity:.75}
+.pband b{font:700 20px/1.2 var(--f-title);letter-spacing:-.01em}
+.pband em{font-style:normal;font-weight:700;white-space:nowrap}
+.pband img{width:36px;height:36px;filter:drop-shadow(0 4px 10px rgba(247,225,26,.4))}
+.pband .dot{position:absolute;right:10px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--bad)}
+.pband.open{background:var(--c-pri,#F7E11A);color:#0B1626}
+.pband.open small{opacity:.7}
+.psec .ppath{padding:20px 0 4px}
+.psec .quiet{margin-top:0}
+.psq.crack{background:var(--gold);overflow:visible}
+.psq .dot{position:absolute;right:-5px;top:-5px;width:16px;height:16px;border-radius:50%;background:var(--bad);box-shadow:0 0 0 3px var(--ground)}
+.prow.isgoal{height:110px}
+.psq.goal.lock,.psq.goal.cur{width:76px;height:76px}
+.psq.goal.lock{background:radial-gradient(circle,rgba(247,225,26,.32),rgba(247,225,26,.05) 70%);box-shadow:inset 0 0 0 2px rgba(247,225,26,.55),0 0 40px rgba(247,225,26,.18)}
+.psq.goal.won{width:72px;height:72px}
+.psq.goal img{width:58px;height:58px}
+.psq.lock:not(.goal){background:#1C2A43;box-shadow:0 5px 0 #111B2E}
+.psq.cur{box-shadow:0 6px 0 #9FB0C9,0 0 0 6px var(--accent-text),0 0 0 14px rgba(247,225,26,.15)}
+.phead .pstreak{margin-left:auto}
