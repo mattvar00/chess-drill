@@ -1,0 +1,59 @@
+# Jumeau numérique : refait seulement l'évaluation, sur les réseaux d'un entraînement déjà fini (sans réentraîner).
+# Se lance quand eval.py change (sur le dernier entraînement), ou à la main avec le numéro d'un run « Jumeau, entraînement ».
+name: Jumeau, évaluation seule
+on:
+  push:
+    branches: [main]
+    paths: ['twin/eval.py', '.github/workflows/twin-eval.yml']
+  workflow_dispatch:
+    inputs:
+      run_id: { description: "Numéro du run d'entraînement (vide : le dernier)", required: false, default: '' }
+permissions: { contents: write, actions: read }
+concurrency: { group: twin-eval, cancel-in-progress: true }
+jobs:
+  evaluation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults: { run: { working-directory: twin } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.12' }
+      - name: Dépendances
+        run: |
+          pip install -q -r requirements.txt
+          sudo apt-get update -qq && sudo apt-get install -y -qq stockfish
+      - name: Run d'entraînement à évaluer
+        id: run
+        env: { GH_TOKEN: "${{ github.token }}", RUN: "${{ inputs.run_id }}" }
+        run: |
+          if [ -z "$RUN" ]; then RUN=$(gh run list -R "${{ github.repository }}" --workflow twin-train.yml --limit 1 --json databaseId -q '.[0].databaseId'); fi
+          echo "Run d'entraînement : $RUN"
+          echo "id=$RUN" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with: { name: jumeau-donnees, path: "${{ runner.temp }}/data", run-id: "${{ steps.run.outputs.id }}", github-token: "${{ github.token }}" }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: jumeau-maison, path: "${{ runner.temp }}/maison", run-id: "${{ steps.run.outputs.id }}", github-token: "${{ github.token }}" }
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with: { name: jumeau-maia, path: "${{ runner.temp }}/maia", run-id: "${{ steps.run.outputs.id }}", github-token: "${{ github.token }}" }
+      - name: Évaluation
+        env: { STOCKFISH: /usr/games/stockfish }
+        run: |
+          mkdir -p "$RUNNER_TEMP/preds"
+          cp "$RUNNER_TEMP"/maison/preds/*.json "$RUNNER_TEMP"/maia/preds/*.json "$RUNNER_TEMP/preds/" 2>/dev/null || true
+          ls "$RUNNER_TEMP/preds"
+          python eval.py --data "$RUNNER_TEMP/data" --preds "$RUNNER_TEMP/preds" --out "$RUNNER_TEMP/report" --depth 11
+      - uses: actions/upload-artifact@v4
+        with: { name: jumeau-rapport, path: "${{ runner.temp }}/report" }
+      - name: Publier sur la branche twin-results
+        working-directory: ${{ runner.temp }}
+        run: |
+          git clone -q --depth 1 --branch twin-results "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" pub || (mkdir pub && cd pub && git init -q && git checkout -q -b twin-results)
+          mkdir -p pub/model && cp report/* pub/
+          if [ -f maison/model/twin.pt ]; then cp maison/model/*.pt maison/model/train-log.json pub/model/; fi
+          cp report/report-net.md "pub/report-net-$(date -u +%F).md"
+          cd pub && git add -A
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Jumeau : réseaux évalués le $(date -u +%F)"
+          git push -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" HEAD:twin-results
