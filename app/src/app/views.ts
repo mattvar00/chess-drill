@@ -3,10 +3,12 @@ import { isDue, isValid } from '../core/schedule';
 import { recentDeviations, refBranch, todayPool } from '../core/drill';
 import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
-import { miniBoard, miniFen, pieceSrc } from '../ui/board';
+import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
-import { openUnit, pathSummary, shortName } from './path';
-import { unitOf } from '../core/path';
+import { devRow, openUnit, pathSummary, shortName } from './path';
+import { caseOf, knownLines, unitOf } from '../core/path';
+import { lineName } from '../core/names';
+import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
 import { dayKey, streak, trainedToday } from '../core/streak';
@@ -40,10 +42,8 @@ function preview(id: string): string {
   return miniBoard(g, bloc.side);
 }
 const small = (h: string) => h.replace('class="mini"', 'class="mini sm"');
-const thumb = (game: Chess, orient: 'w' | 'b') => small(miniBoard(game, orient));
 /** Position après les `n` premiers demi-coups d'une partie. */
 function positionAt(sans: string[], n: number): Chess { const g = new Chess(); for (let i = 0; i < n; i++) if (!tryMove(g, sans[i])) break; return g; }
-const lineThumb = (id: string) => small(preview(id));
 /** Nom d'une ligne en mots simples : le camp et l'ouverture adverse, pas le nom de la variante. */
 const plainBloc = (id: string) => { const b = BR[id].bloc; return `${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'} : ${b.sous || b.titre}`; };
 
@@ -101,29 +101,20 @@ export function viewHome(root: HTMLElement) {
   $('#bGo', root)?.addEventListener('click', () => next!.go());
 }
 
-/** S'entraîner : tout ce qui se lance en libre. Chaque chose a sa forme : le répertoire et sa progression, les plans et les structures en images, les fautes en chiffre, les sorties de ligne coup contre coup. */
+/** S'entraîner : trois portes, pas plus. Les ouvertures (le chemin), les fautes (Woodpecker), les plans (animations et structures). */
 export function viewTrain(root: HTMLElement) {
-  const devs = recentDeviations(store.games, store.state.fixed, BR), due = dueLines(ALL_IDS), posDue = duePositions(store.faults, store.state.fault), valid = validCount(ALL_IDS);
+  const devs = recentDeviations(store.games, store.state.fixed, BR), due = dueLines(ALL_IDS), posDue = duePositions(store.faults, store.state.fault);
   const { due: d, fresh } = todayPool(REP, store.state.br), firstLine = d[0] ?? fresh[0] ?? ALL_IDS[0];
-  const plan = PLANS[0], planPos = plan ? positionAt(plan.sans, plan.steps[0].p) : new Chess(), stPos = PLANS[1] ? positionAt(PLANS[1].sans, PLANS[1].steps[0].p) : planPos;
+  const plan = PLANS[0], planPos = plan ? positionAt(plan.sans, plan.steps[0].p) : new Chess();
+  const P = pathSummary(), u = P.u, c = caseOf(u), nStruct = Object.keys(structureStats(store.games.filter(g => g.st && g.wp && !store.state.ignored[g.id]))).length;
   root.innerHTML = `
     <header class="pagehead"><h1>S'entraîner</h1></header>
-    <section class="grp"><h2>Tes ouvertures</h2>
-      ${(() => { const P = pathSummary(), u = P.u; return `<a class="surf card feat" href="#/rep">${preview(u.lessons.find(l => l.state === 'cur')?.ids[0] ?? firstLine)}<span class="body"><b>Tes ouvertures</b><small>${esc(shortName(u.sys.titre))} : ${u.promoted ? 'promue' : `case ${u.lessons.find(l => l.state === 'cur')?.rank ?? 8} sur 8`}</small>
-        <span class="estrip mini">${P.cells.map((c, i) => `<span class="ecell ${c}${c === 'cur' ? ' pawn' : ''}">${c === 'cur' ? `<img src="${pieceSrc('p')}" alt="">` : i === P.cells.length - 1 && c === 'lock' ? `<img class="qghost" src="${pieceSrc('q')}" alt="">` : ''}</span>`).join('')}</span>${due ? `<span class="due">${due} à revoir</span>` : ''}</span>${chev}</a>`; })()}
-      <div class="halves">
-        <a class="surf card half" href="#/plans">${miniBoard(planPos, plan?.side ?? 'w')}<b>Plans animés</b><small>${plural(PLANS.length, 'plan')} : quoi faire une fois l'ouverture jouée</small></a>
-        <a class="surf card half" href="#/structures">${miniFen(stPos.fen(), PLANS[1]?.side ?? 'w', 'p')}<b>Structures de pions</b><small>Ton score dans chacune, et le plan qui va avec</small></a>
-      </div></section>
-    <section class="grp"><h2>Tes fautes</h2>
-      <a class="surf card feat count" href="#/wood"><b class="num">${store.faults.length}</b><span class="body"><b>Fautes à rejouer</b><small>${store.faults.length ? `${store.faults.length > 1 ? 'Positions tirées' : 'Position tirée'} de tes parties, à résoudre jusqu'à ne plus les rater` : 'Elles arrivent après la première analyse de tes parties'}</small>${posDue ? `<span class="due">${posDue} à revoir</span>` : ''}</span>${chev}</a></section>
-    ${devs.length ? `<section class="grp"><h2>Là où tu as quitté ta ligne</h2><div class="surf card list">
-      ${devs.slice(0, 3).map(g => { const id = refBranch(g, BR)!, exp = (g.a.expected || []).map(e => e.san);
-        return `<a class="rowi" href="${lineUrl(id, 'drill', g.id)}">${thumb(positionAt(g.sans, g.a.ply ?? 0), g.color)}<span class="body"><b>Contre ${esc(g.opp)}, ${ago(g.t * 1000)}</b>
-          <span class="swap"><span class="mv no">${esc(g.a.played ?? '')}</span>${exp.length ? `<small>au lieu de</small>${exp.slice(0, 2).map(x => `<span class="mv yes">${esc(x)}</span>`).join('')}` : ''}</span></span>${chev}</a>`; }).join('')}
-    </div></section>` : ''}
-    <section class="grp"><h2>Libre</h2><div class="row"><button class="btn" id="bMix">Lignes au hasard</button><a class="btn" href="#/explorer">Explorer une position</a></div></section>`;
-  $('#bMix', root).addEventListener('click', () => go('Lignes au hasard', ALL_IDS, '#/entrainer'));
+    <a class="surf card feat door" href="#/rep">${preview(u.lessons.find(l => l.state === 'cur')?.ids[0] ?? firstLine)}<span class="body"><b>Ouvertures</b><small>${esc(shortName(u.sys.titre))} : ${u.promoted ? 'promue' : `case ${c.k} sur ${c.n}`}</small>
+      <span class="estrip mini">${P.cells.map((x, i) => `<span class="ecell ${x}${x === 'cur' ? ' pawn' : ''}">${x === 'cur' ? `<img src="${pieceSrc('p')}" alt="">` : i === P.cells.length - 1 && x === 'lock' ? `<img class="qghost" src="${pieceSrc('q')}" alt="">` : ''}</span>`).join('')}</span>
+      <span class="tags">${due ? `<span class="due">${due} à revoir</span>` : ''}${devs.length ? `<span class="due bad">${plural(devs.length, 'quittée', 'quittées')} en partie</span>` : ''}</span></span>${chev}</a>
+    <a class="surf card feat count door" href="#/wood"><b class="num">${store.faults.length}</b><span class="body"><b>Fautes</b><small>${store.faults.length ? `${store.faults.length > 1 ? 'Positions tirées' : 'Position tirée'} de tes parties, à rejouer jusqu'à ne plus les rater` : 'Elles arrivent après la première analyse de tes parties'}</small>${posDue ? `<span class="tags"><span class="due">${posDue} à revoir</span></span>` : ''}</span>${chev}</a>
+    <a class="surf card feat door" href="#/plans">${miniBoard(planPos, plan?.side ?? 'w')}<span class="body"><b>Plans</b><small>Quoi faire après l'ouverture : ${plural(PLANS.length, 'plan animé', 'plans animés')}${nStruct ? `, ${plural(nStruct, 'structure de pions', 'structures de pions')} tirées de tes parties` : ''}</small></span>${chev}</a>
+    <a class="quiet" href="#/explorer">Explorer une position</a>`;
 }
 
 /** Filtre de la liste des blocs, gardé le temps de la visite. */
@@ -140,10 +131,10 @@ export function viewBlocs(root: HTMLElement) {
       <div class="sumrow"><p>${validPhrase(valid, ALL_IDS.length)}</p>${due ? `<p class="duetxt">${due} à revoir</p>` : ''}</div>${bar(valid, ALL_IDS.length, 'big')}</header>
     ${top.length ? `<section class="grp"><h2>Ce que tu joues vraiment</h2><div class="surf card list">
       <p class="cover">Ces ${top.length} lignes reviennent dans <b>${cover} %</b> de tes parties des 6 derniers mois. Commence par elles.</p>
-      ${top.map(id => `<a class="rowi" href="${lineUrl(id, 'drill')}"><span class="body"><b>${esc(BR[id].br.titre)}</b><small>${esc(BR[id].sys.titre)}, dans ${plural(meet[id], 'partie')}</small></span>${dueTag(st(id)?.runs && isDue(st(id)) ? 1 : 0)}${chev}</a>`).join('')}
+      ${top.map(id => { const nm = lineName(BR[id].br.titre); return `<a class="rowi" href="${lineUrl(id, 'drill')}"><span class="body"><b>${esc(nm.title)}</b><small>${esc(shortName(BR[id].sys.titre))}${nm.detail ? ` : ${esc(nm.detail)}` : ''}, dans ${plural(meet[id], 'partie')}</small></span>${dueTag(st(id)?.runs && isDue(st(id)) ? 1 : 0)}${chev}</a>`; }).join('')}
       <button class="rowi more" id="bTop">Drill sur ces ${top.length} lignes</button></div></section>` : ''}
     <div class="seg" role="group" aria-label="Filtrer par couleur">${FILTERS.map(([v, l]) => `<button type="button" data-f="${v}" aria-pressed="${sideFilter === v}">${l}</button>`).join('')}</div>
-    <div class="surf card list">${blocs.map(b => { const ids = idsOf(b); return `<a class="rowi" href="#/rep/${b.id}"><span class="chip ${b.side}"></span><span class="body"><b>${esc(b.titre)}</b><small>${esc(b.sous)}</small>${progLine(ids)}</span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>
+    <div class="surf card list">${blocs.map(b => { const ids = idsOf(b); return `<a class="rowi" href="#/rep/${b.id}"><span class="chip ${b.side}" role="img" aria-label="${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(b.titre)}</b><small>${esc(b.sous)}</small>${progLine(ids)}</span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>
     <section class="grp"><h2>Plans</h2><div class="surf card list">
       <a class="rowi" href="#/plans"><span class="ico">${icon('chart')}</span><span class="body"><b>Plans animés</b><small>${plural(PLANS.length, 'animation')} : ruptures, cases clés, pièces à échanger</small></span>${chev}</a>
       <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>Plans par structure de pions</b><small>Tes structures, ton score dans chacune, et tes fautes à y rejouer</small></span>${chev}</a>
@@ -170,33 +161,37 @@ function lineStatus(br: Branch): string {
 }
 /** Tes parties jouées dans un système (d'après la ligne du répertoire suivie le plus longtemps), les plus récentes d'abord. */
 const gamesOfSystem = (sys: System) => store.games.filter(g => { const id = refBranch(g, BR); return !!id && BR[id].sys.id === sys.id; }).sort((a, b) => b.t - a.t);
-/** Ce que tes parties disent de ce système : score, ce que tu fais de la sortie d'ouverture, et tes fautes à retravailler. */
+/** Ce que tes parties disent de cette ouverture : score, et ce que tu fais de la sortie d'ouverture. */
 function inYourGames(sys: System): string {
   const games = gamesOfSystem(sys), an = games.filter(g => g.st && myWp(g)); if (!games.length) return '';
   const score = Math.round(100 * games.reduce((a, g) => a + (g.res === 'W' ? 1 : g.res === 'D' ? 0.5 : 0), 0) / games.length);
   const at = (g: typeof an[number], ply: number) => { const w = myWp(g)!; return w[Math.min(ply, w.length - 1)]; };
   const avg = (ply: number) => Math.round(an.reduce((a, g) => a + at(g, ply), 0) / an.length);
-  const ids = new Set(games.map(g => g.id)), faults = store.faults.filter(f => ids.has(f.game));
-  const themes: Record<string, number> = {}; for (const f of faults) themes[f.theme] = (themes[f.theme] || 0) + 1;
-  const top = Object.entries(themes).sort((a, b) => b[1] - a[1])[0];
   const drop = an.length ? avg(40) - avg(20) : 0;
-  return `<section class="grp"><h2>Dans tes parties</h2>
-    <div class="surf card stats two"><div><b>${games.length}</b><span>${games.length > 1 ? 'parties jouées' : 'partie jouée'}</span></div><div><b>${score} %</b><span>des points marqués</span></div><div hidden><b>${an.length ? avg(20) + ' %' : '–'}</b><span></span></div></div>
-    ${an.length >= 3 ? `<p class="insight">${drop <= -5 ? `Tu sors bien de l'ouverture, puis tu perds en moyenne ${-drop} points de chances entre les coups 10 et 20 : c'est le plan du milieu de jeu qui te coûte, pas la théorie.` : drop >= 5 ? `Tu gagnes en moyenne ${drop} points de chances entre les coups 10 et 20 : tu connais les plans de ce système.` : 'Tes chances restent stables entre les coups 10 et 20.'}${top ? ` Ta faute la plus fréquente ici : ${top[0].toLowerCase()} (${top[1]}).` : ''}</p>` : ''}
-    ${faults.length ? `<button class="btn block" id="bSysFaults">${icon('target')}Rejouer tes ${plural(faults.length, 'faute')} dans ce système</button>` : ''}
-  </section>`;
+  return `<p class="pnote">Dans tes parties : ${plural(games.length, 'jouée', 'jouées')}, ${score} % des points.${an.length >= 3 ? ` ${drop <= -5 ? `Tu perds en moyenne ${-drop} points de chances entre les coups 10 et 20 : c'est le plan du milieu de jeu qui te coûte, pas la théorie.` : drop >= 5 ? `Tu gagnes en moyenne ${drop} points de chances entre les coups 10 et 20.` : 'Tes chances restent stables entre les coups 10 et 20.'}` : ''}</p>`;
 }
+/** Page d'une ouverture : où tu en es (une seule mesure), ce qu'il faut corriger, tes lignes, puis les liens vers ses fautes et ses plans. */
 export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
-  const back = `#/rep/${bloc.id}/${sys.id}`;
-  const played = gamesOfSystem(sys);
+  const back = `#/rep/${bloc.id}/${sys.id}`, played = gamesOfSystem(sys);
+  const u = unitOf(bloc, sys, store.state.br), c = caseOf(u), known = knownLines(u, store.state.br);
+  const devs = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 60, 10).filter(g => BR[refBranch(g, BR)!]?.sys.id === sys.id).slice(0, 3);
+  const gids = new Set(played.map(g => g.id)), nFaults = store.faults.filter(f => gids.has(f.game)).length, plans = plansFor(sys.id);
+  const cells = u.lessons.map(l => `<i class="${l.state}"></i>`).join('');
   root.innerHTML = `<p class="intro">${esc(sys.resume)}</p>
-    ${inYourGames(sys)}
-    ${(() => { const u = unitOf(bloc, sys, store.state.br), L = u.lessons.find(l => l.state === 'cur'); return `<button class="btn pri block" id="bPath">${u.promoted ? 'Voir sur le chemin : ouverture promue' : `Continuer sur le chemin : case ${L?.rank ?? 8} sur 8`}</button>`; })()}
-    <button class="quiet" id="bDrill">Drill libre sur les ${sys.branches.length} lignes</button>
-    ${plansFor(sys.id).length ? `<section class="grp"><h2>Plans animés</h2><div class="surf card list">${plansFor(sys.id).map(P => `<a class="rowi" href="#/plan/${P.id}"><span class="ico">${icon('chart')}</span><span class="body"><b>${esc(P.title)}</b><small>${esc(P.sub)}</small></span>${chev}</a>`).join('')}</div></section>` : ''}
-    <div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id]; return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(br.titre)}</b><small>${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
-    ${played.length ? `<section class="grp"><h2>Tes dernières parties dans ce système</h2><div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
+    <section class="surf card padded progcard">
+      <div class="pchead"><b>${u.promoted ? 'Ouverture promue' : `Case ${c.k} sur ${c.n}`}</b><span>${known} ${known > 1 ? 'lignes sues' : 'ligne sue'} sur ${sys.branches.length}</span></div>
+      <div class="pcells" role="img" aria-label="${u.done} cases réussies sur ${c.n}">${cells}</div>
+      <button class="btn pri block" id="bPath">${u.promoted ? 'Revoir ces lignes' : `Continuer : case ${c.k}`}</button>
+      ${inYourGames(sys)}
+    </section>
+    ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
+    <section class="grp"><h2>Tes lignes</h2><div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id], nm = lineName(br.titre);
+      return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
+      <button class="quiet" id="bDrill">Drill libre sur les ${sys.branches.length} lignes</button></section>
+    ${nFaults || plans.length ? `<div class="links2">
+      ${nFaults ? `<a class="surf card lk" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Fautes de cette ouverture</b><small>${plural(nFaults, 'position')}</small></a>` : ''}
+      ${plans.length ? `<a class="surf card lk" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Plans de cette ouverture</b><small>${plural(plans.length, 'plan animé', 'plans animés')}</small></a>` : ''}</div>` : ''}
+    ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2><div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, idsOf(sys), back));
-  $('#bPath', root).addEventListener('click', () => openUnit(bloc.id, sys.id));
-  root.querySelector('#bSysFaults')?.addEventListener('click', () => { const ids = new Set(gamesOfSystem(sys).map(g => g.id)); startCycle(sys.titre, store.faults.filter(f => ids.has(f.game))); });
+  $('#bPath', root).addEventListener('click', () => u.promoted ? go(sys.titre, idsOf(sys), back) : openUnit(bloc.id, sys.id));
 }

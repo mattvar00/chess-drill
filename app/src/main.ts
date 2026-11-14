@@ -16,7 +16,8 @@ import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile }
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
-import { viewLessonEnd, viewPath } from './app/path';
+import { shortName, viewLessonEnd, viewPath } from './app/path';
+import { lineTitle } from './core/names';
 
 restoreLook();
 /** Trois onglets, rangés par intention : ce que je dois faire, ce que je peux faire, où j'en suis. */
@@ -27,6 +28,9 @@ document.getElementById('app')!.innerHTML = `
   <main id="view" tabindex="-1"></main>
   <nav class="tabs surf" id="tabs" aria-label="Sections">${TABS.map(([h, l]) => `<a href="${h}">${l}</a>`).join('')}</nav>`;
 const view = $('#view'), back = $<HTMLAnchorElement>('#back');
+// Toucher l'onglet où l'on est déjà : retour en haut de la page (sur une sous-page, le lien ramène déjà à la page de l'onglet).
+$('#tabs').addEventListener('click', e => { const a = (e.target as HTMLElement).closest('a'); if (!a) return; const h = a.getAttribute('href')!;
+  if (h === (location.hash || '#/') || (h === '#/' && location.hash === '')) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); } });
 mountTool($<HTMLButtonElement>('#xtool'));
 let cleanup: (() => void) | null = null;
 
@@ -44,6 +48,9 @@ function shell(title: string, sub: string, backHref: string | null, tab: string 
   $('#tabs').hidden = !tab || quit; document.body.classList.toggle('focus', kind !== 'page'); document.body.classList.toggle('withtabs', !quit && !!tab); document.body.classList.toggle('fit', fit);
   document.querySelectorAll<HTMLAnchorElement>('#tabs a').forEach(a => { if (a.getAttribute('href') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
 }
+/** Retour : la page d'où l'on vient quand elle est passée dans l'adresse (`r`), sinon `dflt`. */
+const backOf = (q: URLSearchParams, dflt: string) => { const r = q.get('r'); return r && r.startsWith('#/') ? r : dflt; };
+const planSysTitle = (o: string) => { for (const b of REP.blocs) for (const sy of b.systemes) if (sy.id === o) return shortName(sy.titre); return ''; };
 function route() {
   cleanup?.(); cleanup = null;
   const [path, query = ''] = location.hash.slice(1).split('?'), p = path.split('/').filter(Boolean), q = new URLSearchParams(query);
@@ -52,7 +59,7 @@ function route() {
     if (S && !S.pool.includes(br.id)) endSession();
     const cur = session(), g = q.get('g');
     const where = cur ? `${cur.label}, ligne ${cur.done.size + (cur.done.has(br.id) ? 0 : 1)} sur ${cur.pool.length}` : sys.titre;
-    shell(br.titre, where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'Drill'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
+    shell(lineTitle(br.titre), where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'Drill'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
     cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
   } else if (p[0] === 'partie' && p[1] && p[2] === 'refaire') {
     const id = decodeURIComponent(p[1]), ply = +p[3], f = retryFault(id, ply), backTo = gameUrl(id, ply + 1);
@@ -68,7 +75,7 @@ function route() {
   } else if (p[0] === 'plan' && p[1]) {
     endSession(); shell(planTitle(p[1]), 'Plan animé', '#/plans', TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
   } else if (p[0] === 'structure' && p[1]) {
-    endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/structures', TRAIN, '', 'board'); cleanup = mountStruct(view, p[1]);
+    endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/plans', TRAIN, '', 'board'); cleanup = mountStruct(view, p[1]);
   } else if (p[0] === 'wood' && p[1] === 'go') {
     endSession(); shell('Fautes à rejouer', '', woodCur()?.back ?? '#/wood', null, '', 'session');
     cleanup = mountExercise(view, (title, sub, clock) => {
@@ -83,13 +90,13 @@ function route() {
     else if (p[0] === 'rep' && p[1] === 'tout') { shell('Toutes les lignes', '', '#/rep', TRAIN); viewBlocs(view); }
     else if (p[0] === 'rep') { shell('Tes ouvertures', '', TRAIN, TRAIN); viewPath(view); }
     else if (p[0] === 'lecon') { shell('Bilan', '', null, null); viewLessonEnd(view); }
-    else if (p[0] === 'wood') { shell('Fautes à rejouer', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', TRAIN, TRAIN); viewWood(view); }
+    else if (p[0] === 'wood') { shell('Fautes', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', backOf(q, TRAIN), TRAIN); viewWood(view, q); }
     else if (p[0] === 'entrainer') { shell("S'entraîner", '', null, TRAIN); viewTrain(view); }
     else if (p[0] === 'explorer') { shell('Explorer une position', '', TRAIN, TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, TRAIN); }
     else if (p[0] === 'progres' || p[0] === 'parties') { shell('Progrès', '', null, PROG); viewGames(view); }
     else if (p[0] === 'profil') { shell('Ta carte joueur', '', PROG, PROG); viewProfile(view); }
-    else if (p[0] === 'plans') { shell('Plans animés', '', TRAIN, TRAIN); viewPlans(view); }
-    else if (p[0] === 'structures') { shell('Structures de pions', '', TRAIN, TRAIN); viewStructs(view); }
+    else if (p[0] === 'plans') { shell('Plans', q.get('o') ? planSysTitle(q.get('o')!) : 'Quoi faire une fois l\'ouverture jouée', backOf(q, TRAIN), TRAIN); viewPlans(view, q); }
+    else if (p[0] === 'structures') { shell('Structures de pions', '', '#/plans', TRAIN); viewStructs(view); }
     else if (p[0] === 'reglages') { shell('Réglages', '', '#/', '#/reglages'); viewSettings(view); }
     else { shell('Chess Drill', '', null, '#/'); viewHome(view); }
   }

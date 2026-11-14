@@ -30,5 +30,13 @@ const HINTS: Record<string, string> = {
   'Échec adverse ignoré': 'Quels échecs l\'adversaire aura-t-il après ton coup ?',
   'Coup calme': 'Pas de tactique immédiate : cherche le coup le plus utile et vérifie la réponse adverse.',
 };
+/** Noms de thèmes dits plus simplement, partout où ils s'affichent. */
+const THEME_LABEL: Record<string, string> = { 'Coup calme': 'Bon coup tranquille manqué' };
+export const themeLabel = (theme: string) => THEME_LABEL[theme] ?? theme;
+/** Les thèmes de faute du stock, du plus fréquent au moins fréquent. */
+export function themeCounts(faults: Fault[]): [string, number][] {
+  const c: Record<string, number> = {}; for (const f of faults) c[f.theme] = (c[f.theme] || 0) + 1;
+  return Object.entries(c).sort((a, b) => b[1] - a[1]);
+}
 export const themeHint = (theme: string) => HINTS[theme] ?? 'Échecs, prises, menaces : vérifie-les dans cet ordre.';
 export const fmtTime = (ms: number) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };

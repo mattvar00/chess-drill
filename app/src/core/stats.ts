@@ -95,15 +95,19 @@ const clamp = (v: number) => Math.round(Math.max(0, Math.min(100, v)));
  * Résilience : positions perdantes sauvées (40 % vaut 100). Horloge : pénalise les coups et les gaffes joués en moins de 3 s.
  * Rythme : pénalise les grosses journées et la baisse après deux défaites d'affilée. La note globale est la moyenne des notes connues.
  */
+/** En dessous, une note de la carte joueur n'est pas donnée : parties sur la période, et cas observés (positions gagnantes ou perdantes). */
+export const MIN_GAMES = 10, MIN_CASES = 5;
 export function playerCard(pr: Profile): Card {
   const c = pr.clock, ti = pr.tilt;
+  // une note sur trop peu de parties n'apprend rien (et « Ouverture 0 » sur 3 parties décourage) : on ne la donne pas
+  const enough = pr.n >= MIN_GAMES, enoughAn = pr.nAn >= MIN_GAMES;
   const scores: Card['scores'] = {
-    ouverture: pr.opening.coverage,
-    tactique: pr.tactics ? clamp((pr.tactics.acc - 50) * 2) : null,
-    conversion: pr.conversion?.rate ?? null,
-    resilience: pr.resilience?.rate != null ? clamp(pr.resilience.rate * 2.5) : null,
-    horloge: c.fastShare != null ? clamp(100 - (c.fastBlunders ?? 0) - c.fastShare / 2) : null,
-    rythme: ti ? clamp(100 - Math.min(60, ti.maxDay * 2) - (ti.wrAfterTwoL != null && pr.winRate != null ? Math.max(0, (pr.winRate - ti.wrAfterTwoL) * 2) : 0)) : null,
+    ouverture: enough ? pr.opening.coverage : null,
+    tactique: enoughAn && pr.tactics ? clamp((pr.tactics.acc - 50) * 2) : null,
+    conversion: (pr.conversion?.n ?? 0) >= MIN_CASES ? pr.conversion!.rate ?? null : null,
+    resilience: (pr.resilience?.n ?? 0) >= MIN_CASES && pr.resilience!.rate != null ? clamp(pr.resilience!.rate * 2.5) : null,
+    horloge: enough && c.fastShare != null ? clamp(100 - (c.fastBlunders ?? 0) - c.fastShare / 2) : null,
+    rythme: enough && ti ? clamp(100 - Math.min(60, ti.maxDay * 2) - (ti.wrAfterTwoL != null && pr.winRate != null ? Math.max(0, (pr.winRate - ti.wrAfterTwoL) * 2) : 0)) : null,
   };
   const known = AXES.map(([k]) => [k, scores[k]] as const).filter((x): x is [AxisKey, number] => x[1] != null).sort((a, b) => b[1] - a[1]);
   const best = known[0]?.[0] ?? null, worst = known.length > 1 ? known[known.length - 1][0] : null;

@@ -4,6 +4,9 @@
  * Chaque section commence par un bandeau et se termine par sa dame.
  */
 import { unitsOf, type Lesson, type Unit } from '../core/path';
+import { lineTitle } from '../core/names';
+import { recentDeviations, refBranch } from '../core/drill';
+import { lineUrl } from './session';
 import { meetCounts } from '../core/rank';
 import { pieceSrc } from '../ui/board';
 import { $, esc, icon, plural } from '../ui/dom';
@@ -24,7 +27,7 @@ export function openUnit(blocId: string, sysId: string) { setBloc(blocId); unitP
 /** Ouvre une leçon : ses lignes en séance, le bilan à la fin, la croix ramène au chemin. */
 function startLesson(u: Unit, i: number) {
   const L = u.lessons[i];
-  location.hash = startSession(`${shortName(u.sys.titre)}, case ${L.rank}`, L.ids, '#/lecon/fin', L.ids[0],
+  location.hash = startSession(`${shortName(u.sys.titre)}, case ${i + 1}`, L.ids, '#/lecon/fin', L.ids[0],
     { exit: '#/rep', lesson: { bloc: u.bloc.id, sys: u.sys.id, idx: i, rank: L.rank, doneBefore: u.done } });
 }
 
@@ -35,9 +38,9 @@ function step(u: Unit, L: Lesson, i: number) {
   const inner = cur ? `<img src="${pieceSrc('p')}" alt="">` : last ? `<img class="${u.promoted ? '' : 'qghost'}" src="${pieceSrc('q')}" alt="">` : L.state === 'lock' ? '' : icon('check');
   const label = L.state === 'crack' ? '<small class="rev">À revoir</small>' : '';
   return `<div class="prow${cur ? ' iscur' : ''}${last ? ' isgoal' : ''}">
-    <button class="psq ${L.state}${last ? ' goal' : ''}${last && u.promoted ? ' won' : ''}" style="left:${x}%" data-i="${i}" ${L.state === 'lock' ? 'disabled' : ''} aria-label="Case ${L.rank}, ${L.state === 'lock' ? 'verrouillée' : cur ? 'à jouer' : L.state === 'crack' ? 'à revoir' : 'réussie'}">${inner}${L.state === 'crack' ? '<i class="dot"></i>' : ''}</button>
+    <button class="psq ${L.state}${last ? ' goal' : ''}${last && u.promoted ? ' won' : ''}" style="left:${x}%" data-i="${i}" ${L.state === 'lock' ? 'disabled' : ''} aria-label="Case ${i + 1} sur ${u.lessons.length}, ${L.state === 'lock' ? 'verrouillée' : cur ? 'à jouer' : L.state === 'crack' ? 'à revoir' : 'réussie'}">${inner}${L.state === 'crack' ? '<i class="dot"></i>' : ''}</button>
     <span class="plab" style="left:${x}%">${label}</span>
-    ${cur ? `<div class="pbubble" style="--x:${x}%"><b>Case ${L.rank} : ${plural(L.ids.length, 'ligne')}</b><small>${esc(BR[L.ids[0]].br.titre)}${L.ids.length > 1 ? ', …' : ''}</small><button class="btn pri" data-go="${i}">Avancer</button></div>` : ''}</div>`;
+    ${cur ? `<div class="pbubble" style="--x:${x}%"><b>Case ${i + 1} : ${plural(L.ids.length, 'ligne')}</b><small>${esc(lineTitle(BR[L.ids[0]].br.titre))}${L.ids.length > 1 ? ', …' : ''}</small><button class="btn pri" data-go="${i}">Avancer</button></div>` : ''}</div>`;
 }
 
 function section(u: Unit, k: number, open: boolean) {
@@ -57,9 +60,11 @@ export function viewPath(root: HTMLElement) {
   const units = unitsOf(bloc, store.state.br, meet);
   const open = units.find(x => x.sys.id === unitPick[bloc.id]) ?? units.find(x => !x.promoted) ?? units[0];
   const days = streak(trainingDays());
+  const devs = recentDeviations(store.games, store.state.fixed, BR).filter(g => BR[refBranch(g, BR)!]?.bloc.id === bloc.id).slice(0, 3);
   root.innerHTML = `
     <header class="phead"><label class="pbloc"><span class="sr">Bloc</span><select id="selBloc">${blocs.map(b => `<option value="${b.id}" ${b === bloc ? 'selected' : ''}>${esc(b.titre)}</option>`).join('')}</select></label>
       ${days ? `<span class="pstreak">${days > 1 ? `${days} jours de suite` : '1 jour'}</span>` : ''}</header>
+    ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
     <div class="pboard">${units.map((u, k) => section(u, k, u === open)).join('')}</div>
     <a class="quiet" href="#/rep/tout">Toutes les lignes du répertoire</a>`;
   $<HTMLSelectElement>('#selBloc', root).onchange = e => { setBloc((e.target as HTMLSelectElement).value); viewPath(root); };
@@ -67,6 +72,14 @@ export function viewPath(root: HTMLElement) {
   root.querySelectorAll<HTMLButtonElement>('.psq:not([disabled]), [data-go]').forEach(b => b.onclick = () => startLesson(open, +(b.dataset.i ?? b.dataset.go!)));
   // après le retour en haut de page fait par le routeur : on amène le pion au milieu de l'écran
   requestAnimationFrame(() => root.querySelector('.iscur')?.scrollIntoView({ block: 'center' }));
+}
+
+/** Une ligne quittée en partie : contre qui, ce que tu as joué, ce que dit ta ligne. Mène au drill de cette ligne. */
+export function devRow(g: import('../core/types').Game) {
+  const id = refBranch(g, BR)!, exp = (g.a.expected || []).map(e => e.san).slice(0, 2);
+  const when = new Date(g.t * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+  return `<a class="rowi" href="${lineUrl(id, 'drill', g.id)}"><span class="body"><b>${esc(lineTitle(BR[id].br.titre))}</b>
+    <small>Contre ${esc(g.opp)}, ${when} : tu as joué <span class="mv no">${esc(g.a.played ?? '')}</span>${exp.length ? `, ta ligne dit ${exp.map(x => `<span class="mv yes">${esc(x)}</span>`).join(' ou ')}` : ''}</small></span>${icon('chev', 'chev')}</a>`;
 }
 
 /** Ce que la carte « Tes ouvertures » de S'entraîner affiche : l'ouverture en cours et où en est son pion. */

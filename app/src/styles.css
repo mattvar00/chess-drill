@@ -819,3 +819,51 @@ button.quiet{border:0;background:none;width:100%}
 .psq.lock:not(.goal){background:#1C2A43;box-shadow:0 5px 0 #111B2E}
 .psq.cur{box-shadow:0 6px 0 #9FB0C9,0 0 0 6px var(--accent-text),0 0 0 14px rgba(247,225,26,.15)}
 .phead .pstreak{margin-left:auto}
+
+/* ---------- parcours simplifié (nov. 2026) ---------- */
+/* Couleur jouée : un petit pion blanc ou noir, plus une case à cocher */
+.chip,.stm{width:18px;height:20px;border-radius:0;box-shadow:none;background:center/contain no-repeat;display:inline-block}
+.chip.w,.stm.w{background-color:transparent;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 26'%3E%3Ccircle cx='12' cy='7' r='4' fill='%23fff' stroke='%23798aa6' stroke-width='1.5'/%3E%3Cpath d='M8.6 21.5 9.8 13.2a4.4 4.4 0 0 1 4.4 0l1.2 8.3z' fill='%23fff' stroke='%23798aa6' stroke-width='1.5' stroke-linejoin='round'/%3E%3Crect x='5.5' y='20.5' width='13' height='3.5' rx='1.2' fill='%23fff' stroke='%23798aa6' stroke-width='1.5'/%3E%3C/svg%3E")}
+.chip.b,.stm.b{background-color:transparent;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 26'%3E%3Ccircle cx='12' cy='7' r='4' fill='%23151a24' stroke='%23798aa6' stroke-width='1.5'/%3E%3Cpath d='M8.6 21.5 9.8 13.2a4.4 4.4 0 0 1 4.4 0l1.2 8.3z' fill='%23151a24' stroke='%23798aa6' stroke-width='1.5' stroke-linejoin='round'/%3E%3Crect x='5.5' y='20.5' width='13' height='3.5' rx='1.2' fill='%23151a24' stroke='%23798aa6' stroke-width='1.5'/%3E%3C/svg%3E")}
+.stm{vertical-align:-3px;margin-right:6px}
+
+/* S'entraîner : trois portes */
+.door .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.due.bad{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--bad)}
+
+/* Page d'une ouverture */
+.progcard{display:flex;flex-direction:column;gap:12px}
+.pchead{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+.pchead b{font:700 20px/1.2 var(--f-title)}
+.pchead span{font-size:13px;color:var(--c-mute)}
+.pcells{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(0,1fr);gap:4px}
+.pcells i{height:6px;border-radius:3px;background:var(--line)}
+.pcells i.done{background:var(--accent)}.pcells i.crack{background:var(--bad)}
+.pcells i.cur{background:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.pnote{font-size:13px;line-height:1.45;color:var(--c-mute)}
+.grp.fix>h2{color:var(--c-bad)}
+.grp .quiet{margin-top:0}
+.links2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.links2 .lk{display:flex;flex-direction:column;gap:2px;padding:14px;color:inherit;min-height:44px}
+.links2 .lk b{font-size:15px}.links2 .lk small{font-size:13px;color:var(--c-mute)}
+
+/* Fautes : cycles par type et par ouverture */
+.fchips{display:flex;flex-wrap:wrap;gap:8px}
+.fchip{display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:inherit;font:500 14px var(--f-text);cursor:pointer}
+.fchip b{color:var(--accent-text);font-weight:700}
+
+/* Exercice : Indice et Solution, Passer en simple lien */
+.actions.duo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.actions.duo .quiet{grid-column:1/-1;margin-top:-4px}
+
+/* Progrès : fautes fréquentes, chacune se rejoue */
+.flist{padding:14px 0 4px}
+.flist h2{padding:0 14px 6px}
+.flist .rowi{min-height:52px}
+.flist .rowi .prog{margin-top:6px}
+.flist .dim{font-weight:600}
+.flist .go{flex:none;font-size:13px;font-weight:600;color:var(--accent-text)}
+.pcard-miss{font-size:13px;line-height:1.4}
+/* la bande du chemin porte aussi la classe « mini » : elle ne doit pas prendre la taille ni le placement d'un mini-échiquier */
+.feat .estrip.mini{width:auto;height:auto;display:flex}
+.estrip.mini .ecell{position:relative}.estrip.mini .ecell img{position:static;inset:auto}

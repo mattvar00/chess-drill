@@ -2,7 +2,12 @@
 import { Chess, tryMove, uciOf, uciToObj, type Move } from '../core/chess';
 import type { Fault } from '../core/analysis';
 import { schedulePos } from '../core/schedule';
-import { costliestFaults, duePositions, fmtTime, matPhrase, priorityFaults, themeHint } from '../core/wood';
+import { costliestFaults, duePositions, fmtTime, matPhrase, priorityFaults, themeCounts, themeHint, themeLabel } from '../core/wood';
+import { refBranch } from '../core/drill';
+import { STRUCT } from '../core/structures';
+import { structureStats } from '../core/stats';
+import { BR } from './store';
+import { shortName } from './path';
 import { balance, puzzleLine, type PuzzleLine } from '../core/puzzle';
 import { matPhrase as matText } from '../core/review';
 import { Board, miniBoard } from '../ui/board';
@@ -25,27 +30,51 @@ export function startCycle(label: string, faults: Fault[], back = '#/wood', plan
 export const startPriority = () => startCycle('Positions prioritaires', priorityFaults(store.faults, store.state.fault, 10));
 
 const row = (id: string, ic: string, title: string, sub: string) => `<button class="rowi" id="${id}"><span class="ico">${icon(ic)}</span><span class="body"><b>${title}</b><small>${sub}</small></span>${icon('chev', 'chev')}</button>`;
-export function viewWood(root: HTMLElement) {
-  const all = store.faults, cur = woodCur(), hist = woodHistory(), due = duePositions(all, store.state.fault);
+/** L'ouverture de la partie d'où vient une faute (d'après la ligne du répertoire suivie le plus longtemps). */
+function sysOfFault(): (f: Fault) => string | null {
+  const games = new Map(store.games.map(g => [g.id, g]));
+  return f => { const g = games.get(f.game), id = g ? refBranch(g, BR) : null; return id && BR[id].sys.statut !== 'plan' ? BR[id].sys.id : null; };
+}
+const sysName = (id: string) => shortName(Object.values(BR).find(r => r.sys.id === id)?.sys.titre ?? id);
+/** Un sous-ensemble du stock, choisi depuis une autre page : une ouverture (`o`), un type de faute (`t`) ou une structure de pions (`s`). */
+function filtered(q: URLSearchParams): { label: string; faults: Fault[] } | null {
+  const all = store.faults;
+  if (q.get('o')) { const o = q.get('o')!, of = sysOfFault(); return { label: `Fautes : ${sysName(o)}`, faults: all.filter(f => of(f) === o) }; }
+  if (q.get('t')) { const t = q.get('t')!; return { label: themeLabel(t), faults: all.filter(f => f.theme === t) }; }
+  if (q.get('s')) { const s = q.get('s')!, S = STRUCT[s], ids = new Set((structureStats(store.games.filter(g => g.st && g.wp)) [s]?.games ?? []).map(g => g.id));
+    return S ? { label: `Fautes : ${S.name}`, faults: all.filter(f => ids.has(f.game)) } : null; }
+  return null;
+}
+/** Un cycle : les positions les plus utiles d'abord, au plus 10. */
+const cycleOf = (faults: Fault[]) => priorityFaults(faults, store.state.fault, Math.min(10, faults.length));
+
+export function viewWood(root: HTMLElement, q = new URLSearchParams()) {
+  const all = store.faults, cur = woodCur(), hist = woodHistory().filter(c => c.solved > 0 || c.time >= 5000), due = duePositions(all, store.state.fault);
   if (!all.length) {
     root.innerHTML = `<section class="empty"><p>Tes fautes apparaissent ici dès que tes parties sont analysées, chaque nuit.</p></section>`; return;
   }
+  const here = location.hash, F = filtered(q);
   const month = costliestFaults(all, 30, 30), n = Math.min(10, all.length), prio = priorityFaults(all, store.state.fault, n);
-  const shown = (cur && byId().get(cur.ids[cur.i])) || prio[0];
+  const of = sysOfFault(), bySys: Record<string, number> = {}; for (const f of all) { const s = of(f); if (s) bySys[s] = (bySys[s] || 0) + 1; }
+  const themes = themeCounts(all).slice(0, 6), opens = Object.entries(bySys).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const pick = F ? cycleOf(F.faults) : [], shown = (F && pick[0]) || (cur && byId().get(cur.ids[cur.i])) || prio[0];
+  const hero = F
+    ? `<p class="label">Cycle choisi</p><h2>${esc(F.label)}</h2><p>${F.faults.length ? `${plural(pick.length, 'position')}${F.faults.length > pick.length ? ` sur ${F.faults.length}` : ''}, les plus utiles d'abord.` : 'Aucune position pour l\'instant.'}</p>`
+    : cur ? `<p class="label">Cycle en cours</p><h2>${esc(cur.label)}</h2><p>Position ${Math.min(cur.i + 1, cur.ids.length)} sur ${cur.ids.length}, ${fmtTime(cur.elapsed)} au compteur</p>`
+    : `<p class="label">Cycle conseillé</p><h2>${plural(n, 'position prioritaire', 'positions prioritaires')}</h2><p>Celles à revoir, puis les plus coûteuses et les plus récentes.</p>`;
+  const chip = (key: string, label: string, k: number) => `<button type="button" class="fchip" data-c="${esc(key)}">${esc(label)} <b>${k}</b></button>`;
   root.innerHTML = `
     <header class="pagehead">
       <div class="sumrow"><p>${plural(all.length, 'position tirée', 'positions tirées')} de tes parties</p>${due ? `<p class="duetxt">${due} à revoir</p>` : ''}</div></header>
     <section class="surf today">
-      <div class="today-top">
-        <div class="today-text">${cur
-          ? `<p class="label">Cycle en cours</p><h2>${esc(cur.label)}</h2><p>Position ${Math.min(cur.i + 1, cur.ids.length)} sur ${cur.ids.length}, ${fmtTime(cur.elapsed)} au compteur</p>`
-          : `<p class="label">Cycle conseillé</p><h2>${plural(n, 'position prioritaire', 'positions prioritaires')}</h2><p>Celles à revoir, puis les plus coûteuses et les plus récentes.</p>`}</div>
-        ${miniBoard(new Chess(shown.fen), shown.side)}
-      </div>
-      <button class="btn pri block" id="${cur ? 'bResume' : 'bPrio'}">${cur ? 'Reprendre le cycle' : 'Commencer le cycle'}</button>
+      <div class="today-top"><div class="today-text">${hero}</div>${shown ? miniBoard(new Chess(shown.fen), shown.side) : ''}</div>
+      ${F ? (pick.length ? '<button class="btn pri block" id="bPick">Commencer le cycle</button>' : '') : `<button class="btn pri block" id="${cur ? 'bResume' : 'bPrio'}">${cur ? 'Reprendre le cycle' : 'Commencer le cycle'}</button>`}
     </section>
-    <section class="grp"><h2>${cur ? 'Lancer un autre cycle' : 'Autres cycles'}</h2><div class="surf card list">
-      ${cur ? row('bPrio', 'target', plural(n, 'position prioritaire', 'positions prioritaires'), 'Celles à revoir, puis les plus coûteuses et les plus récentes') : ''}
+    ${F ? '<a class="quiet" href="#/wood">Voir tous les cycles</a>' : ''}
+    ${themes.length ? `<section class="grp"><h2>Par type de faute</h2><div class="fchips">${themes.map(([t, k]) => chip('t:' + t, themeLabel(t), k)).join('')}</div></section>` : ''}
+    ${opens.length ? `<section class="grp"><h2>Par ouverture</h2><div class="fchips">${opens.map(([o, k]) => chip('o:' + o, sysName(o), k)).join('')}</div></section>` : ''}
+    <section class="grp"><h2>Autres cycles</h2><div class="surf card list">
+      ${cur || F ? row('bPrio', 'target', plural(n, 'position prioritaire', 'positions prioritaires'), 'Celles à revoir, puis les plus coûteuses et les plus récentes') : ''}
       ${month.length ? row('bMonth', 'calendar', 'Fautes du mois', `Les ${month.length > 1 ? month.length + ' plus coûteuses' : 'plus coûteuse'} des 30 derniers jours`) : ''}
       ${row('bAll', 'stack', 'Tout le stock', plural(all.length, 'position'))}
     </div></section>
@@ -53,9 +82,14 @@ export function viewWood(root: HTMLElement) {
       `<tr><td>${new Date(c.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</td><td>${esc(c.label)}</td><td>${c.solved}/${c.n}</td><td>${fmtTime(c.time)}</td></tr>`).join('')}</tbody></table></div></section>` : ''}
     <p class="foot">Chaque position vient d'un coup qui t'a coûté au moins 15 points de chances de gain. Refais le même cycle jusqu'à le résoudre vite et sans faute.</p>`;
   $('#bResume', root)?.addEventListener('click', () => { location.hash = GO; });
-  $('#bPrio', root).addEventListener('click', startPriority);
+  $('#bPick', root)?.addEventListener('click', () => startCycle(F!.label, pick, here));
+  $('#bPrio', root)?.addEventListener('click', startPriority);
   $('#bMonth', root)?.addEventListener('click', () => startCycle('Fautes du mois', month));
   $('#bAll', root).addEventListener('click', () => startCycle('Tout le stock', all));
+  root.querySelectorAll<HTMLButtonElement>('[data-c]').forEach(b => b.addEventListener('click', () => {
+    const [k, v] = b.dataset.c!.split(/:(.*)/s), f = filtered(new URLSearchParams({ [k]: v }))!;
+    startCycle(f.label, cycleOf(f.faults), here);
+  }));
 }
 
 /**
@@ -97,11 +131,11 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     board.set(game, F.side); sub();
     meta.innerHTML = `Contre <b>${esc(F.opp)}</b>, ${esc(F.date.split('.').reverse().join('/'))}, coup ${F.move_no}`;
     coach.innerHTML = `<p class="lead"><i class="stm ${F.side}"></i>Aux ${F.side === 'w' ? 'Blancs' : 'Noirs'} de jouer</p><p class="why">${mine() > 1 ? `Trouve le meilleur coup et joue la suite jusqu'au gain : ${mine()} coups.` : 'Trouve le meilleur coup.'} ${esc(F.phase.charAt(0).toUpperCase() + F.phase.slice(1))}, ${matPhrase(F.mat)}. ${esc(themeHint(F.theme))}</p>`;
-    actions.className = 'actions trio';
-    actions.innerHTML = `<button class="btn" id="bHint">${icon('bulb')}Indice</button><button class="btn" id="bSol">Solution</button><button class="btn" id="bSkip">Passer</button>`;
+    actions.className = 'actions duo';
+    actions.innerHTML = `<button class="btn" id="bHint">${icon('bulb')}Indice</button><button class="btn" id="bSol">Solution</button><button class="quiet" id="bSkip">Passer cette position</button>`;
     $('#bHint', actions).onclick = () => { hintLevel++; const u = expected(); board.hint(hintLevel >= 2 ? [u.slice(0, 2), u.slice(2, 4)] : [u.slice(0, 2)]); };
     $('#bSol', actions).onclick = () => reveal(false); $('#bSkip', actions).onclick = next;
-    if (one) { $('#bSkip', actions).remove(); actions.className = 'actions'; }
+    if (one) $('#bSkip', actions).remove();
   }
   function explain(found: boolean) {
     const p = F.played, clean = found && tries === 1 && !hintLevel;
@@ -132,6 +166,7 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     board.set(game, F.side, last, true); if (last && found) board.flash(last.to, 'good');
     store.state.fault[F.id] = schedulePos(store.state.fault[F.id], !found ? 'fail' : tries === 1 && !hintLevel ? 'good' : 'ok', tries);
     if (found && tries === 1 && !hintLevel) cyc.solved++;
+    cyc.tried = (cyc.tried ?? 0) + 1;
     markActive(); hold(); explain(found);
   }
   function attempt(m: Move) {
@@ -158,9 +193,11 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     ended = true; cyc.elapsed = cyc.elapsed + Date.now() - since; SFX.done();
     const done = { date: Date.now(), time: cyc.elapsed, solved: cyc.solved, n: cyc.ids.length, label: cyc.label };
     const prev = [...woodHistory()].reverse().find(c => c.label === done.label && c.n === done.n);
-    store.state.wood = [...woodHistory(), done]; store.state.woodCur = undefined; save(); syncSoon();
+    // un cycle où tout a été passé n'est pas un cycle fait : on ne l'inscrit pas dans l'historique
+    const counted = !!cyc.tried;
+    store.state.wood = counted ? [...woodHistory(), done] : woodHistory(); store.state.woodCur = undefined; save(); syncSoon();
     header('Cycle terminé', done.label); XS.destroy();
-    root.innerHTML = `<div class="endwrap"><section class="endcard"><h1>${done.solved}/${done.n} du premier coup</h1><p>En ${fmtTime(done.time)}${prev ? `. La fois précédente : ${prev.solved}/${prev.n} en ${fmtTime(prev.time)}` : ''}.</p>
+    root.innerHTML = `<div class="endwrap"><section class="endcard">${counted ? `<h1>${done.solved}/${done.n} du premier coup</h1><p>En ${fmtTime(done.time)}${prev ? `. La fois précédente : ${prev.solved}/${prev.n} en ${fmtTime(prev.time)}` : ''}.</p>` : '<h1>Cycle passé</h1><p>Aucune position jouée : ce cycle ne compte pas dans ton historique.</p>'}
       <div class="row">${cyc.plan ? `<a class="btn pri" href="${cyc.back ?? '#/'}">Continuer le plan du jour</a><button class="btn" id="bAgain">Refaire</button>` : `<button class="btn pri" id="bAgain">Refaire ce cycle</button><a class="btn" href="${cyc.back ?? '#/wood'}">Retour</a>`}</div></section></div>`;
     if (cyc.plan) markPlan('tac');
     $('#bAgain', root).onclick = () => startCycle(done.label, cyc.ids.map(id => faults.get(id)).filter((f): f is Fault => !!f), cyc.back, cyc.plan);

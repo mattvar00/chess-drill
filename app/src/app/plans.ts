@@ -8,18 +8,21 @@ import { PLANS, planBranch, store, type Plan } from './store';
 import { lineUrl } from './session';
 import { gameRow, gameUrl } from './games';
 import { explorerSlot } from './explorer';
-import { startCycle } from './wood';
 
 const chev = icon('chev', 'chev');
-const planRow = (P: Plan) => `<a class="rowi" href="#/plan/${P.id}"><span class="chip ${P.side}"></span><span class="body"><b>${esc(P.title)}</b><small>${esc(P.sub)}, ${plural(P.steps.length, 'étape')}</small></span>${(store.state.planDone as Record<string, unknown> | undefined)?.[P.id] ? icon('check', 'tick') : ''}${chev}</a>`;
+const planRow = (P: Plan) => `<a class="rowi" href="#/plan/${P.id}"><span class="chip ${P.side}" role="img" aria-label="${P.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(P.title)}</b><small>${esc(P.sub)}, ${plural(P.steps.length, 'étape')}</small></span>${(store.state.planDone as Record<string, unknown> | undefined)?.[P.id] ? icon('check', 'tick') : ''}${chev}</a>`;
 export const planTitle = (id: string) => PLANS.find(p => p.id === id)?.title ?? 'Plan';
 
-/* ---------- liste des plans animés ---------- */
-export function viewPlans(root: HTMLElement, ids?: string[]) {
-  const list = ids ? PLANS.filter(p => ids.includes(p.id)) : PLANS, cats = [...new Set(list.map(p => p.cat))];
-  root.innerHTML = `<p class="intro">Chaque animation montre le plan type d'une ouverture : les ruptures, les cases clés, les pièces à échanger. Tu rejoues d'abord la ligne, puis le plan se déroule étape par étape.</p>
+/* ---------- Plans : tes structures de pions, puis les plans animés par ouverture ---------- */
+/** `o` : seulement les plans d'une ouverture (depuis la page de cette ouverture). */
+export function viewPlans(root: HTMLElement, q = new URLSearchParams()) {
+  const o = q.get('o'), list = o ? PLANS.filter(p => p.sys.includes(o)) : PLANS, cats = [...new Set(list.map(p => p.cat))];
+  const S = o ? {} : structureStats(analysed()), mine = Object.entries(S).sort((a, b) => b[1].n - a[1].n);
+  root.innerHTML = `<p class="intro">${o ? 'Les plans types de cette ouverture : tu rejoues la ligne, puis le plan se déroule étape par étape.' : "Quoi faire une fois l'ouverture jouée. Les plans viennent de la structure de pions : d'abord les tiennes, tirées de tes parties, puis les plans animés de chaque ouverture."}</p>
+    ${mine.length ? `<section class="grp"><h2>Tes structures de pions</h2><div class="surf card list">${mine.slice(0, 5).map(([id, x]) => structRow(STRUCT[id], x)).join('')}
+      <a class="rowi more" href="#/structures">Toutes les structures</a></div></section>` : ''}
     ${cats.map(c => `<section class="grp"><h2>${esc(c)}</h2><div class="surf card list">${list.filter(p => p.cat === c).map(planRow).join('')}</div></section>`).join('')}
-    <div class="surf card list"><a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>Plans par structure de pions</b><small>Tes structures, ton score dans chacune, et tes fautes à y rejouer</small></span>${chev}</a></div>`;
+    ${o ? '<a class="quiet" href="#/plans">Tous les plans</a>' : ''}`;
 }
 
 /* ---------- un plan animé ---------- */
@@ -28,7 +31,7 @@ function positionAt(P: Plan, ply: number): { game: Chess; last: Move | null } {
 }
 
 export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): () => void {
-  const P = PLANS.find(x => x.id === id); if (!P) { root.innerHTML = '<section class="empty"><p>Ce plan n\'existe plus.</p><a class="btn" href="#/plans">Tous les plans</a></section>'; return () => { /* rien */ }; }
+  const P = PLANS.find(x => x.id === id); if (!P) { root.innerHTML = '<section class="empty"><p>Ce plan n\'existe plus.</p><a class="btn" href="#/plans">Plans</a></section>'; return () => { /* rien */ }; }
   const done = (store.state.planDone as Record<string, { errs: number }> | undefined)?.[P.id];
   if (!skipIntro && !done) {
     const lastPly = P.steps[P.steps.length - 1].p, mine = Math.ceil((P.side === 'w' ? lastPly : lastPly - 1) / 2), { game } = positionAt(P, P.steps[0].p);
@@ -111,13 +114,12 @@ export function mountStruct(root: HTMLElement, id: string): () => void {
     <p class="meta">${ex ? `Position de ta partie contre <b>${esc(ex.opp)}</b>, coup 12. ` : ''}Cases clés : ${esc(s.key)}.</p>
     ${o ? `<div class="surf card stats"><div><b>${o.n}</b><span>${o.n > 1 ? 'parties' : 'partie'}</span></div><div><b>${o.score} %</b><span>de score</span></div><div><b>${Math.round(o.errMe)} / ${Math.round(o.errOp)} %</b><span>coups ratés, toi / eux</span></div></div>` : ''}
     ${o && o.n >= 3 ? `<p class="insight">${o.delta <= -5 ? `Dans cette structure, tu perds en moyenne ${-o.delta} points de chances entre les coups 8 et 20.` : o.delta >= 5 ? `Dans cette structure, tu gagnes en moyenne ${o.delta} points de chances entre les coups 8 et 20.` : 'Tes chances restent stables entre les coups 8 et 20.'}</p>` : ''}
-    ${faults.length ? `<button class="btn pri block" id="bStFaults">${icon('target')}Rejouer tes ${plural(faults.length, 'faute')} dans cette structure</button>` : ''}
+    ${faults.length ? `<a class="btn block" href="#/wood?s=${id}&r=${encodeURIComponent('#/structure/' + id)}">${icon('target')}Tes ${plural(faults.length, 'faute')} dans cette structure</a>` : ''}
     ${plan(side)}${plan(side === 'w' ? 'b' : 'w')}
     ${anims.length ? `<section class="grp"><h2>Plans animés</h2><div class="surf card list">${anims.map(a => planRow(PLANS.find(p => p.id === a)!)).join('')}</div></section>` : ''}
     ${games.length ? `<section class="grp"><h2>Tes parties dans cette structure</h2><div class="surf card list">${games.slice(0, 15).map(g => gameRow(g, `#/structure/${id}`).replace(gameUrl(g.id, undefined, `#/structure/${id}`), gameUrl(g.id, gameStructure(g.sans)?.ply, `#/structure/${id}`))).join('')}</div></section>` : ''}
     <p class="foot">Coups ratés : part des coups 9 à 25 qui font perdre au moins 10 points de chances de gain.</p>
   ${st ? '</div></div></div>' : '</div></div>'}`;
-  root.querySelector('#bStFaults')?.addEventListener('click', () => startCycle(s.name, faults));
   let board: Board | null = null, XS: ReturnType<typeof explorerSlot> | null = null;
   if (st && ex) {
     const b = board = new Board($('#board', root), { movable: () => XS?.active()?.movable() ?? null, onMove: m => XS?.active()?.onMove(m) });

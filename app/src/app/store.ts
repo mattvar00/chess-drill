@@ -26,7 +26,7 @@ for (const P of PLANS) {
 export const plansFor = (sysId: string) => PLANS.filter(p => p.sys.includes(sysId));
 
 /** Cycle Woodpecker en cours (repris après une fermeture de l'app) et cycles terminés. */
-export interface WoodCur { ids: string[]; i: number; solved: number; elapsed: number; label: string; back?: string; plan?: boolean }
+export interface WoodCur { ids: string[]; i: number; solved: number; elapsed: number; label: string; back?: string; plan?: boolean; tried?: number }
 export interface WoodCycle { date: number; time: number; solved: number; n: number; label: string }
 export const store = { state: emptyState() as AppState, games: [] as Game[], faults: [] as Fault[], devs: {} as Record<string, number> };
 export const woodHistory = () => ((store.state.wood ?? []) as WoodCycle[]).filter(c => c && typeof c.date === 'number' && typeof c.time === 'number');

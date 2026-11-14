@@ -12,6 +12,8 @@ import { BR, store } from './store';
 import { fullGame } from './api';
 import { lineUrl } from './session';
 import { refBranch } from '../core/drill';
+import { themeLabel } from '../core/wood';
+import { lineTitle } from '../core/names';
 import { explorerSlot } from './explorer';
 
 const chev = icon('chev', 'chev');
@@ -22,7 +24,7 @@ const num = (i: number) => `${Math.floor(i / 2) + 1}${i % 2 ? '…' : '.'}`;
 export const gameUrl = (id: string, ply?: number, back?: string) => `#/partie/${encodeURIComponent(id)}${ply != null || back ? '?' + new URLSearchParams({ ...(ply != null ? { i: String(ply) } : {}), ...(back ? { r: back } : {}) }) : ''}`;
 
 /* ---------- onglet Parties ---------- */
-let period = 30, cadence = 'all', shown = 30;
+let period = 90, cadence = 'all', shown = 30;
 const PERIODS = [[7, '7 jours'], [30, '30 jours'], [90, '90 jours']] as const;
 const bar = (v: number | null, max = 100) => `<span class="prog"><b style="width:${v == null ? 0 : Math.max(0, Math.min(100, Math.round((100 * v) / max)))}%"></b></span>`;
 const axis = (title: string, big: string, label: string, v: number | null, sub: string, max = 100) =>
@@ -31,7 +33,7 @@ const axis = (title: string, big: string, label: string, v: number | null, sub: 
 /** Parties de la période et de la cadence choisies, les plus récentes d'abord. */
 const inScope = () => { const cut = period ? Date.now() / 1000 - period * 86400 : 0; return store.games.filter(g => g.t >= cut && !store.state.ignored[g.id] && (cadence === 'all' || g.tc === cadence)).sort((a, b) => b.t - a.t); };
 export function gameRow(g: Game, back?: string) {
-  return `<a class="rowi" href="${gameUrl(g.id, undefined, back)}"><span class="chip ${g.color}" title="${g.color === 'w' ? 'Blancs' : 'Noirs'}"></span>
+  return `<a class="rowi" href="${gameUrl(g.id, undefined, back)}"><span class="chip ${g.color}" role="img" aria-label="${g.color === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span>
     <span class="body"><b>${esc(g.opp)} <span class="dim">${g.oppElo || ''}</span></b><small>${[ecoName(g.eco), day(g.t), TC[g.tc] ?? g.tc].filter(Boolean).map(esc).join(', ')}</small></span>
     ${g.st?.acc != null ? `<span class="acc" title="Ta précision">${g.st.acc}</span>` : ''}<span class="res res-${g.res}">${RES[g.res]}</span>${chev}</a>`;
 }
@@ -95,7 +97,7 @@ export function viewGames(root: HTMLElement) {
     pair(played > 0 && half('Tes 4 dernières semaines', plural(played, 'jour joué', 'jours joués'), `<div class="heat" role="img" aria-label="Parties par jour sur 28 jours, jusqu'à ${top} en une journée">${D.map(x => `<i${x.n ? ` style="--v:${Math.max(0.25, x.n / top).toFixed(2)}"` : ''}></i>`).join('')}</div>`, `Jusqu'à ${plural(top, 'partie')} en une journée`),
       cs && half('Début de session', `${cs.first} %`, `<div class="bars3" role="img" aria-label="${cs.first} % de victoires sur les 3 premières parties, ${cs.rest} % ensuite"><i class="${cs.first < cs.rest ? 'lo' : ''}" style="height:${cs.first}%"></i><i style="height:${cs.rest}%"></i></div>`, `de victoires sur tes 3 premières parties, ${cs.rest} % ensuite`)),
     mo.length >= 2 ? `<section class="surf card padded tile"><h2>Victoires selon le moment de la journée</h2><div class="cols" style="--n:${mo.length}">${mo.map(x => `<div class="${x === best ? 'best' : ''}"><b>${x.pct} %</b><span class="colbar"><i style="height:${x.pct}%"></i></span><span>${x.label}</span><small>${plural(x.n, 'partie')}</small></div>`).join('')}</div></section>` : '',
-    th.length ? `<section class="surf card padded tile"><h2>Tes fautes les plus fréquentes</h2><div class="phases faults">${th.map(([k, v]) => `<span>${esc(THEME_LABEL[k] ?? k)}</span><span class="prog"><b style="width:${Math.round((100 * v) / thMax)}%"></b></span><b>${v}</b>`).join('')}</div></section>` : '',
+    th.length ? `<section class="surf card tile flist"><h2>Tes fautes les plus fréquentes</h2><div class="list">${th.map(([k, v]) => `<a class="rowi" href="#/wood?t=${encodeURIComponent(k)}&r=${encodeURIComponent('#/progres')}"><span class="body"><b>${esc(themeLabel(k))}</b><span class="prog"><b style="width:${Math.round((100 * v) / thMax)}%"></b></span></span><span class="dim">${v}</span><span class="go">Rejouer</span></a>`).join('')}</div></section>` : '',
   ];
   root.innerHTML = `
     <header class="pagehead"><h1>Progrès</h1><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
@@ -105,11 +107,12 @@ export function viewGames(root: HTMLElement) {
     ${card.overall != null ? `<a class="pcard" href="#/profil" aria-label="Ta carte joueur. Voir le détail">
       <div class="pcard-top"><div class="pcard-id"><b>${esc(String(store.state.settings.user || ''))}</b><span>${esc(card.type)}${card.best && card.worst ? ` : fort sur ${article(card.best)}, à travailler sur ${article(card.worst)}` : ''}</span></div>
         <div class="pcard-elo">${elo.slice(0, 2).map(([tc, p], k) => `<span class="${k ? 'out' : ''}">${TC[tc] ?? tc} ${p[p.length - 1].e}</span>`).join('')}</div></div>
-      <div class="pcard-grid">${AXES.map(([k, l]) => `<div><b>${card.scores[k] ?? '–'}</b><span>${l}</span></div>`).join('')}</div>
+      <div class="pcard-grid">${AXES.filter(([k]) => card.scores[k] != null).map(([k, l]) => `<div><b>${card.scores[k]}</b><span>${l}</span></div>`).join('')}</div>
+      ${AXES.some(([k]) => card.scores[k] == null) ? `<p class="pcard-miss"><b>${AXES.filter(([k]) => card.scores[k] == null).map(([, l]) => l).join(', ')}</b> : pas encore assez de parties sur la période.</p>` : ''}
       <span class="pcard-more">Voir le radar et le détail${icon('chev')}</span></a>` : ''}
     <div class="tiles">${tiles.join('')}</div>
     <div class="surf card list">
-      <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>${weak ? `À travailler : ${esc(STRUCT[weak[0]].name)}` : 'Tes structures de pions'}</b><small>${weak ? `${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires` : 'Leurs plans, ton score, et tes fautes à y rejouer'}</small></span>${chev}</a>
+      <a class="rowi" href="${weak ? `#/structure/${weak[0]}` : '#/plans'}"><span class="ico">${icon('pawn')}</span><span class="body"><b>${weak ? `À travailler : ${esc(STRUCT[weak[0]].name)}` : 'Tes structures de pions'}</b><small>${weak ? `${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires` : 'Leurs plans, ton score, et tes fautes à y rejouer'}</small></span>${chev}</a>
     </div>
     <section class="grp"><h2>Tes parties</h2><div class="surf card list" id="glist">${list.slice(0, shown).map(g => gameRow(g)).join('')}</div>
       ${list.length > shown ? `<button class="btn block" id="bMore">Afficher ${Math.min(30, list.length - shown)} parties de plus</button>` : ''}</section>`
@@ -120,8 +123,6 @@ export function viewGames(root: HTMLElement) {
   const more = root.querySelector<HTMLButtonElement>('#bMore'); if (more) more.onclick = () => { shown += 30; const y = scrollY; viewGames(root); scrollTo(0, y); };
 }
 const cap = (s: string) => s.replace(/^./, c => c.toUpperCase());
-/** Thèmes de faute dont le nom mérite d'être dit plus simplement. */
-const THEME_LABEL: Record<string, string> = { 'Coup calme': 'Bon coup tranquille manqué' };
 
 /** Détail de la carte joueur : le radar des six notes, puis chaque axe avec ce qui l'explique. */
 export function viewProfile(root: HTMLElement) {
@@ -140,9 +141,9 @@ export function viewProfile(root: HTMLElement) {
       </svg></section>
     <section class="grp"><h2>Axe par axe</h2><div class="surf card list axes">
       ${axis('Ouverture', String(card.scores.ouverture ?? '–'), facts.ouverture, card.scores.ouverture, `${plural(o.devs, 'sortie')}, ${plural(o.gaps, 'trou')}${o.wp10 != null ? `. Au coup 10, tu as en moyenne ${o.wp10} % de chances.` : '.'}`)}
-      ${t ? axis('Tactique', String(card.scores.tactique), facts.tactique, card.scores.tactique, `${String(t.mistakes).replace('.', ',')} erreur${t.mistakes >= 2 ? 's' : ''} par partie.${t.themes.length ? ` Fautes les plus fréquentes : ${t.themes.map(([k, v]) => `${k.toLowerCase()} (${v})`).join(', ')}.` : ''}`) : ''}
-      ${pr.conversion?.rate != null ? axis('Conversion', String(card.scores.conversion), facts.conversion, card.scores.conversion, `Sur ${plural(pr.conversion.n, 'partie')} où tu as eu au moins 80 % de chances à un moment.`) : ''}
-      ${pr.resilience?.rate != null ? axis('Résilience', String(card.scores.resilience), facts.resilience, card.scores.resilience, `Sur ${plural(pr.resilience.n, 'partie')} où tu es tombé à 20 % de chances ou moins. Entre 20 et 30 % sauvées, c'est habituel à ce niveau.`) : ''}
+      ${t && card.scores.tactique != null ? axis('Tactique', String(card.scores.tactique), facts.tactique, card.scores.tactique, `${String(t.mistakes).replace('.', ',')} erreur${t.mistakes >= 2 ? 's' : ''} par partie.${t.themes.length ? ` Fautes les plus fréquentes : ${t.themes.map(([k, v]) => `${k.toLowerCase()} (${v})`).join(', ')}.` : ''}`) : ''}
+      ${card.scores.conversion != null ? axis('Conversion', String(card.scores.conversion), facts.conversion, card.scores.conversion, `Sur ${plural(pr.conversion!.n, 'partie')} où tu as eu au moins 80 % de chances à un moment.`) : ''}
+      ${card.scores.resilience != null ? axis('Résilience', String(card.scores.resilience), facts.resilience, card.scores.resilience, `Sur ${plural(pr.resilience!.n, 'partie')} où tu es tombé à 20 % de chances ou moins. Entre 20 et 30 % sauvées, c'est habituel à ce niveau.`) : ''}
       ${card.scores.horloge != null ? axis('Horloge', String(card.scores.horloge), facts.horloge, card.scores.horloge, `${String(c.avgMove).replace('.', ',')} s par coup en moyenne.${c.fastBlunders != null ? ` ${c.fastBlunders} % de tes gaffes jouées en moins de 3 s, ${c.slowBlunders} % après 15 s ou plus.` : ''}${c.timeouts ? ` ${plural(c.timeouts, 'défaite')} au temps.` : ''}`) : ''}
       ${ti && card.scores.rythme != null ? axis('Rythme', String(card.scores.rythme), facts.rythme, card.scores.rythme, ti.afterTwoL ? `Après deux défaites d'affilée, tu gagnes ${ti.wrAfterTwoL} % des parties (${ti.afterTwoL}), contre ${pr.winRate} % en général.${ti.longSessions && ti.wrLongTail != null ? ` Au-delà de la 10ᵉ partie d'une session : ${ti.wrLongTail} %.` : ''}` : 'Pas encore de série de deux défaites.') : ''}
     </div></section>
@@ -188,7 +189,7 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
           <div class="counts">${counts.map(k => `<span class="cnt c-${k}"><i>${CLASS[k][1]}</i>${A.counts[k]} ${CLASS[k][0].toLowerCase()}</span>`).join('')}</div>
         </div></section>
         <div class="surf card list">
-          ${ref ? `<a class="rowi" href="${lineUrl(ref, 'drill', g.id)}"><span class="ico">${icon('book')}</span><span class="body"><b>Corriger la sortie de répertoire</b><small>Tu as joué ${esc(g.a.played ?? '')} dans ${esc(BR[ref].br.titre)}</small></span>${chev}</a>` : ''}
+          ${ref ? `<a class="rowi" href="${lineUrl(ref, 'drill', g.id)}"><span class="ico">${icon('book')}</span><span class="body"><b>Corriger la sortie de répertoire</b><small>Tu as joué ${esc(g.a.played ?? '')} dans « ${esc(lineTitle(BR[ref].br.titre))} »</small></span>${chev}</a>` : ''}
           ${st && STRUCT[st.id] ? `<a class="rowi" href="#/structure/${st.id}"><span class="ico">${icon('pawn')}</span><span class="body"><b>${esc(STRUCT[st.id].name)}</b><small>Structure de la partie au 12ᵉ coup : ses plans</small></span>${chev}</a>` : ''}
           ${g.url?.startsWith('http') ? `<a class="rowi" href="${esc(g.url)}" target="_blank" rel="noopener"><span class="ico">${icon('link')}</span><span class="body"><b>Voir sur chess.com</b></span>${chev}</a>` : ''}
         </div>
