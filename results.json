@@ -1,0 +1,234 @@
+{
+  "date": "2026-11-14T01:09:21.121Z",
+  "user": "matt_chess00",
+  "elo": 1702,
+  "depth": 11,
+  "multipv": 6,
+  "train": {
+    "games": 1500,
+    "moves": 50358,
+    "from": 1785426075,
+    "to": 1793404487
+  },
+  "test": {
+    "games": 100,
+    "moves": 3306,
+    "from": 1793522327,
+    "to": 1794590344
+  },
+  "bookCoverage": 15,
+  "inCandidates": 82,
+  "results": {
+    "moteur-fort": {
+      "tout": {
+        "n": 3306,
+        "top1": 39.3,
+        "top3": 68.8
+      },
+      "ouverture": {
+        "n": 999,
+        "top1": 38,
+        "top3": 74.2
+      },
+      "milieu": {
+        "n": 1370,
+        "top1": 40.6,
+        "top3": 65.2
+      },
+      "finale": {
+        "n": 937,
+        "top1": 38.8,
+        "top3": 68.4
+      },
+      "hors livre": {
+        "n": 2809,
+        "top1": 39.3,
+        "top3": 66.7
+      },
+      "rapide": {
+        "n": 2482,
+        "top1": 38.6,
+        "top3": 69
+      },
+      "blitz": {
+        "n": 824,
+        "top1": 41.6,
+        "top3": 68.2
+      }
+    },
+    "moteur-court": {
+      "tout": {
+        "n": 3306,
+        "top1": 36.7,
+        "top3": 36.7
+      },
+      "ouverture": {
+        "n": 999,
+        "top1": 29,
+        "top3": 29
+      },
+      "milieu": {
+        "n": 1370,
+        "top1": 38.8,
+        "top3": 38.8
+      },
+      "finale": {
+        "n": 937,
+        "top1": 41.8,
+        "top3": 41.8
+      },
+      "hors livre": {
+        "n": 2809,
+        "top1": 38.9,
+        "top3": 38.9
+      },
+      "rapide": {
+        "n": 2482,
+        "top1": 36.1,
+        "top3": 36.1
+      },
+      "blitz": {
+        "n": 824,
+        "top1": 38.6,
+        "top3": 38.6
+      }
+    },
+    "moteur-elo": {
+      "tout": {
+        "n": 3306,
+        "top1": 28.3,
+        "top3": 28.3
+      },
+      "ouverture": {
+        "n": 999,
+        "top1": 25.1,
+        "top3": 25.1
+      },
+      "milieu": {
+        "n": 1370,
+        "top1": 29.6,
+        "top3": 29.6
+      },
+      "finale": {
+        "n": 937,
+        "top1": 29.7,
+        "top3": 29.7
+      },
+      "hors livre": {
+        "n": 2809,
+        "top1": 29.1,
+        "top3": 29.1
+      },
+      "rapide": {
+        "n": 2482,
+        "top1": 27.8,
+        "top3": 27.8
+      },
+      "blitz": {
+        "n": 824,
+        "top1": 29.7,
+        "top3": 29.7
+      }
+    },
+    "ton-livre": {
+      "tout": {
+        "n": 3306,
+        "top1": 46.1,
+        "top3": 70.8
+      },
+      "ouverture": {
+        "n": 999,
+        "top1": 60.4,
+        "top3": 80.8
+      },
+      "milieu": {
+        "n": 1370,
+        "top1": 40.6,
+        "top3": 65.2
+      },
+      "finale": {
+        "n": 937,
+        "top1": 38.8,
+        "top3": 68.4
+      },
+      "hors livre": {
+        "n": 2809,
+        "top1": 39.3,
+        "top3": 66.7
+      },
+      "rapide": {
+        "n": 2482,
+        "top1": 44.9,
+        "top3": 70.8
+      },
+      "blitz": {
+        "n": 824,
+        "top1": 49.5,
+        "top3": 70.8
+      }
+    },
+    "modele-perso": {
+      "tout": {
+        "n": 3306,
+        "top1": 42.5,
+        "top3": 69.6
+      },
+      "ouverture": {
+        "n": 999,
+        "top1": 58.1,
+        "top3": 79.5
+      },
+      "milieu": {
+        "n": 1370,
+        "top1": 35.3,
+        "top3": 64.2
+      },
+      "finale": {
+        "n": 937,
+        "top1": 36.6,
+        "top3": 66.9
+      },
+      "hors livre": {
+        "n": 2809,
+        "top1": 35.4,
+        "top3": 65.6
+      },
+      "rapide": {
+        "n": 2482,
+        "top1": 41.5,
+        "top3": 69.5
+      },
+      "blitz": {
+        "n": 824,
+        "top1": 45.5,
+        "top3": 70
+      }
+    }
+  },
+  "weights": {
+    "perte": -0.78,
+    "perte²": -0.12,
+    "rang0": 0.15,
+    "rang": -1.12,
+    "prise": 0.14,
+    "valeur prise": -0.42,
+    "échec": 0.27,
+    "pion": -0.02,
+    "cavalier": -0.21,
+    "fou": 0.44,
+    "tour": 0.29,
+    "dame": -0.51,
+    "roi": -0.12,
+    "roque": 0.67,
+    "reprise": -0.06,
+    "recul": -0.22,
+    "distance": -0.25,
+    "promotion": 0.04,
+    "livre": 7.05,
+    "même pièce": 0,
+    "perte × peu de temps": -0.04,
+    "perte × finale": -0.12,
+    "développe": 0.5,
+    "avance pion": 0.3
+  }
+}
