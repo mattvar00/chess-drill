@@ -5,7 +5,8 @@ import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, miniFen, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
-import { pathSummary, shortName } from './path';
+import { openUnit, pathSummary, shortName } from './path';
+import { unitOf } from '../core/path';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
 import { dayKey, streak, trainedToday } from '../core/streak';
@@ -180,7 +181,7 @@ function inYourGames(sys: System): string {
   const top = Object.entries(themes).sort((a, b) => b[1] - a[1])[0];
   const drop = an.length ? avg(40) - avg(20) : 0;
   return `<section class="grp"><h2>Dans tes parties</h2>
-    <div class="surf card stats"><div><b>${games.length}</b><span>${games.length > 1 ? 'parties' : 'partie'}</span></div><div><b>${score} %</b><span>de score</span></div><div><b>${an.length ? avg(20) + ' %' : '–'}</b><span>de chances au coup 10</span></div></div>
+    <div class="surf card stats two"><div><b>${games.length}</b><span>${games.length > 1 ? 'parties jouées' : 'partie jouée'}</span></div><div><b>${score} %</b><span>des points marqués</span></div><div hidden><b>${an.length ? avg(20) + ' %' : '–'}</b><span></span></div></div>
     ${an.length >= 3 ? `<p class="insight">${drop <= -5 ? `Tu sors bien de l'ouverture, puis tu perds en moyenne ${-drop} points de chances entre les coups 10 et 20 : c'est le plan du milieu de jeu qui te coûte, pas la théorie.` : drop >= 5 ? `Tu gagnes en moyenne ${drop} points de chances entre les coups 10 et 20 : tu connais les plans de ce système.` : 'Tes chances restent stables entre les coups 10 et 20.'}${top ? ` Ta faute la plus fréquente ici : ${top[0].toLowerCase()} (${top[1]}).` : ''}</p>` : ''}
     ${faults.length ? `<button class="btn block" id="bSysFaults">${icon('target')}Rejouer tes ${plural(faults.length, 'faute')} dans ce système</button>` : ''}
   </section>`;
@@ -190,10 +191,12 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   const played = gamesOfSystem(sys);
   root.innerHTML = `<p class="intro">${esc(sys.resume)}</p>
     ${inYourGames(sys)}
-    <button class="btn pri block" id="bDrill">Drill sur ce système</button>
+    ${(() => { const u = unitOf(bloc, sys, store.state.br), L = u.lessons.find(l => l.state === 'cur'); return `<button class="btn pri block" id="bPath">${u.promoted ? 'Voir sur le chemin : ouverture promue' : `Continuer sur le chemin : case ${L?.rank ?? 8} sur 8`}</button>`; })()}
+    <button class="quiet" id="bDrill">Drill libre sur les ${sys.branches.length} lignes</button>
     ${plansFor(sys.id).length ? `<section class="grp"><h2>Plans animés</h2><div class="surf card list">${plansFor(sys.id).map(P => `<a class="rowi" href="#/plan/${P.id}"><span class="ico">${icon('chart')}</span><span class="body"><b>${esc(P.title)}</b><small>${esc(P.sub)}</small></span>${chev}</a>`).join('')}</div></section>` : ''}
     <div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id]; return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(br.titre)}</b><small>${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
     ${played.length ? `<section class="grp"><h2>Tes dernières parties dans ce système</h2><div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, idsOf(sys), back));
+  $('#bPath', root).addEventListener('click', () => openUnit(bloc.id, sys.id));
   root.querySelector('#bSysFaults')?.addEventListener('click', () => { const ids = new Set(gamesOfSystem(sys).map(g => g.id)); startCycle(sys.titre, store.faults.filter(f => ids.has(f.game))); });
 }
