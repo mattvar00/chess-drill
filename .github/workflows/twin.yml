@@ -1,0 +1,38 @@
+# Jumeau numérique : banc d'essai. Compare plusieurs façons de prédire tes coups sur tes parties récentes.
+# Se lance quand le script change, ou à la main (onglet Actions). Le rapport est publié sur la branche « twin-results ».
+name: Jumeau
+on:
+  push:
+    branches: [main]
+    paths: ['app/scripts/twin.ts', '.github/workflows/twin.yml']
+  workflow_dispatch:
+    inputs:
+      user: { description: 'Pseudo chess.com', required: false, default: 'matt_chess00' }
+      train_days: { description: "Fenêtre d'apprentissage en jours", required: false, default: '180' }
+      test_days: { description: 'Parties de test : les N derniers jours', required: false, default: '14' }
+permissions: { contents: write }
+concurrency: { group: twin, cancel-in-progress: true }
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    defaults: { run: { working-directory: app } }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci
+      - name: Stockfish
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq stockfish && echo quit | /usr/games/stockfish | head -1
+      - name: Banc d'essai
+        env: { STOCKFISH: /usr/games/stockfish }
+        run: npx tsx scripts/twin.ts --user "${{ inputs.user || 'matt_chess00' }}" --train-days "${{ inputs.train_days || '180' }}" --test-days "${{ inputs.test_days || '14' }}" --max-train 1500 --max-test 250 --out "$RUNNER_TEMP/twin"
+      - uses: actions/upload-artifact@v4
+        with: { name: jumeau, path: '${{ runner.temp }}/twin' }
+      - name: Publier sur la branche twin-results
+        working-directory: ${{ runner.temp }}/twin
+        run: |
+          cp report.md "report-$(date -u +%F).md"
+          git init -q && git checkout -q -b twin-results && git add . 
+          git -c user.name="github-actions" -c user.email="github-actions@users.noreply.github.com" commit -qm "Jumeau : banc d'essai du $(date -u +%F)"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" twin-results
