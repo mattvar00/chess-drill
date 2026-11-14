@@ -634,3 +634,4 @@ body.focus.withtabs main{padding-bottom:calc(var(--tabs) + 28px + env(safe-area-
   body.fit .review .bwrap{justify-content:center}
 }
 @media(min-width:900px){ .review .mstrip{padding-left:0;padding-right:0} .rvbar{position:static} }
+.sndlist{display:flex;flex-direction:column;gap:2px}

@@ -3,7 +3,7 @@ import '@fontsource-variable/inter/wght.css';
 import '@fontsource-variable/space-grotesk/wght.css';
 import './styles.css';
 import { $, esc, icon } from './ui/dom';
-import { setSound } from './ui/sound';
+import { setSound, setSoundSet } from './ui/sound';
 import { BR, REP, loadStore, store, woodCur } from './app/store';
 import { viewBloc, viewBlocs, viewHome, viewSystem, viewTrain } from './app/views';
 import { mountTrainer } from './app/trainer';
@@ -94,7 +94,7 @@ function route() {
 }
 
 async function boot() {
-  await loadStore(); const s = store.state.settings; setSound(s.sound !== false);
+  await loadStore(); const s = store.state.settings; setSound(s.sound !== false); setSoundSet(String(s.soundSet ?? 'sfx'));
   if (s.palette || s.mode || s.board) applyLook({ palette: s.palette, mode: s.mode, board: s.board });
   window.addEventListener('hashchange', route); route();
   // Nouvelles parties et progression des autres appareils : on rafraîchit l'écran d'accueil si quelque chose est arrivé.

@@ -1,6 +1,6 @@
 /** Réglages : apparence, pseudo et synchronisation, son, reprise de la progression de l'ancienne version. */
 import { $, esc, plural } from '../ui/dom';
-import { setSound } from '../ui/sound';
+import { SFX, SOUND_SETS, persoSound, setPersoSound, setSound, setSoundSet, unlockAudio } from '../ui/sound';
 import type { BranchState } from '../core/types';
 import { lastSync, sync } from './api';
 import { BR, save, store } from './store';
@@ -30,6 +30,15 @@ export function viewSettings(root: HTMLElement) {
     </div></section>
     <section class="grp"><h2>Son</h2><div class="surf card padded">
       <label class="check"><input type="checkbox" id="cSound" ${s.sound === false ? '' : 'checked'}> Bruit des pièces et signal de fin de ligne</label>
+      <p class="flabel" id="lSnd">Son des pièces</p>
+      <div class="sndlist" role="radiogroup" aria-labelledby="lSnd">${SOUND_SETS.map(([v, l]) => `<label class="check"><input type="radio" name="sndset" value="${v}" ${(s.soundSet ?? 'sfx') === v ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+      <div class="row"><button type="button" class="btn" id="bHearMove">Écouter un coup</button><button type="button" class="btn" id="bHearCap">Écouter une prise</button></div>
+      <div id="perso" class="stackc" ${(s.soundSet ?? 'sfx') === 'perso' ? '' : 'hidden'}>
+        <p class="hint">Choisis un fichier audio court pour un coup et un pour une prise. Ils restent sur cet appareil.</p>
+        <label class="btn">Son d'un coup${persoSound('Move') ? ' (choisi)' : ''}<input type="file" id="fMove" accept="audio/*" hidden></label>
+        <label class="btn">Son d'une prise${persoSound('Capture') ? ' (choisi)' : ''}<input type="file" id="fCap" accept="audio/*" hidden></label>
+      </div>
+      <p class="hint">Les sons Lichess sont de Enigmahack, sous licence AGPLv3+.</p>
     </div></section>
     <section class="grp"><h2>Ancienne version</h2><div class="surf card padded stackc">
       <p class="hint">Dans l'ancienne app, ouvre les réglages et exporte tes données, puis choisis le fichier ici. Seule la progression des lignes est reprise ; pour chaque ligne, le passage le plus récent est conservé.</p>
@@ -49,6 +58,13 @@ export function viewSettings(root: HTMLElement) {
     root.querySelectorAll<HTMLElement>('.sw').forEach(sw => { sw.dataset.mode = shownMode(); });
   }));
   $('#cSound', root).addEventListener('change', e => { s.sound = (e.target as HTMLInputElement).checked; setSound(s.sound !== false); save(); });
+  root.querySelectorAll<HTMLInputElement>('input[name=sndset]').forEach(r => r.addEventListener('change', () => {
+    s.soundSet = r.value; unlockAudio(); setSoundSet(r.value); save(); $('#perso', root).hidden = r.value !== 'perso'; setTimeout(() => SFX.move(), 250); }));
+  $('#bHearMove', root).addEventListener('click', () => { unlockAudio(); SFX.move(); });
+  $('#bHearCap', root).addEventListener('click', () => { unlockAudio(); SFX.capture(); });
+  for (const [id, k] of [['#fMove', 'Move'], ['#fCap', 'Capture']] as const) $(id, root).addEventListener('change', e => {
+    const f = (e.target as HTMLInputElement).files?.[0]; if (!f) return; if (f.size > 400_000) return;   // un son de coup fait quelques kilo-octets
+    const rd = new FileReader(); rd.onload = () => { setPersoSound(k, String(rd.result)); unlockAudio(); setTimeout(() => (k === 'Move' ? SFX.move() : SFX.capture()), 300); viewSettings(root); }; rd.readAsDataURL(f); });
   $('#fImport', root).addEventListener('change', async e => {
     const out = $('#importStatus', root), f = (e.target as HTMLInputElement).files?.[0]; if (!f) return;
     try { const n = importLegacy(JSON.parse(await f.text())); out.className = 'status'; out.textContent = n ? `${plural(n, 'ligne reprise', 'lignes reprises')}.` : 'Rien de plus récent à reprendre dans ce fichier.'; }
