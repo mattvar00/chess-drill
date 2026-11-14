@@ -148,26 +148,28 @@ export function reviewGame(g: Pick<Game, 'sans' | 'color' | 'clocks' | 'tcs' | '
 }
 
 /** Commentaire d'un coup, en français, du point de vue du joueur (« tu ») ou de son adversaire. */
-export function commentMove(g: Pick<Game, 'color'> & { ev: EvalEntry[] }, A: Review, r: MoveReview): string {
+/** `brief` : sans les variantes entre parenthèses ni les chances (affichées à part), pour la revue sur téléphone. */
+export function commentMove(g: Pick<Game, 'color'> & { ev: EvalEntry[] }, A: Review, r: MoveReview, brief = false): string {
   const ev = g.ev, i = r.i, mine = r.me === g.color, your = mine ? 'Tes' : 'Ses';
   const W = whatMove(A.F[i], r.m, mine); const out: string[] = [];
-  out.push(W.d + (W.bits.length ? ', ' + W.bits.slice(0, 2).join(', ') : '') + '.');
+  if (!brief || r.loss < 10) out.push(W.d + (W.bits.length ? ', ' + W.bits.slice(0, 2).join(', ') : '') + '.');
   if (r.k === 'book') return out.concat('Coup de théorie.').join(' ');
   if (r.k === 'forced') return out.concat('Le seul coup légal.').join(' ');
   if (r.k === 'brilliant') out.push('Un sacrifice juste : le matériel donné revient avec intérêt.');
   if (r.k === 'great') out.push("C'était le seul bon coup : tous les autres perdaient nettement.");
   const loses = (n: number) => `${mine ? 'tu perds' : 'il perd'} ${matPhrase(n)}`;
   if (r.loss >= 10) {
-    out.push(`${your} chances passent de ${Math.round(r.wb)} % à ${Math.round(r.wa)} %.`);
+    if (!brief) out.push(`${your} chances passent de ${Math.round(r.wb)} % à ${Math.round(r.wa)} %.`);
+    const par = (x: string) => (brief ? '' : ` (${x})`);
     const after = ev[i + 1], pv = pvOf(after), rep = pvSan(A.F[i + 1], pv, 4);
-    if (after.m != null && ((r.me === 'w' && after.m < 0) || (r.me === 'b' && after.m > 0))) out.push(`Après ce coup, ${rep[0]} mène au mat en ${Math.abs(after.m)} (${rep.join(' ')}).`);
+    if (after.m != null && ((r.me === 'w' && after.m < 0) || (r.me === 'b' && after.m > 0))) out.push(`Après ce coup, ${rep[0]} mène au mat en ${Math.abs(after.m)}${par(rep.join(' '))}.`);
     else if (rep.length) {
       const t = new Chess(A.F[i + 1]); const rm = tryMove(t, rep[0]); const lost = -lineMat(A.F[i + 1], pv, r.me, 4);
       if (W.hang && rm && rm.to === r.m.to) out.push(`${Le(r.m.piece)} que ${mine ? 'tu viens' : "l'adversaire vient"} de jouer n'est pas assez défendu${e(r.m.piece)} : ${rep[0]} ${fem(r.m.piece) ? 'la' : 'le'} prend${lost >= 2 ? ', ' + loses(lost) : ''}.`);
       else if (rm?.captured) out.push(`Réponse : ${rep[0]}, qui prend ${le(rm.captured)} en ${rm.to}${lost >= 2 ? ' : ' + loses(lost) : ''}.`);
-      else if (rm?.san.includes('+')) out.push(`Réponse : l'échec ${rep[0]}${lost >= 2 ? ', et ' + loses(lost) : ''} (${rep.join(' ')}).`);
+      else if (rm?.san.includes('+')) out.push(`Réponse : l'échec ${rep[0]}${lost >= 2 ? ', et ' + loses(lost) : ''}${par(rep.join(' '))}.`);
       else if (lost >= 2) out.push(`Après ${rep.join(' ')}, ${loses(lost)}.`);
-      else { const Wr = rm ? whatMove(A.F[i + 1], rm, !mine) : null; out.push(`Réponse : ${rep[0]}${Wr?.bits.length ? ` (${Wr.bits[0]})` : ''}, et la position bascule.`); }
+      else { const Wr = rm ? whatMove(A.F[i + 1], rm, !mine) : null; out.push(`Réponse : ${rep[0]}${Wr?.bits.length ? par(Wr.bits[0]) : ''}, et la position bascule.`); }
     }
     if (r.k === 'miss') out.push(mine ? "L'adversaire venait de faire une erreur : il fallait la punir." : "Il n'a pas puni ton erreur précédente.");
   }
@@ -178,7 +180,7 @@ export function commentMove(g: Pick<Game, 'color'> & { ev: EvalEntry[] }, A: Rev
       const why: string[] = []; if (bm.captured) why.push(`prend ${le(bm.captured)} en ${bm.to}`);
       Wb.bits.filter(x => !x.startsWith('développe') || !why.length).slice(0, 2).forEach(x => why.push(x));
       if (mate) why.push(`mat en ${Math.abs(ev[i].m!)}`); else if (gain >= 2) why.push(`gagne ${matPhrase(gain)}`);
-      out.push(`Il fallait ${bm.san}${why.length ? ' : ' + why.join(', ') : ''}${pvs.length > 1 ? ` (${pvs.join(' ')})` : ''}.`); }
+      out.push(`Il fallait ${bm.san}${why.length ? ' : ' + why.join(', ') : ''}${pvs.length > 1 && !brief ? ` (${pvs.join(' ')})` : ''}.`); }
   } else if (r.k === 'best' && !W.bits.length && mine) out.push("C'est le coup du moteur.");
   if (mine && r.t != null && r.loss >= 10 && r.t < 4) out.push(`Joué en ${Math.round(r.t)} s.`);
   return out.join(' ');

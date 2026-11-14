@@ -22,18 +22,23 @@ restoreLook();
 const TABS = [['#/', "Aujourd'hui"], ['#/entrainer', "S'entraîner"], ['#/progres', 'Progrès']] as const;
 const TRAIN = '#/entrainer', PROG = '#/progres';
 document.getElementById('app')!.innerHTML = `
-  <header class="top" id="top" hidden><a class="back" id="back" aria-label="Retour">${icon('back')}</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><span class="hright" id="hright"></span><button class="xtool" id="xtool" type="button" hidden>${icon('search')}</button></header>
+  <header class="top" id="top" hidden><a class="back" id="back" aria-label="Retour">${icon('back')}</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><span class="hright" id="hright"></span><button class="xtool" id="xtool" type="button" hidden>${icon('search')}<span>Explorer</span></button></header>
   <main id="view" tabindex="-1"></main>
   <nav class="tabs surf" id="tabs" aria-label="Sections">${TABS.map(([h, l]) => `<a href="${h}">${l}</a>`).join('')}</nav>`;
 const view = $('#view'), back = $<HTMLAnchorElement>('#back');
 mountTool($<HTMLButtonElement>('#xtool'));
 let cleanup: (() => void) | null = null;
 
-/** Barre du haut (seulement sur les écrans où l'on revient en arrière) et onglet actif. `right` : contenu à droite du titre. */
-function shell(title: string, sub: string, backHref: string | null, tab: string | null, right = '') {
+/**
+ * Barre du haut (seulement sur les écrans où l'on revient en arrière) et onglet actif. `right` : contenu à droite du titre.
+ * `kind` : « board » pour un écran avec échiquier (mise en page large, onglets toujours là pour changer d'endroit),
+ * « session » pour un exercice ou un drill en cours (plein écran, une croix pour quitter, comme une leçon Duolingo).
+ */
+function shell(title: string, sub: string, backHref: string | null, tab: string | null, right = '', kind: 'page' | 'board' | 'session' = 'page') {
   $('#title').textContent = title; $('#subtitle').textContent = sub; document.title = title === 'Chess Drill' ? title : `${title} · Chess Drill`;
   $('#top').hidden = !backHref; if (backHref) back.href = backHref; $('#hright').innerHTML = right; setTool('hidden');
-  $('#tabs').hidden = !tab; document.body.classList.toggle('focus', !tab);
+  const quit = kind === 'session'; back.innerHTML = icon(quit ? 'close' : 'back'); back.setAttribute('aria-label', quit ? 'Quitter' : 'Retour'); back.classList.toggle('quit', quit);
+  $('#tabs').hidden = quit || !tab; document.body.classList.toggle('focus', kind !== 'page'); document.body.classList.toggle('withtabs', !quit && !!tab);
   document.querySelectorAll<HTMLAnchorElement>('#tabs a').forEach(a => { if (a.getAttribute('href') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
 }
 function route() {
@@ -44,25 +49,25 @@ function route() {
     if (S && !S.pool.includes(br.id)) endSession();
     const cur = session(), g = q.get('g');
     const where = cur ? `${cur.label}, ligne ${cur.done.size + (cur.done.has(br.id) ? 0 : 1)} sur ${cur.pool.length}` : sys.titre;
-    shell(br.titre, where, cur ? cur.back : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, null, `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'Drill'}</a>`);
+    shell(br.titre, where, cur ? cur.back : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'Drill'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
     cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
   } else if (p[0] === 'partie' && p[1] && p[2] === 'refaire') {
     const id = decodeURIComponent(p[1]), ply = +p[3], f = retryFault(id, ply), backTo = gameUrl(id, ply + 1);
     if (!f) { location.replace(backTo); return; }
-    endSession(); shell('Retrouver le bon coup', '', backTo, null);
+    endSession(); shell('Retrouver le bon coup', '', backTo, null, '', 'session');
     cleanup = mountExercise(view, (title, sub, clock) => {
       $('#title').textContent = title; $('#subtitle').textContent = sub;
       $('#hright').innerHTML = clock ? `<span class="pill clock surf">${icon('clock')}${esc(clock)}</span>` : '';
     }, { fault: f, back: backTo });
   } else if (p[0] === 'partie' && p[1]) {
     endSession(); const id = decodeURIComponent(p[1]), r = q.get('r'), backTo = r && r.startsWith('#/') ? r : PROG, [t, sub] = reviewTitle(id);
-    shell(t, sub, backTo, null); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
+    shell(t, sub, backTo, PROG, '', 'board'); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
   } else if (p[0] === 'plan' && p[1]) {
-    endSession(); shell(planTitle(p[1]), 'Plan animé', '#/plans', null); cleanup = mountPlan(view, p[1], q.has('vu'));
+    endSession(); shell(planTitle(p[1]), 'Plan animé', '#/plans', TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
   } else if (p[0] === 'structure' && p[1]) {
-    endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/structures', null); cleanup = mountStruct(view, p[1]);
+    endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/structures', TRAIN, '', 'board'); cleanup = mountStruct(view, p[1]);
   } else if (p[0] === 'wood' && p[1] === 'go') {
-    endSession(); shell('Fautes à rejouer', '', woodCur()?.back ?? '#/wood', null);
+    endSession(); shell('Fautes à rejouer', '', woodCur()?.back ?? '#/wood', null, '', 'session');
     cleanup = mountExercise(view, (title, sub, clock) => {
       $('#title').textContent = title; $('#subtitle').textContent = sub;
       $('#hright').innerHTML = clock ? `<span class="pill clock surf">${icon('clock')}${esc(clock)}</span>` : '';
@@ -75,7 +80,7 @@ function route() {
     else if (p[0] === 'rep') { shell('Répertoire', '', TRAIN, TRAIN); viewBlocs(view); }
     else if (p[0] === 'wood') { shell('Fautes à rejouer', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', TRAIN, TRAIN); viewWood(view); }
     else if (p[0] === 'entrainer') { shell("S'entraîner", '', null, TRAIN); viewTrain(view); }
-    else if (p[0] === 'explorer') { shell('Explorer une position', '', TRAIN, null); cleanup = mountFreeExplorer(view, TRAIN); }
+    else if (p[0] === 'explorer') { shell('Explorer une position', '', TRAIN, TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, TRAIN); }
     else if (p[0] === 'progres' || p[0] === 'parties') { shell('Progrès', '', null, PROG); viewGames(view); }
     else if (p[0] === 'profil') { shell('Ta carte joueur', '', PROG, PROG); viewProfile(view); }
     else if (p[0] === 'plans') { shell('Plans animés', '', TRAIN, TRAIN); viewPlans(view); }

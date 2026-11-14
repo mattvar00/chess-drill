@@ -3,6 +3,8 @@ import { Chess, tryMove, uciOf, uciToObj, type Move } from '../core/chess';
 import type { Fault } from '../core/analysis';
 import { schedulePos } from '../core/schedule';
 import { costliestFaults, duePositions, fmtTime, matPhrase, priorityFaults, themeHint } from '../core/wood';
+import { balance, puzzleLine, type PuzzleLine } from '../core/puzzle';
+import { matPhrase as matText } from '../core/review';
 import { Board, miniBoard } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
@@ -68,7 +70,8 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
   root.innerHTML = `<div class="trainer"><div class="tboard"><div id="board"></div></div>
     <div class="tside"><div id="ex"><p class="meta" id="meta"></p><div class="coach" id="coach" aria-live="polite"></div><div class="actions" id="actions"></div></div><div id="xp" hidden></div></div></div>`;
   const coach = $('#coach', root), actions = $('#actions', root), meta = $('#meta', root);
-  let F: Fault, game = new Chess(), last: Move | null = null, tries = 0, solved = false, hintLevel = 0, ended = false;
+  // `L` : la ligne à jouer (ton coup, la réponse, ton coup…) ; `k` : l'indice du coup attendu dans cette ligne.
+  let F: Fault, L: PuzzleLine, k = 0, game = new Chess(), last: Move | null = null, tries = 0, solved = false, hintLevel = 0, ended = false;
   let since = Date.now(); const elapsed = () => cyc.elapsed + (ended ? 0 : Date.now() - since);
   const xa = () => XS.active();
   const board = new Board($('#board', root), { movable: () => xa() ? xa()!.movable() : solved || ended ? null : F.side, onMove: m => xa() ? xa()!.onMove(m) : attempt(m) });
@@ -78,6 +81,11 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     { label: 'Ton coup dans la partie', sans: [F.played.san, ...sanTokens(F.played.refut)] }] }), () => board.set(game, F.side, last));
   const sub = () => header(cyc.label, one ? `Contre ${F.opp}, coup ${F.move_no}` : `Position ${cyc.i + 1} sur ${cyc.ids.length}`, fmtTime(elapsed()));
   const numbered = (san: string) => `${F.move_no}${F.side === 'w' ? '.' : '…'}${san}`;
+  /** Une suite de coups numérotée depuis la position du problème : « 23.Cc7+ Rd7 24.Cxa8 ». */
+  const fmtLine = (sans: string[]) => { let n = F.move_no, w = F.side === 'w'; return sans.map((x, j) => { const t = w ? `${n}.${x}` : j === 0 ? `${n}…${x}` : x; if (!w) n++; w = !w; return t; }).join(' '); };
+  /** Le coup attendu maintenant, en coordonnées (pour l'indice). */
+  const expected = () => { const t = new Chess(game.fen()); const m = tryMove(t, L.sans[k]); return m ? uciOf(m) : F.best.uci; };
+  const mine = () => (L.sans.length + 1) / 2;
   const tick = setInterval(() => { if (!ended) sub(); }, 1000);
   const hold = () => { cyc.elapsed = elapsed(); since = Date.now(); if (!one) store.state.woodCur = cyc; save(); };
 
@@ -85,23 +93,29 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     XS.available(false, 'Trouve le coup, ou affiche la solution, pour explorer la position.');
     while (cyc.i < cyc.ids.length && !faults.has(cyc.ids[cyc.i])) cyc.i++;   // position disparue du stock : on passe
     if (cyc.i >= cyc.ids.length) return finish();
-    F = faults.get(cyc.ids[cyc.i])!; game = new Chess(F.fen); last = null; tries = 0; solved = false; hintLevel = 0;
+    F = faults.get(cyc.ids[cyc.i])!; game = new Chess(F.fen); last = null; tries = 0; solved = false; hintLevel = 0; k = 0;
+    L = puzzleLine(F.fen, F.side, [F.best.san, ...sanTokens(F.best.suite)]);
     board.set(game, F.side); sub();
     meta.innerHTML = `Contre <b>${esc(F.opp)}</b>, ${esc(F.date.split('.').reverse().join('/'))}, coup ${F.move_no}`;
-    coach.innerHTML = `<p class="lead"><i class="stm ${F.side}"></i>Aux ${F.side === 'w' ? 'Blancs' : 'Noirs'} de jouer</p><p class="why">Trouve le meilleur coup. ${esc(F.phase.charAt(0).toUpperCase() + F.phase.slice(1))}, ${matPhrase(F.mat)}. ${esc(themeHint(F.theme))}</p>`;
+    coach.innerHTML = `<p class="lead"><i class="stm ${F.side}"></i>Aux ${F.side === 'w' ? 'Blancs' : 'Noirs'} de jouer</p><p class="why">${mine() > 1 ? `Trouve le meilleur coup et joue la suite jusqu'au gain : ${mine()} coups.` : 'Trouve le meilleur coup.'} ${esc(F.phase.charAt(0).toUpperCase() + F.phase.slice(1))}, ${matPhrase(F.mat)}. ${esc(themeHint(F.theme))}</p>`;
     actions.className = 'actions trio';
     actions.innerHTML = `<button class="btn" id="bHint">${icon('bulb')}Indice</button><button class="btn" id="bSol">Solution</button><button class="btn" id="bSkip">Passer</button>`;
-    $('#bHint', actions).onclick = () => { hintLevel++; board.hint(hintLevel >= 2 ? [F.best.uci.slice(0, 2), F.best.uci.slice(2, 4)] : [F.best.uci.slice(0, 2)]); };
+    $('#bHint', actions).onclick = () => { hintLevel++; const u = expected(); board.hint(hintLevel >= 2 ? [u.slice(0, 2), u.slice(2, 4)] : [u.slice(0, 2)]); };
     $('#bSol', actions).onclick = () => reveal(false); $('#bSkip', actions).onclick = next;
     if (one) { $('#bSkip', actions).remove(); actions.className = 'actions'; }
   }
   function explain(found: boolean) {
     const p = F.played, clean = found && tries === 1 && !hintLevel;
-    coach.innerHTML = `<p class="lead">${found ? `<span class="okb">${icon('check')}</span>` : 'Le coup : '}${esc(numbered(F.best.san))}${clean ? '<span class="tag ok">du premier coup</span>' : found ? `<span class="tag">${tries > 1 ? plural(tries, 'essai') : 'avec indice'}</span>` : ''}</p>
-      <p>${esc(F.best.desc)}${F.best.suite ? ` Suite : <span class="line">${esc((/^\d/.test(F.best.suite) ? '' : F.move_no + '…') + short(F.best.suite))}</span>` : ''}</p>
+    // ce que coûtait le coup de la partie : le matériel perdu au bout de la réfutation
+    const t = new Chess(F.fen), b0 = balance(F.fen, F.side); tryMove(t, p.san); for (const x of sanTokens(p.refut).slice(0, 4)) if (!tryMove(t, x)) break;
+    const lost = b0 - balance(t.fen(), F.side), mated = t.isCheckmate();
+    const why = L.mate ? 'Et c\'est mat.' : L.gain >= 2 ? `Au bout de la ligne, tu gagnes ${matText(L.gain)}.` : mated || lost >= 2 ? 'Ce coup tient la position : celui de la partie perdait.' : '';
+    coach.innerHTML = `<p class="lead">${found ? `<span class="okb">${icon('check')}</span>` : 'La solution : '}${esc(fmtLine(L.sans))}${clean ? '<span class="tag ok">du premier coup</span>' : found ? `<span class="tag">${tries > 1 ? plural(tries, 'essai') : 'avec indice'}</span>` : ''}</p>
+      ${why ? `<p class="punch">${esc(why)}</p>` : ''}<p>${esc(F.best.desc)}</p>
       <div class="surf ingame"><p class="label">Dans la partie</p>
-        <p>Tu as joué <b>${esc(numbered(p.san))}</b>${p.refut ? `, puni par <b>${esc(short(p.refut, 3))}</b>` : ''}.</p>
-        <p class="odds"><span>Chances de gain</span><b>${Math.round(p.wp_before)} %</b>${icon('arrow')}<b class="down">${Math.round(p.wp_after)} %</b></p></div>`;
+        <p>Tu as joué <b>${esc(numbered(p.san))}</b>${p.refut ? `, puni par <b>${esc(short(p.refut, 3))}</b>` : ''}${mated ? ' : mat.' : lost >= 2 ? ` : tu perdais ${matText(lost)}.` : '.'}</p>
+        <p class="odds"><span>Chances de gain</span><b>${Math.round(p.wp_before)} %</b>${icon('arrow')}<b class="down">${Math.round(p.wp_after)} %</b></p></div>
+      <p class="hint">Pour voir d'autres coups ou la suite au moteur, ouvre l'explorateur en haut.</p>`;
     actions.className = 'actions';
     actions.innerHTML = one ? `<a class="btn pri" href="${one.back}">Revenir à la partie</a><button class="btn" id="bAgain1">Refaire</button>`
       : `<button class="btn pri" id="bNext">${cyc.i + 1 < cyc.ids.length ? 'Position suivante' : 'Terminer le cycle'}</button>${store.games.some(g => g.id === F.game) ? `<button class="btn" id="bGame">Voir la partie</button>` : `<a class="btn" href="https://www.chess.com/game/live/${encodeURIComponent(F.game)}" target="_blank" rel="noopener">Voir la partie</a>`}`;
@@ -111,19 +125,33 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     const again = actions.querySelector<HTMLButtonElement>('#bAgain1'); if (again) { again.onclick = () => { since = Date.now(); load(); }; return; }
     $('#bNext', actions).onclick = next;
   }
-  /** Montre le meilleur coup. `found` : trouvé par le joueur (sinon c'est un échec pour la répétition espacée). */
+  /** Montre la solution. `found` : trouvée par le joueur (sinon c'est un échec pour la répétition espacée). */
   function reveal(found: boolean, m?: Move) {
     if (solved) return; solved = true; if (!found) tries = Math.max(tries, 1);
-    last = tryMove(game, m ?? uciToObj(F.best.uci)); board.set(game, F.side, last, true); if (last) board.flash(last.to, 'good');
+    if (m) last = tryMove(game, m);
+    else for (; k < L.sans.length; k++) last = tryMove(game, L.sans[k]) ?? last;   // la solution : le reste de la ligne d'un coup
+    board.set(game, F.side, last, true); if (last && found) board.flash(last.to, 'good');
     store.state.fault[F.id] = schedulePos(store.state.fault[F.id], !found ? 'fail' : tries === 1 && !hintLevel ? 'good' : 'ok', tries);
     if (found && tries === 1 && !hintLevel) cyc.solved++;
     markActive(); hold(); explain(found);
   }
   function attempt(m: Move) {
-    tries++;
-    if (uciOf(m) === F.best.uci) return reveal(true, m);
-    board.set(game, F.side); board.flash(m.to, 'bad');
-    coach.innerHTML = `<p class="lead bad">${esc(m.san)} n'est pas le meilleur coup</p><p>${uciOf(m) === F.played.uci ? "C'est le coup que tu as joué dans la partie." : 'Regarde encore : échecs, prises, menaces.'}</p>`;
+    if (k === 0) tries++;
+    const want = expected(), right = uciOf(m) === want || m.san.includes('#');
+    if (right && (k + 1 >= L.sans.length || m.san.includes('#'))) return reveal(true, m);
+    if (right) {
+      // bon coup en cours de ligne : on le joue, l'adversaire répond, et on continue
+      last = tryMove(game, m); board.set(game, F.side, last, true); board.flash(m.to, 'good');
+      coach.innerHTML = `<p class="lead"><span class="okb">${icon('check')}</span>${esc(fmtLine(L.sans.slice(0, k + 1)))}</p><p class="why">Bien. Continue : ${plural(mine() - (k / 2 + 1), 'coup')} encore.</p>`;
+      const reply = L.sans[k + 1]; k += 2;
+      setTimeout(() => { if (solved || ended) return; last = tryMove(game, reply); board.set(game, F.side, last, true); }, 450);
+      return;
+    }
+    if (k > 0) tries++;
+    board.set(game, F.side, last); board.flash(m.to, 'bad');
+    coach.innerHTML = k === 0
+      ? `<p class="lead bad">${esc(m.san)} n'est pas le meilleur coup</p><p>${uciOf(m) === F.played.uci ? "C'est le coup que tu as joué dans la partie." : 'Regarde encore : échecs, prises, menaces.'}</p>`
+      : `<p class="lead bad">${esc(m.san)} laisse filer l'avantage</p><p>Le bon début est joué. Il y a plus fort pour finir le travail.</p>`;
   }
   function next() { if (!solved) store.state.fault[F.id] = schedulePos(store.state.fault[F.id], 'fail', tries || 1); cyc.i++; hold(); load(); }
   function finish() {
