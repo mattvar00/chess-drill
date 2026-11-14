@@ -3,7 +3,8 @@ import { isDue, isValid } from '../core/schedule';
 import { recentDeviations, refBranch, todayPool } from '../core/drill';
 import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
-import { miniBoard, miniFen } from '../ui/board';
+import { miniBoard, miniFen, pieceSrc } from '../ui/board';
+import { RANKS, lineRank, meetCounts, rankSummary } from '../core/rank';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
 import { dayKey, streak, trainedToday } from '../core/streak';
@@ -29,6 +30,12 @@ const bar = (done: number, total: number, cls = '') => `<span class="prog ${cls}
 /** Barre d'avancement suivie du décompte « validées / total ». */
 const progLine = (ids: string[]) => { const v = validCount(ids); return `<span class="pl">${bar(v, ids.length)}<i>${v}/${ids.length}</i></span>`; };
 const validPhrase = (v: number, total: number) => `${v} ${v > 1 ? 'lignes validées' : 'ligne validée'} sur ${total}`;
+const nf = (n: number) => n.toLocaleString('fr-FR');
+/** La pièce d'un rang (pion … dame), en image. */
+const rankImg = (r: number, cls = '') => `<img class="rk ${cls}" src="${pieceSrc(RANKS[r].key)}" alt="${RANKS[r].name}" title="${RANKS[r].name} : ${RANKS[r].how}">`;
+/** Les cinq rangs avec le nombre de lignes à chacun. */
+const rankStrip = (per: number[]) => `<div class="rkstrip">${RANKS.map((r, i) => `<span class="${per[i] ? '' : 'none'}">${rankImg(i)}<b>${per[i]}</b></span>`).join('')}</div>`;
+const repoSum = () => rankSummary(ALL_IDS, store.state.br);
 
 /** Aperçu d'une ligne : la position atteinte au bout de la ligne. */
 function preview(id: string): string {
@@ -105,7 +112,7 @@ export function viewTrain(root: HTMLElement) {
   root.innerHTML = `
     <header class="pagehead"><h1>S'entraîner</h1></header>
     <section class="grp"><h2>Tes ouvertures</h2>
-      <a class="surf card feat" href="#/rep">${preview(firstLine)}<span class="body"><b>Répertoire</b><small>${validPhrase(valid, ALL_IDS.length)}</small>${bar(valid, ALL_IDS.length, 'big')}${due ? `<span class="due">${due} à revoir</span>` : ''}</span>${chev}</a>
+      <a class="surf card feat" href="#/rep">${preview(firstLine)}<span class="body"><b>Répertoire</b><small><b class="pts">${nf(repoSum().pts)}</b> points sur ${nf(repoSum().max)}</small>${rankStrip(repoSum().per)}${due ? `<span class="due">${due} à revoir</span>` : ''}</span>${chev}</a>
       <div class="halves">
         <a class="surf card half" href="#/plans">${miniBoard(planPos, plan?.side ?? 'w')}<b>Plans animés</b><small>${plural(PLANS.length, 'plan')} : quoi faire une fois l'ouverture jouée</small></a>
         <a class="surf card half" href="#/structures">${miniFen(stPos.fen(), PLANS[1]?.side ?? 'w', 'p')}<b>Structures de pions</b><small>Ton score dans chacune, et le plan qui va avec</small></a>
@@ -125,17 +132,28 @@ export function viewTrain(root: HTMLElement) {
 let sideFilter: 'all' | 'b' | 'w' = 'all';
 const FILTERS = [['all', 'Tout'], ['b', 'Avec les Noirs'], ['w', 'Avec les Blancs']] as const;
 export function viewBlocs(root: HTMLElement) {
-  const valid = validCount(ALL_IDS), due = dueLines(ALL_IDS), blocs = REP.blocs.filter(b => sideFilter === 'all' || b.side === sideFilter);
+  const due = dueLines(ALL_IDS), blocs = REP.blocs.filter(b => sideFilter === 'all' || b.side === sideFilter), sum = repoSum();
+  // les lignes que tu rencontres vraiment : on ne les apprendra pas toutes, autant commencer par celles-là
+  const meet = meetCounts(store.games), top = Object.entries(meet).filter(([id]) => BR[id] && !BR[id].sys.statut.startsWith('plan')).sort((x, y) => y[1] - x[1]).slice(0, 8).map(([id]) => id);
+  const since = Date.now() / 1000 - 180 * 86400, inRep = store.games.filter(g => g.t >= since && g.a?.branches?.length), topSet = new Set(top);
+  const cover = inRep.length ? Math.round(100 * inRep.filter(g => g.a.branches!.some(id => topSet.has(id))).length / inRep.length) : 0;
   root.innerHTML = `
-    <header class="pagehead">
-      <div class="sumrow"><p>${validPhrase(valid, ALL_IDS.length)}</p>${due ? `<p class="duetxt">${due} à revoir</p>` : ''}</div>${bar(valid, ALL_IDS.length, 'big')}</header>
+    <header class="pagehead repohead">
+      <div class="sumrow"><p><b class="pts big">${nf(sum.pts)}</b> points sur ${nf(sum.max)}</p>${due ? `<p class="duetxt">${due} à revoir</p>` : ''}</div>${bar(sum.pts, sum.max, 'big')}
+      ${rankStrip(sum.per)}
+      <details class="help"><summary>Comment on monte</summary><p>Chaque ligne a un rang, et chaque rang vaut sa pièce : ${RANKS.map(r => `${r.name.toLowerCase()} ${r.pts} (${r.how.charAt(0).toLowerCase() + r.how.slice(1)})`).join(', ')}.</p></details></header>
+    ${top.length ? `<section class="grp"><h2>Ce que tu joues vraiment</h2><div class="surf card list">
+      <p class="cover">Ces ${top.length} lignes reviennent dans <b>${cover} %</b> de tes parties des 6 derniers mois. Commence par elles.</p>
+      ${top.map(id => `<a class="rowi" href="${lineUrl(id, 'drill')}">${rankImg(lineRank(st(id)))}<span class="body"><b>${esc(BR[id].br.titre)}</b><small>${esc(BR[id].sys.titre)}, dans ${plural(meet[id], 'partie')}</small></span>${dueTag(st(id)?.runs && isDue(st(id)) ? 1 : 0)}${chev}</a>`).join('')}
+      <button class="rowi more" id="bTop">Drill sur ces ${top.length} lignes</button></div></section>` : ''}
     <div class="seg" role="group" aria-label="Filtrer par couleur">${FILTERS.map(([v, l]) => `<button type="button" data-f="${v}" aria-pressed="${sideFilter === v}">${l}</button>`).join('')}</div>
-    <div class="surf card list">${blocs.map(b => { const ids = idsOf(b); return `<a class="rowi" href="#/rep/${b.id}"><span class="chip ${b.side}"></span><span class="body"><b>${esc(b.titre)}</b><small>${esc(b.sous)}</small>${progLine(ids)}</span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>
+    <div class="surf card list">${blocs.map(b => { const ids = idsOf(b), r = rankSummary(ids, store.state.br); return `<a class="rowi" href="#/rep/${b.id}">${rankImg(r.rank)}<span class="body"><b>${esc(b.titre)}</b><small>${esc(b.sous)}</small><small class="ptsl">${nf(r.pts)} / ${nf(r.max)} points</small></span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>
     <section class="grp"><h2>Plans</h2><div class="surf card list">
       <a class="rowi" href="#/plans"><span class="ico">${icon('chart')}</span><span class="body"><b>Plans animés</b><small>${plural(PLANS.length, 'animation')} : ruptures, cases clés, pièces à échanger</small></span>${chev}</a>
       <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>Plans par structure de pions</b><small>Tes structures, ton score dans chacune, et tes fautes à y rejouer</small></span>${chev}</a>
     </div></section>
     <details class="help"><summary>Comment ça marche</summary><p>Le drill te fait rejouer une ligne de mémoire ; Voir la ligne la montre avec ses commentaires. L'explorateur, sur chaque position, te laisse essayer tes propres coups avec l'avis du moteur. Deux passages sans faute valident une ligne, qui revient ensuite à intervalles de plus en plus longs. Le tirage favorise les lignes neuves et celles où tu es sorti du répertoire en partie.</p></details>`;
+  root.querySelector<HTMLButtonElement>('#bTop')?.addEventListener('click', () => go('Ce que tu joues vraiment', top, '#/rep'));
   root.querySelectorAll<HTMLButtonElement>('[data-f]').forEach(b => b.addEventListener('click', () => {
     sideFilter = b.dataset.f as typeof sideFilter; viewBlocs(root); root.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
   }));
@@ -144,7 +162,7 @@ export function viewBlocs(root: HTMLElement) {
 const badge = (s: System) => `<span class="badge ${s.statut === 'joué' ? 'ok' : s.statut === 'à apprendre' ? 'learn' : ''}">${esc(s.statut)}</span>`;
 export function viewBloc(root: HTMLElement, bloc: Bloc) {
   root.innerHTML = `<button class="btn pri block" id="bAll">Drill sur tout le bloc</button>
-    <div class="surf card list">${bloc.systemes.map(s => { const ids = idsOf(s); return `<a class="rowi" href="#/rep/${bloc.id}/${s.id}"><span class="body"><span><b>${esc(s.titre)}</b>${badge(s)}</span><small class="clamp">${esc(s.resume)}</small>${progLine(ids)}</span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>`;
+    <div class="surf card list">${bloc.systemes.map(s => { const ids = idsOf(s); const r = rankSummary(ids, store.state.br); return `<a class="rowi" href="#/rep/${bloc.id}/${s.id}">${rankImg(r.rank)}<span class="body"><span><b>${esc(s.titre)}</b>${badge(s)}</span><small class="clamp">${esc(s.resume)}</small><small class="ptsl">${nf(r.pts)} / ${nf(r.max)} points</small></span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>`;
   $('#bAll', root).addEventListener('click', () => go(bloc.titre, idsOf(bloc), `#/rep/${bloc.id}`));
 }
 
@@ -179,7 +197,7 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
     ${inYourGames(sys)}
     <button class="btn pri block" id="bDrill">Drill sur ce système</button>
     ${plansFor(sys.id).length ? `<section class="grp"><h2>Plans animés</h2><div class="surf card list">${plansFor(sys.id).map(P => `<a class="rowi" href="#/plan/${P.id}"><span class="ico">${icon('chart')}</span><span class="body"><b>${esc(P.title)}</b><small>${esc(P.sub)}</small></span>${chev}</a>`).join('')}</div></section>` : ''}
-    <div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id]; return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(br.titre)}</b><small>${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
+    <div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id]; return `<a class="rowi" href="${lineUrl(br.id, 'explore')}">${rankImg(lineRank(st(br.id)))}<span class="body"><b>${esc(br.titre)}</b><small>${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${chev}</a>`; }).join('')}</div>
     ${played.length ? `<section class="grp"><h2>Tes dernières parties dans ce système</h2><div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, idsOf(sys), back));
   root.querySelector('#bSysFaults')?.addEventListener('click', () => { const ids = new Set(gamesOfSystem(sys).map(g => g.id)); startCycle(sys.titre, store.faults.filter(f => ids.has(f.game))); });

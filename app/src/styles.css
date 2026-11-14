@@ -662,3 +662,27 @@ body.focus.withtabs main{padding-bottom:calc(var(--tabs) + 28px + env(safe-area-
   body.focus .top .xtool{width:40px;padding:0}
   body.focus main{padding:4px 12px 8px}
 }
+
+/* ---------- rangs du répertoire : pion → dame ---------- */
+.rk{flex:none;width:34px;height:34px;padding:3px;border-radius:10px;background:var(--sq-l)}
+.rkstrip{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin-top:6px;align-self:stretch}
+.rkstrip span{display:flex;align-items:center;gap:4px;font-size:14px}
+.rkstrip .rk{width:26px;height:26px;padding:2px;border-radius:7px}
+.rkstrip span.none{opacity:.4}
+.pts{font:700 18px var(--f-title);color:var(--accent-text)}
+.pts.big{font-size:26px}
+.ptsl{font-size:12px;color:var(--mute)}
+.repohead .rkstrip{margin-top:10px}
+.cover{padding:12px 14px 4px;font-size:14px;color:var(--mute)}
+.cover b{color:var(--ink)}
+.rowi.more{justify-content:center;font-weight:600;color:var(--c-link)}
+.promo{display:flex;align-items:center;gap:14px;padding:12px 14px;border-radius:16px;background:var(--soft);color:var(--soft-ink);animation:promo .5s ease-out}
+.promo img{width:52px;height:52px;padding:4px;border-radius:12px;background:var(--sq-l)}
+.promo div{display:flex;flex-direction:column}
+.promo b{font:700 20px var(--f-title)}
+.promo span{font-size:14px}
+@keyframes promo{from{transform:scale(.9);opacity:0}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){.promo{animation:none}}
+.feat .rkstrip{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px}
+.feat .rkstrip span{gap:3px;font-size:13px}
+.feat .rkstrip .rk{width:22px;height:22px}

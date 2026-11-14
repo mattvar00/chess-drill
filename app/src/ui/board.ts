@@ -169,3 +169,6 @@ export function miniFen(fen: string, orient: Color, only?: string): string {
     h += `<i class="${(r + f) % 2 === 1 ? 'd' : 'l'}">${show ? `<img src="${PIECES[(ch === ch.toUpperCase() ? 'w' : 'b') + ch.toLowerCase()]}" alt="">` : ''}</i>`; }
   return `<span class="mini" aria-hidden="true">${h}</span>`;
 }
+
+/** Image d'une pièce blanche (« p », « n », « b », « r », « q », « k »). */
+export const pieceSrc = (k: string) => PIECES['w' + k];
