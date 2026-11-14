@@ -16,6 +16,7 @@ import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile }
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
+import { viewLessonEnd, viewPath } from './app/path';
 
 restoreLook();
 /** Trois onglets, rangés par intention : ce que je dois faire, ce que je peux faire, où j'en suis. */
@@ -51,7 +52,7 @@ function route() {
     if (S && !S.pool.includes(br.id)) endSession();
     const cur = session(), g = q.get('g');
     const where = cur ? `${cur.label}, ligne ${cur.done.size + (cur.done.has(br.id) ? 0 : 1)} sur ${cur.pool.length}` : sys.titre;
-    shell(br.titre, where, cur ? cur.back : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'Drill'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
+    shell(br.titre, where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'Drill'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
     cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
   } else if (p[0] === 'partie' && p[1] && p[2] === 'refaire') {
     const id = decodeURIComponent(p[1]), ply = +p[3], f = retryFault(id, ply), backTo = gameUrl(id, ply + 1);
@@ -78,8 +79,10 @@ function route() {
     endSession();
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
     if (bloc && sys) { shell(sys.titre, bloc.titre, `#/rep/${bloc.id}`, TRAIN); viewSystem(view, bloc, sys); }
-    else if (bloc) { shell(bloc.titre, bloc.sous, '#/rep', TRAIN); viewBloc(view, bloc); }
-    else if (p[0] === 'rep') { shell('Répertoire', '', TRAIN, TRAIN); viewBlocs(view); }
+    else if (bloc) { shell(bloc.titre, bloc.sous, '#/rep/tout', TRAIN); viewBloc(view, bloc); }
+    else if (p[0] === 'rep' && p[1] === 'tout') { shell('Toutes les lignes', '', '#/rep', TRAIN); viewBlocs(view); }
+    else if (p[0] === 'rep') { shell('Tes ouvertures', '', TRAIN, TRAIN); viewPath(view); }
+    else if (p[0] === 'lecon') { shell('Bilan', '', null, null); viewLessonEnd(view); }
     else if (p[0] === 'wood') { shell('Fautes à rejouer', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', TRAIN, TRAIN); viewWood(view); }
     else if (p[0] === 'entrainer') { shell("S'entraîner", '', null, TRAIN); viewTrain(view); }
     else if (p[0] === 'explorer') { shell('Explorer une position', '', TRAIN, TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, TRAIN); }
