@@ -32,7 +32,7 @@ const progLine = (ids: string[]) => { const v = validCount(ids); return `<span c
 const validPhrase = (v: number, total: number) => `${v} ${v > 1 ? 'lignes validées' : 'ligne validée'} sur ${total}`;
 const nf = (n: number) => n.toLocaleString('fr-FR');
 /** La pièce d'un rang (pion … dame), en image. */
-const rankImg = (r: number, cls = '') => `<img class="rk ${cls}" src="${pieceSrc(RANKS[r].key)}" alt="${RANKS[r].name}" title="${RANKS[r].name} : ${RANKS[r].how}">`;
+const rankImg = (r: number, cls = '') => `<img class="rk r${r} ${cls}" src="${pieceSrc(RANKS[r].key)}" alt="${RANKS[r].name}" title="${RANKS[r].name} : ${RANKS[r].how}">`;
 /** Les cinq rangs avec le nombre de lignes à chacun. */
 const rankStrip = (per: number[]) => `<div class="rkstrip">${RANKS.map((r, i) => `<span class="${per[i] ? '' : 'none'}">${rankImg(i)}<b>${per[i]}</b></span>`).join('')}</div>`;
 const repoSum = () => rankSummary(ALL_IDS, store.state.br);
