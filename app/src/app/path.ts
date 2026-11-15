@@ -3,7 +3,7 @@
  * Toutes les ouvertures d'un bloc se suivent sur un seul chemin, par sections, sur un grand échiquier à peine visible.
  * Chaque section commence par un bandeau et se termine par sa dame.
  */
-import { unitsOf, type Lesson, type Unit } from '../core/path';
+import { passed, unitsOf, type Lesson, type Unit } from '../core/path';
 import { lineName, lineTitle } from '../core/names';
 import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
@@ -25,18 +25,24 @@ export const shortName = (t: string) => t.replace(/\s*\(.*?\)\s*/g, ' ').split(/
 /** Ouvre le chemin sur une ouverture précise (depuis la page d'une ouverture). */
 export function openUnit(blocId: string, sysId: string) { setBloc(blocId); unitPick[blocId] = sysId; location.hash = '#/rep'; }
 
+/** Les lignes à jouer quand on (re)lance une case : celles qui ne sont pas encore sues pour la case en cours,
+ *  celles qui reviennent en révision pour une case à revoir, toutes pour une case réussie qu'on veut rejouer. */
+export function lessonIds(L: Lesson): string[] {
+  const st = store.state.br;
+  const left = L.state === 'cur' ? L.ids.filter(id => !passed(st[id])) : L.state === 'crack' ? L.ids.filter(id => isDue(st[id]) || !passed(st[id])) : L.ids;
+  return left.length ? left : L.ids;
+}
 /** Ouvre une leçon : ses lignes en séance, le bilan à la fin, la croix ramène au chemin. */
 function startLesson(u: Unit, i: number) {
-  const L = u.lessons[i];
-  location.hash = startSession(`${shortName(u.sys.titre)}, case ${i + 1}`, L.ids, '#/lecon/fin', L.ids[0],
+  const L = u.lessons[i], ids = lessonIds(L);
+  location.hash = startSession(`${shortName(u.sys.titre)}, case ${i + 1}`, ids, '#/lecon/fin', ids[0],
     { exit: '#/rep', lesson: { bloc: u.bloc.id, sys: u.sys.id, idx: i, rank: L.rank, doneBefore: u.done } });
 }
 
 const X = [50, 35, 62, 42, 60, 38, 52];   // position horizontale des cases (en %), pour le zigzag
-/** Case choisie sur le chemin, par ouverture ; par défaut la case en cours. */
+/** Case choisie sur le chemin, par ouverture : aucune tant qu'on n'en touche pas une (la bulle ne s'ouvre qu'au toucher). */
 const selPick: Record<string, number> = {};
-const defaultSel = (u: Unit) => { const c = u.lessons.findIndex(l => l.state === 'cur'); if (c >= 0) return c; const k = u.lessons.findIndex(l => l.state === 'crack'); return k >= 0 ? k : u.lessons.length - 1; };
-const selOf = (u: Unit) => { const s = selPick[u.sys.id]; return s != null && s < u.lessons.length ? s : defaultSel(u); };
+const selOf = (u: Unit) => { const s = selPick[u.sys.id]; return s != null && s < u.lessons.length ? s : -1; };
 const STATE: Record<Lesson['state'], string> = { done: 'réussie', crack: 'à revoir', cur: 'à jouer', lock: 'pas encore ouverte' };
 
 /** La bulle sous la case choisie : ce qu'elle contient, où elle en est, et l'action qui va avec. */
@@ -44,11 +50,12 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
   const n = u.lessons.length, last = i === n - 1, st = store.state.br;
   const lineMark = (id: string) => { const s = st[id]; return !s?.runs ? ['new', 'nouvelle'] : s.clean >= 1 && isDue(s) ? ['rev', 'à revoir'] : s.clean >= 1 ? ['ok', 'sue'] : ['new', 'à finir']; };
   const lines = L.ids.slice(0, 4).map(id => { const [c, t] = lineMark(id); const nm = lineName(BR[id].br.titre); return `<li><span class="lm ${c}">${t}</span><span>${esc(nm.title)}${nm.detail ? `<small>${esc(nm.detail)}</small>` : ''}</span></li>`; }).join('') + (L.ids.length > 4 ? `<li class="more">et ${plural(L.ids.length - 4, 'autre ligne', 'autres lignes')}</li>` : '');
-  const why = L.state === 'cur' ? `Joue ces ${plural(L.ids.length, 'ligne')} une fois chacune sans faute pour avancer le pion.`
+  const rest = lessonIds(L).length, partial = L.state === 'cur' && rest < L.ids.length;
+  const why = L.state === 'cur' ? `Joue ces ${plural(L.ids.length, 'ligne')} une fois chacune sans faute pour avancer le pion.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`
     : L.state === 'crack' ? 'Une ligne de cette case revient en révision. Rejoue-la sans faute pour garder la case.'
     : L.state === 'done' ? 'Case réussie. Tu peux rejouer ses lignes quand tu veux.'
     : last ? `La dame : termine les ${n} cases pour promouvoir l'ouverture.` : `S'ouvre quand la case ${i} est réussie.`;
-  const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">Jouer la case ${i + 1}</button>`
+  const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">${partial ? `Finir la case ${i + 1} : ${plural(rest, 'ligne restante', 'lignes restantes')}` : `Jouer la case ${i + 1}`}</button>`
     : L.state === 'crack' ? `<button class="btn pri" data-go="${i}">Revoir maintenant</button>`
     : L.state === 'done' ? `<button class="btn" data-go="${i}">Rejouer ces lignes</button>` : '';
   return `<div class="pbubble ${L.state}" style="--x:${x}%" role="region" aria-label="Case ${i + 1} sur ${n}">
@@ -59,7 +66,7 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
 function step(u: Unit, L: Lesson, i: number, sel: number) {
   const last = i === u.lessons.length - 1, x = X[i % X.length], cur = L.state === 'cur', on = i === sel;
   const inner = cur ? `<img src="${pieceSrc('p')}" alt="">` : last ? `<img class="${u.promoted ? '' : 'qghost'}" src="${pieceSrc('q')}" alt="">` : L.state === 'lock' ? `<span class="pn">${i + 1}</span>` : icon('check');
-  return `<div class="prow${on ? ' issel' : ''}${last ? ' isgoal' : ''}">
+  return `<div class="prow${on ? ' issel' : ''}${cur ? ' iscur' : ''}${last ? ' isgoal' : ''}">
     <button class="psq ${L.state}${last ? ' goal' : ''}${last && u.promoted ? ' won' : ''}${on ? ' sel' : ''}" style="left:${x}%" data-i="${i}" aria-expanded="${on}" aria-label="Case ${i + 1} sur ${u.lessons.length}, ${STATE[L.state]}">${inner}${L.state === 'crack' ? '<i class="dot"></i>' : ''}</button>
     ${on ? bubble(u, L, i, x) : ''}</div>`;
 }
@@ -98,12 +105,12 @@ export function viewPath(root: HTMLElement) {
     const t = e.target as HTMLElement, go = t.closest<HTMLElement>('[data-go]'), sq = t.closest<HTMLElement>('.psq');
     if (go) return startLesson(open, +go.dataset.go!);
     if (!sq) return;
-    selPick[open.sys.id] = +sq.dataset.i!; path.innerHTML = pathCells(open);
+    const i = +sq.dataset.i!; selPick[open.sys.id] = selPick[open.sys.id] === i ? -1 : i; path.innerHTML = pathCells(open);
     path.querySelector('.issel')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     path.querySelector<HTMLElement>('.psq.sel')?.focus({ preventScroll: true });
   });
   // après le retour en haut de page fait par le routeur : on amène la case choisie au milieu de l'écran
-  requestAnimationFrame(() => root.querySelector('.issel')?.scrollIntoView({ block: 'center' }));
+  requestAnimationFrame(() => (root.querySelector('.issel') ?? root.querySelector('.iscur'))?.scrollIntoView({ block: 'center' }));
 }
 
 /** Une ligne quittée en partie : contre qui, ce que tu as joué, ce que dit ta ligne. Mène au drill de cette ligne. */
