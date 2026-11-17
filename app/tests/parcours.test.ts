@@ -154,7 +154,7 @@ describe('cours : chapitres et méthode', () => {
   it('une case par chapitre, dans l\'ordre du cours, puis les lignes tirées des parties', () => {
     const u = unitOf(bloc, c5, {});
     expect(u.lessons.map(l => l.name)).toEqual([...chaptersOf(course)!.map(c => c.name), 'Tirées de tes parties']);
-    expect(u.lessons[1].ids).toEqual(['C5b2', 'C5b1', 'C5b7', 'C5b3', 'C5b4', 'C5b5', 'C5b6']);
+    expect(u.lessons[1].ids).toEqual(['C5b5', 'C5b6', 'C5b3', 'C5b4', 'C5b2', 'C5b1', 'C5b7']);
   });
   it('chaque variante du cours a un rôle, une explication, des coups légaux, finit sur un coup à soi, et explique chacun de tes coups', () => {
     expect(course.length).toBeGreaterThanOrEqual(19);
@@ -166,8 +166,15 @@ describe('cours : chapitres et méthode', () => {
       for (const k of Object.keys(b.notes)) expect(+k % 2, `${b.id} note ${k}`).toBe(0);
     }
   });
-  it('dans chaque chapitre, la théorie passe avant les erreurs', () => {
-    for (const c of chaptersOf(course)!) expect(c.lines[0].role, c.name).toBe('theorie');
+  it('dans chaque chapitre, on va de la variante la plus courte à la plus longue, et le cours s\'ouvre sur un piège', () => {
+    for (const c of chaptersOf(course)!) expect(c.lines.map(b => b.moves.length), c.name).toEqual(c.lines.map(b => b.moves.length).sort((x, y) => x - y));
+    expect(course[0].role).toBe('erreur');
+  });
+  it('les fautes marquées sont des coups de l\'adversaire, et chaque erreur classique en porte une', () => {
+    for (const b of course) {
+      for (const k of Object.keys(b.marks ?? {})) { expect(+k % 2, `${b.id} ${k}`).toBe(1); expect(b.marks![k]).toMatch(/^(\?|\?\?|\?!)$/); }
+      if (b.role === 'erreur') expect(Object.keys(b.marks ?? {}).length, b.id).toBeGreaterThan(0);
+    }
   });
   it('rien de connu : la variante s\'explique dès le premier coup', () => {
     expect(trunkOf(mv('C5b1'), [], 'w')).toBe(0);

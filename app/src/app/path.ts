@@ -69,7 +69,7 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
   const lineMark = (id: string) => { const s = st[id]; return !s?.runs ? ['new', 'nouvelle'] : s.clean >= 1 && isDue(s) ? ['rev', 'à revoir'] : s.clean >= 1 ? ['ok', 'sue'] : ['new', 'à finir']; };
   const lines = L.ids.slice(0, L.name ? 8 : 4).map(id => { const [c, t] = lineMark(id); const nm = lineName(BR[id].br.titre); const ty = BR[id].br.type, ro = BR[id].br.role; return `<li><span class="lm ${c}">${t}</span><span>${ty ? `<span class="ltype ${ty}">${typeLabel(ty)}</span>` : ro ? `<span class="ltype ${ro}">${roleLabel(ro)}</span>` : ''}${esc(nm.title)}${nm.detail ? `<small>${esc(nm.detail)}</small>` : ''}</span></li>`; }).join('') + (L.ids.length > (L.name ? 8 : 4) ? `<li class="more">et ${plural(L.ids.length - (L.name ? 8 : 4), 'autre ligne', 'autres lignes')}</li>` : '');
   const rest = lessonIds(L).length, partial = L.state === 'cur' && rest < L.ids.length;
-  const why = L.state === 'cur' ? (L.name ? `${plural(L.ids.length, 'variante')}, l'une après l'autre : les coups que tu connais se jouent tout seuls, on t'explique la variante, puis tu la joues.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`
+  const why = L.state === 'cur' ? (L.name ? `${plural(L.ids.length, 'variante')}, de la plus courte à la plus longue : le coach t'explique chaque coup, puis tu la rejoues de mémoire.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`
       : `Joue ces ${plural(L.ids.length, 'ligne')} une fois chacune sans faute pour avancer le pion.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`)
     : L.state === 'crack' ? 'Une ligne de cette case revient en révision. Rejoue-la sans faute pour garder la case.'
     : L.state === 'done' ? 'Case réussie. Tu peux rejouer ses lignes quand tu veux.'
@@ -113,7 +113,7 @@ export function pathBlock(u: Unit): string {
   const L = go >= 0 ? u.lessons[go] : null, rest = L ? lessonIds(L).length : 0, partial = L?.state === 'cur' && rest < L.ids.length;
   const msg = u.promoted && cur < 0 ? (crack >= 0 ? 'Ouverture promue. Une case est à revoir pour garder la dame bien en place.' : 'Ouverture promue : ses lignes reviendront de temps en temps pour ne pas s\'effacer.')
     : u.promoted ? 'Ouverture promue. De nouvelles lignes sont arrivées : elles forment une case avant la dame, la dame reste à toi.'
-    : L?.name ? 'Une case par réponse de l\'adversaire. Dans chaque case : la théorie d\'abord, puis les erreurs classiques et comment les punir.'
+    : L?.name ? 'Une case par réponse de l\'adversaire. Dans chaque case : d\'abord les pièges courts à punir, puis la théorie.'
     : 'Joue chaque ligne de la case une fois sans faute : le pion avance d\'une case. Au bout, la dame.';
   const btn = L ? `<button class="btn pri block" data-go="${go}">${L.state === 'crack' ? `Revoir la case ${go + 1}` : partial ? `Finir la case ${go + 1} : ${L.name ? plural(rest, 'variante restante', 'variantes restantes') : plural(rest, 'ligne restante', 'lignes restantes')}` : `Jouer la case ${go + 1}`}</button>` : '';
   return `<section class="surf card padded pathhead${u.promoted ? ' won' : ''}">

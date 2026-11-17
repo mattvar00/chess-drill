@@ -45,8 +45,6 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   const steps: (Step | undefined)[] = []; let timer: ReturnType<typeof setTimeout> | undefined;
   const course = mode === 'drill' && !fromGame && !!br.ch;
   const trunk = course ? trunkOf(moves, sys.branches.filter(o => o.id !== id && o.ch && (passed(store.state.br[o.id]) || S?.done.has(o.id))).map(o => o.moves), side) : 0;
-  /** `fork` : le coup où cette variante quitte celles d'avant dans le cours (là où l'adversaire l'ouvre). */
-  const fork = course ? trunkOf(moves, sys.branches.slice(0, sys.branches.findIndex(o => o.id === id)).filter(o => o.ch).map(o => o.moves), side) : 0;
   /** `learn` : premier passage d'une variante jamais jouée de mémoire. Le coach dit chaque coup nouveau et pourquoi ; rien n'est noté. */
   let learn = course && !store.state.br[id]?.runs;   // déjà tentée de mémoire, même ratée : on la retente directement
   // le coach en haut, au-dessus de l'échiquier, sur téléphone : on lit, puis on joue
@@ -106,8 +104,8 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   function prompt() {
     if (ply >= moves.length) return end();
     if (course) {
-      // le coup adverse qui ouvre la variante porte un « ? » quand c'est une erreur
-      if (ply === fork && br.role === 'erreur' && last) board.mark({ sq: last.to, text: '?', cls: 'mistake', label: 'Erreur de ton adversaire' });
+      // une faute de l'adversaire porte sa marque sur sa case : « ? », « ?? », « ?! »
+      const mk = br.marks?.[ply - 1]; if (mk && last) board.mark({ sq: last.to, text: mk, cls: mk === '??' ? 'blunder' : mk === '?!' ? 'inacc' : 'mistake', label: 'Erreur de ton adversaire' });
       if (learn && ply >= trunk) coach.innerHTML = coachSay('talk', lesson(ply));   // un coup nouveau : le coach l'explique, sans rien arrêter
       else say('you', `<i class="stm ${side}"></i>À toi`, learn ? '<p class="why">Tu connais ce coup.</p>' : ply <= 1 ? `<p class="why">${esc(nb(lineTitle(br.titre)))}</p>` : '');
       return drillActions();
