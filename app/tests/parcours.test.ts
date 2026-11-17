@@ -154,30 +154,31 @@ describe('cours : chapitres et méthode', () => {
   it('une case par chapitre, dans l\'ordre du cours, puis les lignes tirées des parties', () => {
     const u = unitOf(bloc, c5, {});
     expect(u.lessons.map(l => l.name)).toEqual([...chaptersOf(course)!.map(c => c.name), 'Tirées de tes parties']);
-    expect(u.lessons[1].ids).toEqual(['C5b1', 'C5b2', 'C5b3', 'C5b4', 'C5b5', 'C5b6']);
+    expect(u.lessons[1].ids).toEqual(['C5b2', 'C5b1', 'C5b7', 'C5b3', 'C5b4', 'C5b5', 'C5b6']);
   });
-  it('chaque variante du cours a un rôle, une explication, des coups légaux, et finit sur un coup à soi (sauf la ligne principale d\'origine)', () => {
-    expect(course.length).toBeGreaterThanOrEqual(18);
+  it('chaque variante du cours a un rôle, une explication, des coups légaux, finit sur un coup à soi, et explique chacun de tes coups', () => {
+    expect(course.length).toBeGreaterThanOrEqual(19);
     for (const b of course) {
       expect(b.role, b.id).toMatch(/^(theorie|erreur)$/); expect(b.intro!.length, b.id).toBeGreaterThan(40);
       const g = new Chess(); for (const m of b.moves) expect(g.move(m.san).san, `${b.id} ${m.san}`).toBe(m.san);
-      if (b.id !== 'C1d') expect(b.moves.length % 2, b.id).toBe(1);
-      for (const k of Object.keys(b.notes)) expect(+k % 2, `${b.id} note ${k}`).toBe(0);   // les notes sont sur tes coups
+      expect(b.moves.length % 2, b.id).toBe(1);
+      for (let i = 0; i < b.moves.length; i += 2) expect(b.notes[i], `${b.id} ${b.moves[i].san}`).toMatch(new RegExp(`^${i / 2 + 1}\\.\\S+ : .{12,}`));   // une raison à chaque coup
+      for (const k of Object.keys(b.notes)) expect(+k % 2, `${b.id} note ${k}`).toBe(0);
     }
   });
   it('dans chaque chapitre, la théorie passe avant les erreurs', () => {
     for (const c of chaptersOf(course)!) expect(c.lines[0].role, c.name).toBe('theorie');
   });
-  it('rien de connu : la variante se joue depuis le premier coup', () => {
+  it('rien de connu : la variante s\'explique dès le premier coup', () => {
     expect(trunkOf(mv('C5b1'), [], 'w')).toBe(0);
   });
   it('les coups communs se jouent tout seuls, jusqu\'au coup adverse qui ouvre la variante', () => {
-    // …Bd7 connue : pour …Qb6, on rejoue jusqu'à 6.Nc3 puis 6…Qb6 ; il reste 7.Nd5 à trouver
-    const t = trunkOf(mv('C5b2'), [mv('C5b1')], 'w');
-    expect(mv('C5b2')[t - 1].san).toBe('Qb6'); expect(mv('C5b2')[t].san).toBe('Nd5');
+    // …Qb6 connue : pour …Bd7, les coups connus vont jusqu'à 6.Nc3, puis 6…Bd7 ouvre la variante ; il reste 7.d5 à trouver
+    const t = trunkOf(mv('C5b1'), [mv('C5b2')], 'w');
+    expect(mv('C5b1')[t - 1].san).toBe('Bd7'); expect(mv('C5b1')[t].san).toBe('d5');
     // d'un chapitre à l'autre : seuls 1.d4 d5 2.c4 dxc4 3.e4 sont communs, puis 3…b5
-    const t2 = trunkOf(mv('C5b1'), [mv('C1d'), mv('C1e')], 'w');
-    expect(mv('C5b1')[t2 - 1].san).toBe('b5'); expect(mv('C5b1')[t2].san).toBe('a4');
+    const t2 = trunkOf(mv('C5b2'), [mv('C1d'), mv('C1e')], 'w');
+    expect(mv('C5b2')[t2 - 1].san).toBe('b5'); expect(mv('C5b2')[t2].san).toBe('a4');
   });
   it('quand la variante s\'écarte par un coup à soi, on s\'arrête juste avant', () => {
     const t = trunkOf(mv('C1x3'), [mv('C1d')], 'w');   // 5.Nxd4 au lieu de 5.Bxc4

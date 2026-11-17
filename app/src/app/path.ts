@@ -254,9 +254,12 @@ export function viewLessonEnd(root: HTMLElement) {
   const strip = u.lessons.map((l, i) => { const isPawn = l.state === 'cur', last = i === u.lessons.length - 1;
     return `<span class="ecell ${l.state}${isPawn ? ' pawn' : ''}">${isPawn ? `<img src="${pieceSrc('p')}" alt="">` : last && l.state === 'lock' ? `<img class="qghost" src="${pieceSrc('q')}" alt="">` : ''}</span>`; }).join('');
   const left = u.lessons.length - u.done;
+  // la case suivante est prête : on y va d'ici, sans repasser par la page de l'ouverture
+  const ni = moved ? u.lessons.findIndex(l => l.state === 'cur') : -1, nx = ni >= 0 ? u.lessons[ni] : null;
   root.innerHTML = `<div class="lend"><h1>${moved ? 'Le pion avance' : 'Presque'}</h1>
     <div class="estrip">${strip}</div>
     <p class="sub">${moved ? `${esc(name)} : ${left === 1 ? 'plus qu\'une case avant la dame' : `plus que ${left} cases avant la dame`}` : 'Rejoue sans faute les lignes ratées pour passer à la case suivante.'}</p>
     <div class="etiles"><div><b class="ok">${L.clean}/${L.lines}</b><span>lignes sans faute</span></div><div><b class="combo">×${L.best}</b><span>meilleur combo</span></div><div><b>${time}</b><span>temps</span></div></div></div>
-    <div class="lend-act"><a class="btn pri block" href="${back}">Continuer</a></div>`;
+    <div class="lend-act">${nx ? `<button class="btn pri block" id="bNext">${nx.name ? `Chapitre suivant : ${esc(nx.name)}` : `Jouer la case ${ni + 1}`}</button><a class="btn block" href="${back}">Voir l'ouverture</a>` : `<a class="btn pri block" href="${back}">Continuer</a>`}</div>`;
+  root.querySelector('#bNext')?.addEventListener('click', () => startLesson(u, ni));
 }
