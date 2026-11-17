@@ -1,17 +1,15 @@
 /**
  * Sorties d'ouverture : ce que le scan de tes parties trouve dans les 15 premiers coups.
- * En haut, l'indicateur (erreurs adverses punies, semaine après semaine) ; puis les erreurs à punir, les positions à connaître,
- * les lignes « Punir » / « Bon coup » déjà dans ton répertoire, et tes propres oublis.
+ * Deux listes seulement : les erreurs adverses à punir, et les coups adverses à connaître. Tes propres oublis restent sur la page
+ * de chaque ouverture (« À corriger »), les lignes déjà apprises dans les ouvertures ; l'indicateur suivi est dans Progrès.
  */
 import { Chess } from '../core/chess';
 import { punishWeeks, scanExits, type ExitCard } from '../core/scan';
-import { lineName, typeLabel } from '../core/names';
 import { miniBoard } from '../ui/board';
 import { esc, icon, plural } from '../ui/dom';
 import { gameUrl } from './games';
-import { devRow, shortName } from './path';
-import { lineUrl } from './session';
-import { BR, REP, store } from './store';
+import { shortName } from './path';
+import { BR, store } from './store';
 
 const HERE = '#/rep/sorties';
 /** Les derniers coups d'une ligne, numérotés : « … 3.Nc3 Nf6 4.Nf3 Bg4 ». */
@@ -47,24 +45,14 @@ export function punishRate() {
 }
 
 export function viewExits(root: HTMLElement) {
-  const s = scanExits(store.games, store.state.ignored), R = punishRate(), max = Math.max(1, ...R.weeks.map(x => x.errors));
+  const s = scanExits(store.games, store.state.ignored), R = punishRate();
   const pct = (x: { e: number; p: number }) => (x.e ? Math.round((100 * x.p) / x.e) : null), now = pct(R.now), before = pct(R.before);
-  const typed = REP.blocs.flatMap(b => b.systemes.flatMap(sys => sys.branches.filter(br => br.type).map(br => ({ br, sys }))))
-    .sort((a, b) => (a.br.type === 'punir' ? 0 : 1) - (b.br.type === 'punir' ? 0 : 1));
   const punir = s.punir.slice(0, 12), connaitre = s.connaitre.filter(c => c.count > 1).slice(0, 8), once = s.connaitre.filter(c => c.count === 1).length;
   root.innerHTML = `
-    <p class="intro">Les 15 premiers coups de tes parties analysées, là où elles sortent de ton répertoire. Une erreur adverse, c'est un coup qui te donne au moins 8 points de chances (environ +0,8) ; elle est punie si ta réponse garde l'avantage.</p>
-    <section class="surf card padded ptile">
-      <div class="pchead"><b>${now == null ? 'Aucune erreur adverse sur la période' : `${now} % des erreurs punies`}</b><span>4 dernières semaines</span></div>
-      ${now != null ? `<p class="pnote">${R.now.p} sur ${R.now.e}${before != null ? `. Les 4 semaines d'avant : ${before} %.` : '.'}</p>` : ''}
-      <div class="wbars" role="img" aria-label="Erreurs adverses et erreurs punies, semaine par semaine, sur 8 semaines">${R.weeks.map(x => `<span><i style="height:${Math.round((100 * x.errors) / max)}%"><b style="height:${x.errors ? Math.round((100 * x.punished) / x.errors) : 0}%"></b></i></span>`).join('')}</div>
-      <p class="wleg"><span><i class="k"></i>punies</span><span><i class="e"></i>pas punies</span></p>
-    </section>
+    <p class="intro">Là où tes adversaires sortent de ton répertoire, dans les 15 premiers coups. Une erreur, c'est un coup qui te donne environ +0,8 ou plus.</p>
+    ${now != null ? `<p class="pnote">Ces 4 dernières semaines, tu as puni ${R.now.p} erreur${R.now.p > 1 ? 's' : ''} adverse${R.now.p > 1 ? 's' : ''} sur ${R.now.e} (${now} %)${before != null ? ` ; les 4 d'avant : ${before} %` : ''}.</p>` : ''}
     <section class="grp"><h2>À punir <span class="dim">${punir.length}</span></h2>
       ${punir.length ? punir.map(card).join('') : '<p class="pnote">Aucune erreur adverse repérée dans tes parties analysées.</p>'}</section>
     <section class="grp"><h2>À connaître <span class="dim">${connaitre.length}</span></h2><p class="pnote">Des coups adverses normaux que ton répertoire ne prévoit pas, vus au moins deux fois.${once ? ` ${plural(once, 'autre', 'autres')}, vu${once > 1 ? 's' : ''} une seule fois, ne sont pas montrés.` : ''}</p>
-      ${connaitre.map(card).join('')}</section>
-    ${typed.length ? `<section class="grp"><h2>Déjà dans ton répertoire <span class="dim">${typed.length}</span></h2><p class="pnote">Les lignes « Punir » et « Bon coup » tirées de tes parties.</p><div class="surf card list">${typed.map(({ br, sys }) => { const nm = lineName(br.titre);
-      return `<a class="rowi" href="${lineUrl(br.id, 'drill')}"><span class="body"><b><span class="ltype ${br.type}">${typeLabel(br.type)}</span>${esc(nm.title)}</b><small>${esc(shortName(sys.titre))}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}
-    ${s.mineDev.length ? `<section class="grp fix"><h2>Tes oublis <span class="dim">${s.mineDev.length}</span></h2><p class="pnote">Là où tu as quitté une ligne que tu connais : à rejouer.</p><div class="surf card list">${s.mineDev.slice(0, 6).map(g => devRow(g)).join('')}</div></section>` : ''}`;
+      ${connaitre.map(card).join('')}</section>`;
 }
