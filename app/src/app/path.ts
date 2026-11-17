@@ -7,6 +7,7 @@ import { caseOf, earnedQueen, freshFromGames, passed, unitOf, unitsOf, type Less
 import type { Bloc, System } from '../core/types';
 import { syncSoon } from './api';
 import { recommend, type Facts, type Reco, type RecoKind } from '../core/reco';
+import { punishLines, punishRow } from './exits';
 import { scanExits } from '../core/scan';
 import { myWp } from '../core/stats';
 import type { Game } from '../core/types';
@@ -188,21 +189,24 @@ export function viewPath(root: HTMLElement) {
   const row = (u: Unit) => `<a class="rowi orow" href="${openingUrl(u)}"><span class="body"><b>${esc(shortName(u.sys.titre))}</b><small>${where(u)}</small>${strip(u)}</span>
       ${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Promue">` : ''}${icon('chev', 'chev')}</a>`;
   const act = top ? actionOf(top) : null;
+  const pun = punishLines();
   const recoRow = (r: Reco) => `<a class="rowi rrow" href="${openingUrl(r.f.u)}"><span class="chip ${r.f.u.bloc.side}" role="img" aria-label="${r.f.u.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(shortName(r.f.u.sys.titre))}</b><small>${WHY[r.kind](r.f)}</small></span>${icon('chev', 'chev')}</a>`;
   const strongRow = (f: Facts) => `<a class="rowi rrow" href="${openingUrl(f.u)}"><span class="chip ${f.u.bloc.side}" role="img" aria-label="${f.u.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(shortName(f.u.sys.titre))}</b><small>${f.u.promoted ? 'Promue, et tes résultats suivent.' : 'Tu y prends plus de points qu\'ailleurs, sans quitter tes lignes.'}</small></span>${f.u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Promue">` : ''}${icon('chev', 'chev')}</a>`;
   const blocs = REP.blocs.filter(b => b.side === side);
   root.innerHTML = `
-    ${top ? `<section class="surf today resume"><div class="today-top"><div class="today-text"><p class="label">À travailler maintenant</p><h2>${esc(shortName(top.f.u.sys.titre))}</h2><p class="rside">${esc(sideWord(top.f.u))}</p><p>${WHY[top.kind](top.f)}</p>${strip(top.f.u)}</div></div>
+    ${top ? `<section class="surf today resume"><div class="today-top"><div class="today-text"><p class="label">Ta priorité</p><h2>${esc(shortName(top.f.u.sys.titre))}</h2><p class="rside">${esc(sideWord(top.f.u))}</p><p>${WHY[top.kind](top.f)}</p>${strip(top.f.u)}</div></div>
       ${act!.href ? `<a class="btn pri block" href="${act!.href}">${act!.label}</a>` : `<button class="btn pri block" id="bReco">${act!.label}</button>`}<a class="quiet" href="${openingUrl(top.f.u)}">Voir l'ouverture</a></section>` : ''}
-    ${rest.length ? `<section class="grp"><h2>Ensuite</h2><div class="surf card list">${rest.map(recoRow).join('')}</div></section>` : ''}
-    <section class="grp"><h2>Ce que tu joues bien</h2>${R.strong.length ? `<div class="surf card list">${R.strong.map(strongRow).join('')}</div>` : '<p class="pnote">Encore trop peu de parties par ouverture pour le dire. Ça viendra tout seul en jouant.</p>'}</section>
-    <section class="grp allrep"><h2>Tout ton répertoire <span class="dim">${nQ} ${nQ > 1 ? 'dames' : 'dame'} sur ${allPlayed.length}</span></h2>
+    ${rest.length ? `<section class="grp"><h2>À travailler ensuite</h2><p class="pnote">Choisies d'après tes dernières parties et ce que tu as déjà appris.</p><div class="surf card list">${rest.map(recoRow).join('')}</div></section>` : ''}
+    ${pun.length ? `<section class="grp"><h2>Punir les erreurs adverses</h2><p class="pnote">Les erreurs que tes adversaires font dans l'ouverture, et le coup qui les punit.</p>
+      <div class="surf card list">${pun.slice(0, 3).map(punishRow).join('')}<a class="rowi more" href="#/rep/sorties">${pun.length > 3 ? `Toutes les punitions (${pun.length})` : 'Voir la page des punitions'}</a></div></section>` : ''}
+    <section class="grp"><h2>Tes points forts</h2><p class="pnote">Les ouvertures où tu prends le plus de points.</p>${R.strong.length ? `<div class="surf card list">${R.strong.map(strongRow).join('')}</div>` : '<p class="pnote">Encore trop peu de parties par ouverture pour le dire. Ça viendra tout seul en jouant.</p>'}</section>
+    <section class="grp allrep"><h2>Tout ton répertoire <span class="dim">${nQ} ${nQ > 1 ? 'dames' : 'dame'} sur ${allPlayed.length}</span></h2><p class="pnote">Toutes tes ouvertures, rangées par le premier coup de l'adversaire.</p>
     <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture ou une ligne</label><input id="qRep" type="search" placeholder="Chercher : Londres, Bowdler, Meran…" autocomplete="off"><a class="hchip" href="#/rep/chercher">Jouer les coups</a></div>
     <div id="qRes"></div>
     <div id="olist"><div class="seg" role="group" aria-label="Couleur"><button type="button" data-side="b" aria-pressed="${side === 'b'}">Avec les Noirs</button><button type="button" data-side="w" aria-pressed="${side === 'w'}">Avec les Blancs</button></div>
     ${blocs.map(b => { const us = playedU.filter(u => u.bloc.id === b.id); return us.length ? `<section class="grp"><h2>${esc(b.titre)}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; }).join('')}
     ${others.length ? `<details class="others"><summary>Autres options (${others.length})</summary><p class="pnote">Des ouvertures de rechange, que tu ne joues pas d'habitude.</p><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
-    <a class="quiet" href="#/rep/sorties">Ce que tes adversaires jouent hors de ton répertoire</a></div></section>`;
+    </div></section>`;
   root.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.onclick = () => { setLS(SIDE_KEY, b.dataset.side!); const y = window.scrollY; viewPath(root); window.scrollTo(0, y); });
   if (act?.run) $('#bReco', root)?.addEventListener('click', act.run);
   // recherche par nom : ouvertures et lignes, toutes couleurs confondues

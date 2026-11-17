@@ -9,6 +9,10 @@ import { miniBoard } from '../ui/board';
 import { esc, icon, plural } from '../ui/dom';
 import { gameUrl } from './games';
 import { shortName } from './path';
+import { passed } from '../core/path';
+import { isDue } from '../core/schedule';
+import { lineName } from '../core/names';
+import { lineUrl, startSession } from './session';
 import { BR, store } from './store';
 
 const HERE = '#/rep/sorties';
@@ -39,15 +43,30 @@ export function punishRate() {
   return { weeks: w, now: sum(w.slice(4)), before: sum(w.slice(0, 4)) };
 }
 
+/** Tes punitions : les lignes « Punir » de ton répertoire, celles qui restent à apprendre d'abord. */
+export function punishLines() {
+  const st = store.state.br, rank = (id: string) => (!st[id]?.runs ? 0 : !passed(st[id]) ? 1 : isDue(st[id]) ? 2 : 3);
+  return Object.values(BR).filter(r => r.br.type === 'punir').sort((a, b) => rank(a.br.id) - rank(b.br.id));
+}
+/** Une punition : son titre, d'où elle vient, et où tu en es (en un mot). */
+export function punishRow(r: ReturnType<typeof punishLines>[number]) {
+  const s = store.state.br[r.br.id], [c, t] = !s?.runs ? ['new', 'à apprendre'] : !passed(s) ? ['new', 'à finir'] : isDue(s) ? ['rev', 'à revoir'] : ['ok', 'sue'];
+  return `<a class="rowi" href="${lineUrl(r.br.id, 'drill')}"><span class="body"><b>${esc(lineName(r.br.titre).title)}</b><small>${esc(shortName(r.sys.titre))}, ${r.bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}</small></span><span class="lm ${c}">${t}</span>${icon('chev', 'chev')}</a>`;
+}
+
+/**
+ * Punir les erreurs adverses : d'abord tes punitions (les lignes « Punir » du répertoire, à travailler d'un bouton),
+ * puis les erreurs repérées dans tes parties qui n'ont pas encore de ligne, et, repliés, les coups normaux hors répertoire.
+ */
 export function viewExits(root: HTMLElement) {
-  const s = scanExits(store.games, store.state.ignored), R = punishRate();
-  const pct = (x: { e: number; p: number }) => (x.e ? Math.round((100 * x.p) / x.e) : null), now = pct(R.now), before = pct(R.before);
-  const punir = s.punir.slice(0, 12), connaitre = s.connaitre.filter(c => c.count > 1).slice(0, 8), once = s.connaitre.filter(c => c.count === 1).length;
+  const s = scanExits(store.games, store.state.ignored), lines = punishLines(), todo = lines.filter(r => !passed(store.state.br[r.br.id]) || isDue(store.state.br[r.br.id]));
+  const punir = s.punir.slice(0, 12), connaitre = s.connaitre.filter(c => c.count > 1).slice(0, 8);
   root.innerHTML = `
-    <p class="intro">Là où tes adversaires sortent de ton répertoire, dans les 15 premiers coups. Une erreur, c'est un coup qui te donne environ +0,8 ou plus.</p>
-    ${now != null ? `<p class="pnote">Ces 4 dernières semaines, tu as puni ${R.now.p} erreur${R.now.p > 1 ? 's' : ''} adverse${R.now.p > 1 ? 's' : ''} sur ${R.now.e} (${now} %)${before != null ? ` ; les 4 d'avant : ${before} %` : ''}.</p>` : ''}
-    <section class="grp"><h2>À punir <span class="dim">${punir.length}</span></h2>
-      ${punir.length ? punir.map(card).join('') : '<p class="pnote">Aucune erreur adverse repérée dans tes parties analysées.</p>'}</section>
-    <section class="grp"><h2>À connaître <span class="dim">${connaitre.length}</span></h2><p class="pnote">Des coups adverses normaux que ton répertoire ne prévoit pas, vus au moins deux fois.${once ? ` ${plural(once, 'autre', 'autres')}, vu${once > 1 ? 's' : ''} une seule fois, ne sont pas montrés.` : ''}</p>
-      ${connaitre.map(card).join('')}</section>`;
+    <p class="intro">Les erreurs que tes adversaires font dans l'ouverture, et le coup qui les punit. Tout vient de tes parties.</p>
+    <section class="grp"><h2>Tes punitions</h2><p class="pnote">Des lignes courtes : tu rejoues l'ouverture jusqu'à l'erreur, puis tu trouves le coup qui punit.</p>
+      ${lines.length ? `${todo.length ? `<button class="btn pri block" id="bPun">Travailler ${todo.length > 1 ? `les ${todo.length} punitions à apprendre` : 'la punition à apprendre'}</button>` : ''}
+      <div class="surf card list">${lines.map(punishRow).join('')}</div>` : '<p class="pnote">Aucune pour l\'instant.</p>'}</section>
+    ${punir.length ? `<section class="grp"><h2>Repérées dans tes parties</h2><p class="pnote">Des erreurs adverses récentes qui n'ont pas encore leur ligne. Regarde le coup du moteur.</p>${punir.map(card).join('')}</section>` : ''}
+    ${connaitre.length ? `<details class="others"><summary>Coups adverses que ton répertoire ne prévoit pas (${connaitre.length})</summary><p class="pnote">Pas des erreurs : des coups normaux, vus au moins deux fois, pour lesquels tu n'as pas de ligne.</p>${connaitre.map(card).join('')}</details>` : ''}`;
+  root.querySelector('#bPun')?.addEventListener('click', () => { location.hash = startSession('Punir les erreurs adverses', todo.map(r => r.br.id), HERE); });
 }

@@ -29,7 +29,7 @@ function punishTile() {
   const R = punishRate(); if (!R.now.e && !R.before.e) return '';
   const pc = (x: { e: number; p: number }) => (x.e ? Math.round((100 * x.p) / x.e) : null), a = pc(R.now), b = pc(R.before);
   return `<a class="surf card tile t2 wide lnk" href="#/rep/sorties"><span class="tl">Erreurs adverses punies dans l'ouverture</span><b class="tn">${a == null ? '–' : a + ' %'}</b>
-    <small>${R.now.e ? `${R.now.p} sur ${R.now.e}, ` : ''}4 dernières semaines${b != null ? ` (avant : ${b} %)` : ''}. Voir les sorties d'ouverture</small></a>`;
+    <small>${R.now.e ? `${R.now.p} sur ${R.now.e}, ` : ''}4 dernières semaines${b != null ? ` (avant : ${b} %)` : ''}. Voir les punitions</small></a>`;
 }
 
 /* ---------- onglet Parties ---------- */

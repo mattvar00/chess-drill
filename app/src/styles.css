@@ -947,3 +947,4 @@ a.tile.lnk{color:inherit;text-decoration:none}
 .rrow .body small{font-size:13.5px;line-height:1.4;color:var(--c-mute)}
 .allrep>.rsearch{margin-bottom:12px}.allrep #olist>.seg{margin-bottom:14px}
 .allrep #olist>.quiet{display:block;text-align:center}
+.grp>.btn.block{margin-bottom:10px}
