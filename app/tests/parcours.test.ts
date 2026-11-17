@@ -227,3 +227,39 @@ describe('le coach dit les coups en mots', () => {
     for (const b of c5.branches.filter(x => x.ch)) for (const n of Object.values(b.notes)) expect(n.replace(/^[^:]*: /, '').length, `${b.id} ${n}`).toBeLessThanOrEqual(110);
   });
 });
+
+describe('cours de toutes les ouvertures', () => {
+  const R = rep as unknown as Repertoire;
+  const all = R.blocs.flatMap(bl => bl.systemes.map(s => ({ bl, s })));
+  it('chaque variante de cours : coups légaux, une explication courte sur chacun de tes coups, les fautes marquées sur les coups adverses', () => {
+    let n = 0;
+    for (const { bl, s } of all) for (const b of s.branches.filter(x => x.role)) {
+      n++; const mine = bl.side === 'w' ? 0 : 1, g = new Chess();
+      for (const m of b.moves) expect(g.move(m.san).san, `${b.id} ${m.san}`).toBe(m.san);
+      expect((b.moves.length - 1) % 2, `${b.id} finit sur ton coup`).toBe(mine);
+      for (let i = mine; i < b.moves.length; i += 2) expect(b.notes[i], `${b.id} ${b.moves[i].san}`).toBeTruthy();
+      for (const k of Object.keys(b.notes)) expect(+k % 2, `${b.id} note ${k}`).toBe(mine);
+      for (const k of Object.keys(b.marks ?? {})) expect(+k % 2, `${b.id} marque ${k}`).toBe(1 - mine);
+      if (s.id !== 'C5') for (const v of Object.values(b.notes)) expect(v.replace(/^[^:]*: /, '').length, `${b.id} ${v}`).toBeLessThanOrEqual(110);
+    }
+    expect(n).toBeGreaterThan(200);
+  });
+  it('tes fautes classiques sont sur tes coups, légales, et jamais le coup du cours', () => {
+    for (const { bl, s } of all) for (const b of s.branches) for (const [k, bad] of Object.entries(b.wrong ?? {})) {
+      expect(+k % 2, `${b.id} ${k}`).toBe(bl.side === 'w' ? 0 : 1);
+      const g = new Chess(); for (const m of b.moves.slice(0, +k)) g.move(m.san);
+      for (const uci of Object.keys(bad)) { expect(uci).not.toBe(b.moves[+k].uci); expect(g.moves({ verbose: true }).some(m => m.from + m.to === uci), `${b.id} ${uci}`).toBe(true); }
+    }
+  });
+  it('une ouverture en cours a toutes ses lignes dans des chapitres, et 6 cases au plus', () => {
+    for (const { bl, s } of all) {
+      const base = s.branches.filter(b => !b.type); if (!base.some(b => b.ch)) continue;
+      expect(base.every(b => b.ch), s.id).toBe(true);
+      expect(unitOf(bl, s, {}).lessons.filter(l => l.name !== 'Tirées de tes parties').length, s.id).toBeLessThanOrEqual(6);
+    }
+  });
+  it('les identifiants restent uniques (ta progression y est rangée)', () => {
+    const ids = all.flatMap(({ s }) => s.branches.map(b => b.id));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
