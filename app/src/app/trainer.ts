@@ -129,7 +129,10 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     } else if (course) {
       // en découverte une erreur ne coûte rien ; de mémoire elle compte, et le coach rappelle l'idée du coup attendu
       if (!learn) { miss(); if (S) S.combo = 0; } wrongHere++; show(); board.flash(m.to, 'bad');
-      coach.innerHTML = coachSay('oops', `<p class="lead bad">Pas celui-là.</p>${learn ? lesson(ply) : br.notes[ply] ? `<p>${esc(bare(br.notes[ply]))}</p>` : ''}`);
+      // une faute que tout le monde fait ici : le coach dit pourquoi elle est fausse ; sinon il rappelle l'idée du bon coup
+      const why = br.wrong?.[ply]?.[uciOf(m)];
+      coach.innerHTML = why ? coachSay('oops', `<p class="lead bad">Erreur classique.</p><p>${esc(nb(why))}</p>${learn ? `<p class="do">${esc(tell(want))}</p>` : ''}`)
+        : coachSay('oops', `<p class="lead bad">Pas celui-là.</p>${learn ? lesson(ply) : br.notes[ply] ? `<p>${esc(bare(br.notes[ply]))}</p>` : ''}`);
     } else {
       miss(); wrongHere++; show(); board.flash(m.to, 'bad'); if (S) S.combo = 0;
       const plan = br.notes[ply]?.replace(/^[^:]*:\s*/, '');
