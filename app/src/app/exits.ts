@@ -33,11 +33,6 @@ function card(c: ExitCard) {
       <a class="quiet" href="${gameUrl(g.id, c.ply + 1, HERE)}">Voir la partie</a></div></article>`;
 }
 
-/** Ce qu'en montre la page Ouvertures : combien d'erreurs à punir et de positions à connaître. */
-export function exitsSummary() {
-  const s = scanExits(store.games, store.state.ignored);
-  return { punir: s.punir.filter(c => c.missed).length, connaitre: s.connaitre.filter(c => c.count > 1).length };
-}
 /** L'indicateur : erreurs adverses punies sur les 4 dernières semaines, et la tendance par rapport aux 4 d'avant. */
 export function punishRate() {
   const w = punishWeeks(store.games, 8), sum = (xs: typeof w) => xs.reduce((a, x) => ({ e: a.e + x.errors, p: a.p + x.punished }), { e: 0, p: 0 });

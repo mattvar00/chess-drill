@@ -1,6 +1,6 @@
 /**
  * Le chemin des ouvertures (concept « la promotion ») : chaque ouverture est la marche d'un pion vers la 8e rangée.
- * Ses lignes sont coupées en leçons (une case chacune, au plus 6). Une leçon est réussie quand chacune de ses lignes
+ * Ses lignes sont coupées en leçons (une case chacune : 6 au plus pour le répertoire de base, puis des cases de 3 pour les lignes tirées de tes parties). Une leçon est réussie quand chacune de ses lignes
  * a été jouée une fois sans faute ; elle se « fissure » quand une de ses lignes est à revoir. Toutes réussies : promotion.
  */
 import { isDue } from './schedule';
@@ -20,7 +20,10 @@ export const passed = (s?: BranchState) => !!s && s.runs > 0 && s.clean >= 1;
 
 /** `queens` : les dames déjà gagnées. Une ouverture promue le reste quand on lui ajoute des lignes : la nouvelle case se joue avant la dame, sans la reprendre. */
 export function unitOf(bloc: Bloc, sys: System, st: Record<string, BranchState | undefined>, meet: Record<string, number> = {}, now = Date.now(), queens: Record<string, number> = {}): Unit {
-  const ids = sys.branches.map(b => b.id), parts = chunk(ids, Math.min(6, ids.length)), n = parts.length;
+  // Les lignes du répertoire de base sont coupées en 6 cases au plus. Celles tirées de tes parties (« Punir », « Bon coup »)
+  // forment leurs propres cases de 3, ajoutées à la fin : en ajouter une ne déplace jamais une case déjà jouée.
+  const ids = sys.branches.map(b => b.id), base = sys.branches.filter(b => !b.type).map(b => b.id), extra = sys.branches.filter(b => b.type).map(b => b.id);
+  const parts = [...chunk(base, Math.min(6, base.length)), ...Array.from({ length: Math.ceil(extra.length / 3) }, (_, i) => extra.slice(3 * i, 3 * i + 3))], n = parts.length;
   let cur = false;
   const lessons = parts.map((p, i): Lesson => {
     const rank = 8 - n + 1 + i, ok = p.every(id => passed(st[id]));

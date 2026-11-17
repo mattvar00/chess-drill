@@ -6,7 +6,10 @@
 import { caseOf, earnedQueen, freshFromGames, passed, unitOf, unitsOf, type Lesson, type Unit } from '../core/path';
 import type { Bloc, System } from '../core/types';
 import { syncSoon } from './api';
-import { exitsSummary } from './exits';
+import { recommend, type Facts, type Reco, type RecoKind } from '../core/reco';
+import { scanExits } from '../core/scan';
+import { myWp } from '../core/stats';
+import type { Game } from '../core/types';
 import { lineName, lineTitle, typeLabel } from '../core/names';
 import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
@@ -14,7 +17,7 @@ import { isDue } from '../core/schedule';
 import { meetCounts } from '../core/rank';
 import { pieceSrc } from '../ui/board';
 import { $, esc, icon, plural } from '../ui/dom';
-import { BR, REP, lastLesson, save, store } from './store';
+import { BR, REP, lastLesson, plansFor, save, store } from './store';
 import { startSession } from './session';
 
 const SIDE_KEY = 'cd_rep_side', LAST_KEY = 'cd_last_sys';
@@ -32,11 +35,9 @@ function allUnits(): Unit[] {
   return out;
 }
 const played = (u: Unit) => u.sys.statut !== 'alternatif';
-/** L'ouverture à reprendre : la dernière travaillée tant qu'il lui reste une case, sinon la plus jouée qui n'est pas promue. */
+/** L'ouverture mise en avant (porte Ouvertures de S'entraîner) : celle que l'appli recommande de travailler. */
 function currentUnit(units = allUnits()): Unit {
-  const last = units.find(u => u.sys.id === getLS(LAST_KEY));
-  const open = (u: Unit) => u.lessons.some(l => l.state === 'cur' || l.state === 'crack');
-  return (last && open(last) ? last : null) ?? [...units].filter(u => played(u) && open(u)).sort((a, b) => b.meet - a.meet)[0] ?? units[0];
+  return recommend(factsOf(units)).todo[0]?.f.u ?? units.find(played) ?? units[0];
 }
 /** Ouvre la page d'une ouverture (son chemin en haut). */
 export function openUnit(blocId: string, sysId: string) { location.hash = `#/rep/${blocId}/${sysId}`; }
@@ -133,33 +134,77 @@ export function bindPath(root: HTMLElement, u: Unit) {
 /** L'ouverture d'une page, avec sa progression (pour `pathBlock`). */
 export const unitFor = (bloc: Bloc, sys: System) => allUnits().find(u => u.sys.id === sys.id) ?? unitOf(bloc, sys, store.state.br, {}, Date.now(), queens());
 
+/** Ce qu'on sait de chaque ouverture d'après tes parties et ta progression : la matière des recommandations. */
+function factsOf(units: Unit[]): Facts[] {
+  const bySys: Record<string, Game[]> = {};
+  for (const g of store.games) { if (store.state.ignored[g.id]) continue; const id = refBranch(g, BR), s = id ? BR[id].sys : null; if (s && s.statut !== 'plan') (bySys[s.id] ??= []).push(g); }
+  const devBy: Record<string, number> = {};
+  for (const g of recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50)) { const s = BR[refBranch(g, BR)!]?.sys.id; if (s) devBy[s] = (devBy[s] || 0) + 1; }
+  const punBy: Record<string, number> = {};
+  for (const c of scanExits(store.games, store.state.ignored).punir) { if (!c.missed) continue; const s = c.branches.map(id => BR[id]).find(Boolean)?.sys.id; if (s) punBy[s] = (punBy[s] || 0) + 1; }
+  return units.map(u => {
+    const gs = bySys[u.sys.id] ?? [], an = gs.filter(g => g.st && myWp(g));
+    const at = (g: Game, ply: number) => { const w = myWp(g)!; return w[Math.min(ply, w.length - 1)]; };
+    return { u, games: gs.length, score: gs.length ? (100 * gs.reduce((a, g) => a + (g.res === 'W' ? 1 : g.res === 'D' ? 0.5 : 0), 0)) / gs.length : null,
+      devs: devBy[u.sys.id] || 0, due: u.sys.branches.filter(b => { const s = store.state.br[b.id]; return s?.runs && isDue(s); }).length,
+      fresh: freshFromGames(u.sys, store.state.br), punir: punBy[u.sys.id] || 0,
+      drop: an.length >= 3 ? an.reduce((a, g) => a + at(g, 40) - at(g, 20), 0) / an.length : null, plans: plansFor(u.sys.id).length };
+  });
+}
+/** La raison d'une recommandation, en une phrase, sans chiffres. */
+const WHY: Record<RecoKind, (f: Facts) => string> = {
+  oubli: f => f.devs > 1 ? 'Tu as quitté tes lignes plusieurs fois ces dernières semaines : c\'est ta priorité.' : 'Tu as quitté ta ligne dans une partie récente : rejoue-la tant que c\'est frais.',
+  punir: () => 'Un adversaire s\'y est trompé et tu n\'as pas trouvé la punition.',
+  revoir: () => 'Des lignes que tu sais reviennent en révision, avant qu\'elles s\'effacent.',
+  fragile: () => 'Tu la rencontres souvent, et tu y perds plus de points qu\'ailleurs.',
+  milieu: () => 'Tu sors bien de l\'ouverture, mais tu perds le fil juste après : regarde ses plans.',
+  nouveau: () => 'De nouvelles lignes tirées de tes parties t\'attendent.',
+  avancer: f => f.games ? 'Tu la joues souvent, et il te reste des lignes à apprendre.' : 'La suite de ton chemin.',
+  apprendre: () => 'Tu n\'as pas encore de réponse apprise ici.',
+};
+/** L'action qui va avec une recommandation : son libellé, et soit un lien, soit un geste. */
+function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {
+  const u = r.f.u, i = u.lessons.findIndex(l => l.state === 'cur' || l.state === 'crack');
+  const lesson = i >= 0 ? { label: `${u.lessons[i].state === 'crack' ? 'Revoir' : 'Jouer'} la case ${i + 1}`, run: () => startLesson(u, i) } : { label: 'Voir l\'ouverture', href: openingUrl(u) };
+  if (r.kind === 'oubli') { const g = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50).find(x => BR[refBranch(x, BR)!]?.sys.id === u.sys.id);
+    return g ? { label: 'Rejouer la ligne', href: lineUrl(refBranch(g, BR)!, 'drill', g.id) } : lesson; }
+  if (r.kind === 'punir') return { label: 'Voir la punition', href: '#/rep/sorties' };
+  if (r.kind === 'milieu') return { label: 'Voir ses plans', href: `#/plans?o=${u.sys.id}&r=${encodeURIComponent('#/rep')}` };
+  if (r.kind === 'revoir') { const ids = u.sys.branches.map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
+    return { label: 'Revoir maintenant', run: () => { setLS(LAST_KEY, u.sys.id); location.hash = startSession(`${shortName(u.sys.titre)}, à revoir`, ids, '#/rep'); } }; }
+  return lesson;
+}
+const sideWord = (u: Unit) => `${u.bloc.titre}, ${u.bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`;
+
 /**
- * Ouvertures : la liste, rangée comme sur l'échiquier. Avec les Noirs ou avec les Blancs, puis par le premier coup adverse.
- * En haut, l'ouverture à reprendre et le nombre de dames ; une recherche par nom ; en bas, les ouvertures de rechange, repliées.
+ * Ouvertures : l'appli recommande. En haut, quoi travailler maintenant (une ouverture, une raison, un bouton), puis la suite ;
+ * ensuite ce que tu joues bien ; enfin tout le répertoire, rangé par couleur et par premier coup adverse, avec la recherche.
  */
 export function viewPath(root: HTMLElement) {
-  const units = allUnits(), cu = currentUnit(units), side = (getLS(SIDE_KEY) || cu.bloc.side) as 'w' | 'b';
+  const units = allUnits(), R = recommend(factsOf(units)), top = R.todo[0], rest = R.todo.slice(1);
+  const side = (getLS(SIDE_KEY) || top?.f.u.bloc.side || 'b') as 'w' | 'b';
   const mine = units.filter(u => u.bloc.side === side), playedU = mine.filter(played), others = mine.filter(u => !played(u));
-  const nQ = playedU.filter(u => u.promoted).length, devs = recentDeviations(store.games, store.state.fixed, BR);
-  const devBy: Record<string, number> = {}; for (const g of devs) { const s = BR[refBranch(g, BR)!]?.sys.id; if (s) devBy[s] = (devBy[s] || 0) + 1; }
-  const row = (u: Unit) => { const due = u.sys.branches.filter(b => { const s = store.state.br[b.id]; return s?.runs && isDue(s); }).length, fresh = freshFromGames(u.sys, store.state.br);
-    return `<a class="rowi orow" href="${openingUrl(u)}"><span class="body"><b>${esc(shortName(u.sys.titre))}</b>
-      <small>${where(u)}${u.meet ? ` · dans ${plural(u.meet, 'de tes parties', 'de tes parties')}` : ''}</small>${strip(u)}
-      ${due || fresh || devBy[u.sys.id] ? `<span class="tags">${devBy[u.sys.id] ? `<span class="due bad">${plural(devBy[u.sys.id], 'quittée', 'quittées')} en partie</span>` : ''}${due ? `<span class="due">${due} à revoir</span>` : ''}${fresh ? `<span class="due new">${plural(fresh, 'nouvelle ligne', 'nouvelles lignes')} de tes parties</span>` : ''}</span>` : ''}</span>
-      ${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Promue">` : ''}${icon('chev', 'chev')}</a>`; };
+  const allPlayed = units.filter(played), nQ = allPlayed.filter(u => u.promoted).length;
+  const row = (u: Unit) => `<a class="rowi orow" href="${openingUrl(u)}"><span class="body"><b>${esc(shortName(u.sys.titre))}</b><small>${where(u)}</small>${strip(u)}</span>
+      ${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Promue">` : ''}${icon('chev', 'chev')}</a>`;
+  const act = top ? actionOf(top) : null;
+  const recoRow = (r: Reco) => `<a class="rowi rrow" href="${openingUrl(r.f.u)}"><span class="chip ${r.f.u.bloc.side}" role="img" aria-label="${r.f.u.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(shortName(r.f.u.sys.titre))}</b><small>${WHY[r.kind](r.f)}</small></span>${icon('chev', 'chev')}</a>`;
+  const strongRow = (f: Facts) => `<a class="rowi rrow" href="${openingUrl(f.u)}"><span class="chip ${f.u.bloc.side}" role="img" aria-label="${f.u.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(shortName(f.u.sys.titre))}</b><small>${f.u.promoted ? 'Promue, et tes résultats suivent.' : 'Tu y prends plus de points qu\'ailleurs, sans quitter tes lignes.'}</small></span>${f.u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Promue">` : ''}${icon('chev', 'chev')}</a>`;
   const blocs = REP.blocs.filter(b => b.side === side);
-  const cc = caseOf(cu), cl = cu.lessons.findIndex(l => l.state === 'cur' || l.state === 'crack'), ex = exitsSummary();
   root.innerHTML = `
-    <div class="seg" role="group" aria-label="Couleur"><button type="button" data-side="b" aria-pressed="${side === 'b'}">Avec les Noirs</button><button type="button" data-side="w" aria-pressed="${side === 'w'}">Avec les Blancs</button></div>
-    <section class="surf today resume"><div class="today-top"><div class="today-text"><p class="label">À reprendre</p><h2>${esc(shortName(cu.sys.titre))}</h2><p>${where(cu)}, ${esc(cu.bloc.titre.toLowerCase())}</p>${strip(cu)}</div></div>
-      ${cl >= 0 ? `<button class="btn pri block" id="bResume">${cu.lessons[cl].state === 'crack' ? 'Revoir' : 'Jouer'} la case ${cl + 1}</button>` : ''}<a class="quiet" href="${openingUrl(cu)}">Voir l'ouverture</a></section>
-    <p class="qcount"><img src="${pieceSrc('q')}" alt=""><span><b>${nQ}</b> ${nQ > 1 ? 'dames' : 'dame'} sur ${playedU.length}</span>${ex.punir || ex.connaitre ? `<a class="qx${ex.punir ? ' bad' : ''}" href="#/rep/sorties">${ex.punir ? `${plural(ex.punir, 'erreur adverse', 'erreurs adverses')} à punir` : `${plural(ex.connaitre, 'position', 'positions')} à connaître`}</a>` : ''}</p>
+    ${top ? `<section class="surf today resume"><div class="today-top"><div class="today-text"><p class="label">À travailler maintenant</p><h2>${esc(shortName(top.f.u.sys.titre))}</h2><p class="rside">${esc(sideWord(top.f.u))}</p><p>${WHY[top.kind](top.f)}</p>${strip(top.f.u)}</div></div>
+      ${act!.href ? `<a class="btn pri block" href="${act!.href}">${act!.label}</a>` : `<button class="btn pri block" id="bReco">${act!.label}</button>`}<a class="quiet" href="${openingUrl(top.f.u)}">Voir l'ouverture</a></section>` : ''}
+    ${rest.length ? `<section class="grp"><h2>Ensuite</h2><div class="surf card list">${rest.map(recoRow).join('')}</div></section>` : ''}
+    <section class="grp"><h2>Ce que tu joues bien</h2>${R.strong.length ? `<div class="surf card list">${R.strong.map(strongRow).join('')}</div>` : '<p class="pnote">Encore trop peu de parties par ouverture pour le dire. Ça viendra tout seul en jouant.</p>'}</section>
+    <section class="grp allrep"><h2>Tout ton répertoire <span class="dim">${nQ} ${nQ > 1 ? 'dames' : 'dame'} sur ${allPlayed.length}</span></h2>
     <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture ou une ligne</label><input id="qRep" type="search" placeholder="Chercher : Londres, Bowdler, Meran…" autocomplete="off"><a class="hchip" href="#/rep/chercher">Jouer les coups</a></div>
     <div id="qRes"></div>
-    <div id="olist">${blocs.map(b => { const us = playedU.filter(u => u.bloc.id === b.id); return us.length ? `<section class="grp"><h2>${esc(b.titre)}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; }).join('')}
-    ${others.length ? `<details class="others"><summary>Autres options (${others.length})</summary><p class="pnote">Des ouvertures de rechange, que tu ne joues pas d'habitude.</p><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}</div>`;
-  root.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.onclick = () => { setLS(SIDE_KEY, b.dataset.side!); viewPath(root); });
-  $('#bResume', root)?.addEventListener('click', () => startLesson(cu, cl));
+    <div id="olist"><div class="seg" role="group" aria-label="Couleur"><button type="button" data-side="b" aria-pressed="${side === 'b'}">Avec les Noirs</button><button type="button" data-side="w" aria-pressed="${side === 'w'}">Avec les Blancs</button></div>
+    ${blocs.map(b => { const us = playedU.filter(u => u.bloc.id === b.id); return us.length ? `<section class="grp"><h2>${esc(b.titre)}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; }).join('')}
+    ${others.length ? `<details class="others"><summary>Autres options (${others.length})</summary><p class="pnote">Des ouvertures de rechange, que tu ne joues pas d'habitude.</p><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
+    <a class="quiet" href="#/rep/sorties">Ce que tes adversaires jouent hors de ton répertoire</a></div></section>`;
+  root.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.onclick = () => { setLS(SIDE_KEY, b.dataset.side!); const y = window.scrollY; viewPath(root); window.scrollTo(0, y); });
+  if (act?.run) $('#bReco', root)?.addEventListener('click', act.run);
   // recherche par nom : ouvertures et lignes, toutes couleurs confondues
   const q = $<HTMLInputElement>('#qRep', root), res = $('#qRes', root), list = $('#olist', root);
   const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import rep from '../src/data/repertoire.json';
 import type { Bloc, Repertoire, System } from '../src/core/types';
 import { lineName } from '../src/core/names';
-import { caseOf, knownLines, unitOf } from '../src/core/path';
+import { caseOf, knownLines, unitOf, type Unit } from '../src/core/path';
 import { newBranchState } from '../src/core/schedule';
 import { MIN_GAMES, playerCard, profile } from '../src/core/stats';
 import { themeCounts, themeLabel } from '../src/core/wood';
@@ -107,5 +107,41 @@ describe('sorties d\'ouverture', () => {
   it('suit les erreurs punies semaine par semaine', () => {
     const w = punishWeeks([mk('1', 55), mk('2', 68)], 8);
     expect(w[7]).toMatchObject({ errors: 2, punished: 1 });
+  });
+});
+
+import { recommend, type Facts } from '../src/core/reco';
+describe('recommandations', () => {
+  const mkU = (id: string, statut = 'joué', learnt = 0): Unit => {
+    const sys: System = { id, titre: id, statut, resume: '', branches: Array.from({ length: 4 }, (_, i) => ({ id: id + i, titre: '', moves: [], notes: {} })) };
+    const st: Record<string, ReturnType<typeof newBranchState>> = {};
+    for (let i = 0; i < learnt; i++) st[id + i] = { ...newBranchState(), runs: 1, clean: 1, due: Date.now() + 864e5 * 9 };
+    return unitOf({ id: 'B', titre: '', sous: '', side: 'b', systemes: [sys] }, sys, st);
+  };
+  const f = (id: string, x: Partial<Facts> = {}, statut = 'joué', learnt = 0): Facts => ({ u: mkU(id, statut, learnt), games: 0, score: null, devs: 0, due: 0, fresh: 0, punir: 0, drop: null, plans: 0, ...x });
+  it('un oubli récent passe avant le reste, une ouverture de rechange ne sort jamais', () => {
+    const r = recommend([f('a', { games: 10, score: 50, due: 2 }), f('b', { games: 6, score: 50, devs: 1 }), f('c', { games: 20, score: 20, devs: 3 }, 'alternatif')]);
+    expect(r.todo.map(x => [x.f.u.sys.id, x.kind])).toEqual([['b', 'oubli'], ['a', 'revoir']]);
+  });
+  it('repère une ouverture qui coûte des points, et renvoie vers les plans quand ça se gâte après l\'ouverture', () => {
+    const r = recommend([f('a', { games: 10, score: 70 }, 'joué', 4), f('b', { games: 10, score: 30, drop: -9, plans: 2 }, 'joué', 4), f('c', { games: 10, score: 30 }, 'joué', 4)]);
+    expect(r.todo.map(x => x.kind).sort()).toEqual(['fragile', 'milieu']);
+    expect(r.strong.map(x => x.u.sys.id)).toEqual(['a']);
+  });
+  it('sans rien d\'urgent, propose la suite du chemin', () => {
+    const r = recommend([f('a'), f('b')]);
+    expect(r.todo).toHaveLength(1); expect(r.todo[0].kind).toBe('avancer');
+  });
+});
+describe('cases stables', () => {
+  it('une ligne tirée de tes parties s\'ajoute à la fin sans déplacer les cases', () => {
+    const base = Array.from({ length: 12 }, (_, i) => ({ id: 'k' + i, titre: '', moves: [], notes: {} }));
+    const sys: System = { id: 'K', titre: '', statut: 'joué', resume: '', branches: base };
+    const bloc: Bloc = { id: 'B', titre: '', sous: '', side: 'w', systemes: [sys] };
+    const before = unitOf(bloc, sys, {}).lessons.map(l => l.ids);
+    const more = { ...sys, branches: [...base, ...['x1', 'x2', 'x3', 'x4'].map(id => ({ id, titre: '', moves: [], notes: {}, type: 'punir' as const }))] };
+    const after = unitOf(bloc, more, {}).lessons.map(l => l.ids);
+    expect(after.slice(0, before.length)).toEqual(before);
+    expect(after.slice(before.length)).toEqual([['x1', 'x2', 'x3'], ['x4']]);
   });
 });
