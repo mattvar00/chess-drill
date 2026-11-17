@@ -923,3 +923,21 @@ button.quiet{border:0;background:none;width:100%}
 /* Chercher en jouant les coups */
 .xrep{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
 .xnext{font-size:14px;color:var(--c-mute)}.xnext b{color:inherit}
+/* Sorties d'ouverture */
+.xentry .body{gap:3px}.xentry .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.xcard{display:flex;flex-direction:column;gap:12px;padding:14px;margin-bottom:10px}
+.xtop{display:flex;gap:14px;align-items:flex-start}
+.xtop .mini{flex:none;width:104px;height:104px}
+.xbody{display:flex;flex-direction:column;gap:4px;min-width:0}
+.xbody b{font-size:15px;line-height:1.3}.xbody small{font-size:13px;color:var(--c-mute)}
+.xbody p{font-size:14px;line-height:1.4}
+.xcard.punir{border-color:color-mix(in srgb,var(--bad) 35%,var(--line))}
+.xact{display:flex;align-items:center;gap:12px}.xact .btn{flex:1}.xact .quiet{margin:0;flex:none}
+.ptile{display:flex;flex-direction:column;gap:10px}
+.wbars{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;height:64px;align-items:end}
+.wbars span{height:100%;display:flex;align-items:flex-end}
+.wbars i{display:flex;align-items:flex-end;width:100%;min-height:3px;border-radius:4px;background:var(--line);overflow:hidden}
+.wbars b{display:block;width:100%;background:var(--ok)}
+.wleg{display:flex;gap:14px;font-size:12px;color:var(--c-mute)}.wleg span{display:inline-flex;align-items:center;gap:6px}
+.wleg i{width:10px;height:10px;border-radius:3px;display:inline-block}.wleg .k{background:var(--ok)}.wleg .e{background:var(--line)}
+a.tile.lnk{color:inherit;text-decoration:none}

@@ -13,6 +13,7 @@ import { fullGame } from './api';
 import { lineUrl } from './session';
 import { refBranch } from '../core/drill';
 import { themeLabel } from '../core/wood';
+import { punishRate } from './exits';
 import { lineTitle } from '../core/names';
 import { explorerSlot } from './explorer';
 
@@ -22,6 +23,14 @@ const TC: Record<string, string> = { bullet: 'Bullet', blitz: 'Blitz', rapid: 'R
 const day = (t: number, long = false) => new Date(t * 1000).toLocaleDateString('fr-FR', long ? { day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'short' });
 const num = (i: number) => `${Math.floor(i / 2) + 1}${i % 2 ? '…' : '.'}`;
 export const gameUrl = (id: string, ply?: number, back?: string) => `#/partie/${encodeURIComponent(id)}${ply != null || back ? '?' + new URLSearchParams({ ...(ply != null ? { i: String(ply) } : {}), ...(back ? { r: back } : {}) }) : ''}`;
+
+/** Progrès : la part des erreurs adverses punies dans l'ouverture, sur 4 semaines, et vers les sorties d'ouverture. */
+function punishTile() {
+  const R = punishRate(); if (!R.now.e && !R.before.e) return '';
+  const pc = (x: { e: number; p: number }) => (x.e ? Math.round((100 * x.p) / x.e) : null), a = pc(R.now), b = pc(R.before);
+  return `<a class="surf card tile t2 wide lnk" href="#/rep/sorties"><span class="tl">Erreurs adverses punies dans l'ouverture</span><b class="tn">${a == null ? '–' : a + ' %'}</b>
+    <small>${R.now.e ? `${R.now.p} sur ${R.now.e}, ` : ''}4 dernières semaines${b != null ? ` (avant : ${b} %)` : ''}. Voir les sorties d'ouverture</small></a>`;
+}
 
 /* ---------- onglet Parties ---------- */
 let period = 90, cadence = 'all', shown = 30;
@@ -97,6 +106,7 @@ export function viewGames(root: HTMLElement) {
     pair(played > 0 && half('Tes 4 dernières semaines', plural(played, 'jour joué', 'jours joués'), `<div class="heat" role="img" aria-label="Parties par jour sur 28 jours, jusqu'à ${top} en une journée">${D.map(x => `<i${x.n ? ` style="--v:${Math.max(0.25, x.n / top).toFixed(2)}"` : ''}></i>`).join('')}</div>`, `Jusqu'à ${plural(top, 'partie')} en une journée`),
       cs && half('Début de session', `${cs.first} %`, `<div class="bars3" role="img" aria-label="${cs.first} % de victoires sur les 3 premières parties, ${cs.rest} % ensuite"><i class="${cs.first < cs.rest ? 'lo' : ''}" style="height:${cs.first}%"></i><i style="height:${cs.rest}%"></i></div>`, `de victoires sur tes 3 premières parties, ${cs.rest} % ensuite`)),
     mo.length >= 2 ? `<section class="surf card padded tile"><h2>Victoires selon le moment de la journée</h2><div class="cols" style="--n:${mo.length}">${mo.map(x => `<div class="${x === best ? 'best' : ''}"><b>${x.pct} %</b><span class="colbar"><i style="height:${x.pct}%"></i></span><span>${x.label}</span><small>${plural(x.n, 'partie')}</small></div>`).join('')}</div></section>` : '',
+    punishTile(),
     th.length ? `<section class="surf card tile flist"><h2>Tes fautes les plus fréquentes</h2><div class="list">${th.map(([k, v]) => `<a class="rowi" href="#/wood?t=${encodeURIComponent(k)}&r=${encodeURIComponent('#/progres')}"><span class="body"><b>${esc(themeLabel(k))}</b><span class="prog"><b style="width:${Math.round((100 * v) / thMax)}%"></b></span></span><span class="dim">${v}</span><span class="go">Rejouer</span></a>`).join('')}</div></section>` : '',
   ];
   root.innerHTML = `

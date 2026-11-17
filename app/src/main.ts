@@ -17,6 +17,7 @@ import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
 import { shortName, viewLessonEnd, viewPath } from './app/path';
+import { viewExits } from './app/exits';
 import { lineTitle } from './core/names';
 
 restoreLook();
@@ -86,12 +87,14 @@ function route() {
     endSession();
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
     if (bloc && sys) { shell(shortName(sys.titre), `${bloc.titre}, ${bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`, '#/rep', TRAIN); viewSystem(view, bloc, sys); }
+    else if (p[0] === 'rep' && p[1] === 'sorties') { shell("Sorties d'ouverture", 'Ce que tes parties disent de ton répertoire', '#/rep', TRAIN); viewExits(view); }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', TRAIN, TRAIN); viewPath(view); }
     else if (p[0] === 'lecon') { shell('Bilan', '', null, null); viewLessonEnd(view); }
     else if (p[0] === 'wood') { shell('Fautes', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', backOf(q, TRAIN), TRAIN); viewWood(view, q); }
     else if (p[0] === 'entrainer') { shell("S'entraîner", '', null, TRAIN); viewTrain(view); }
-    else if (p[0] === 'explorer') { shell('Explorer une position', '', TRAIN, TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, TRAIN); }
+    else if (p[0] === 'explorer') { const back = backOf(q, TRAIN); shell('Explorer une position', q.get('fen') ? 'Le moteur montre le meilleur coup' : '', back, TRAIN, '', 'board');
+      cleanup = mountFreeExplorer(view, back, false, q.get('fen') ?? undefined, q.get('o') === 'b' ? 'b' : 'w'); }
     else if (p[0] === 'progres' || p[0] === 'parties') { shell('Progrès', '', null, PROG); viewGames(view); }
     else if (p[0] === 'profil') { shell('Ta carte joueur', '', PROG, PROG); viewProfile(view); }
     else if (p[0] === 'plans') { shell('Plans', q.get('o') ? planSysTitle(q.get('o')!) : 'Quoi faire une fois l\'ouverture jouée', backOf(q, TRAIN), TRAIN); viewPlans(view, q); }

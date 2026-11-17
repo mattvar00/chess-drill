@@ -85,3 +85,27 @@ describe('dame gagnée', () => {
     expect(kept.lessons.some(l => l.state === 'cur')).toBe(true);
   });
 });
+
+import { punishWeeks, scanExits } from '../src/core/scan';
+import type { Game } from '../src/core/types';
+describe('sorties d\'ouverture', () => {
+  const base = { url: '', tc: 'rapid', tcs: '', rr: '', opp: 'x', oppElo: 1700, myElo: 1750, res: 'W', eco: '', clocks: [], nply: 9 } as const;
+  const sans = ['d4', 'd5', 'c4', 'c6', 'Nc3', 'Nf6', 'Nf3', 'Bg4', 'h3'];
+  const gap = { status: 'gap', depth: 7, ply: 7, fen: 'x', played: 'Bg4', branches: [] } as Game['a'];
+  // chances des Blancs avant chaque coup : son …Bg4 fait monter de 50 à 70 ; h3 rend l'avantage (70 → 55) ou le garde (70 → 68)
+  const mk = (id: string, after: number, t = Date.now() / 1000): Game => ({ ...base, id, t, color: 'w', sans, a: gap, wp: [50, 50, 50, 50, 50, 50, 50, 50, 70, after] } as unknown as Game);
+  it("classe une erreur adverse, et compte si elle a été punie", () => {
+    const s = scanExits([mk('1', 55), mk('2', 68), mk('3', 54), { ...mk('5', 62), cls: [...Array(8).fill('book'), 'best'] } as Game]);
+    expect(s.punir).toHaveLength(1);
+    expect(s.punir[0]).toMatchObject({ count: 4, punished: 2, missed: 2, played: 'Bg4' });   // le 4e : la classe « meilleur coup » prime sur l'écart
+    expect(s.connaitre).toHaveLength(0);
+  });
+  it('un coup normal hors répertoire est à connaître', () => {
+    const g = { ...mk('4', 52), wp: [50, 50, 50, 50, 50, 50, 50, 50, 52, 52] } as Game;
+    expect(scanExits([g]).connaitre).toHaveLength(1);
+  });
+  it('suit les erreurs punies semaine par semaine', () => {
+    const w = punishWeeks([mk('1', 55), mk('2', 68)], 8);
+    expect(w[7]).toMatchObject({ errors: 2, punished: 1 });
+  });
+});

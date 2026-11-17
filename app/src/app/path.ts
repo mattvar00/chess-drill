@@ -6,6 +6,7 @@
 import { caseOf, earnedQueen, freshFromGames, passed, unitOf, unitsOf, type Lesson, type Unit } from '../core/path';
 import type { Bloc, System } from '../core/types';
 import { syncSoon } from './api';
+import { exitsSummary } from './exits';
 import { lineName, lineTitle, typeLabel } from '../core/names';
 import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
@@ -147,12 +148,13 @@ export function viewPath(root: HTMLElement) {
       ${due || fresh || devBy[u.sys.id] ? `<span class="tags">${devBy[u.sys.id] ? `<span class="due bad">${plural(devBy[u.sys.id], 'quittée', 'quittées')} en partie</span>` : ''}${due ? `<span class="due">${due} à revoir</span>` : ''}${fresh ? `<span class="due new">${plural(fresh, 'nouvelle ligne', 'nouvelles lignes')} de tes parties</span>` : ''}</span>` : ''}</span>
       ${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Promue">` : ''}${icon('chev', 'chev')}</a>`; };
   const blocs = REP.blocs.filter(b => b.side === side);
-  const cc = caseOf(cu), cl = cu.lessons.findIndex(l => l.state === 'cur' || l.state === 'crack');
+  const cc = caseOf(cu), cl = cu.lessons.findIndex(l => l.state === 'cur' || l.state === 'crack'), ex = exitsSummary();
   root.innerHTML = `
     <div class="seg" role="group" aria-label="Couleur"><button type="button" data-side="b" aria-pressed="${side === 'b'}">Avec les Noirs</button><button type="button" data-side="w" aria-pressed="${side === 'w'}">Avec les Blancs</button></div>
     <section class="surf today resume"><div class="today-top"><div class="today-text"><p class="label">À reprendre</p><h2>${esc(shortName(cu.sys.titre))}</h2><p>${where(cu)}, ${esc(cu.bloc.titre.toLowerCase())}</p>${strip(cu)}</div></div>
       ${cl >= 0 ? `<button class="btn pri block" id="bResume">${cu.lessons[cl].state === 'crack' ? 'Revoir' : 'Jouer'} la case ${cl + 1}</button>` : ''}<a class="quiet" href="${openingUrl(cu)}">Voir l'ouverture</a></section>
     <p class="qcount"><img src="${pieceSrc('q')}" alt=""><span><b>${nQ}</b> ${nQ > 1 ? 'dames' : 'dame'} sur ${playedU.length} ouvertures ${side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}</span></p>
+    ${ex.punir || ex.connaitre ? `<a class="surf card feat xentry" href="#/rep/sorties"><span class="body"><b>Sorties d'ouverture</b><small>Ce que tes parties disent de ton répertoire</small><span class="tags">${ex.punir ? `<span class="due bad">${plural(ex.punir, 'erreur adverse', 'erreurs adverses')} à punir</span>` : ''}${ex.connaitre ? `<span class="due">${plural(ex.connaitre, 'position', 'positions')} à connaître</span>` : ''}</span></span>${icon('chev', 'chev')}</a>` : '<a class="quiet" href="#/rep/sorties">Sorties d\'ouverture</a>'}
     <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture ou une ligne</label><input id="qRep" type="search" placeholder="Chercher : Londres, Bowdler, Meran…" autocomplete="off"><a class="hchip" href="#/rep/chercher">Jouer les coups</a></div>
     <div id="qRes"></div>
     <div id="olist">${blocs.map(b => { const us = playedU.filter(u => u.bloc.id === b.id); return us.length ? `<section class="grp"><h2>${esc(b.titre)}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; }).join('')}

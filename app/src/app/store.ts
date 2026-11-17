@@ -3,7 +3,7 @@ import rep from '../data/repertoire.json';
 import plansJson from '../data/plans.json';
 import { Chess, tryMove, uciOf } from '../core/chess';
 import type { Game, Repertoire, BranchState } from '../core/types';
-import { indexBranches } from '../core/book';
+import { analyseGame, buildBook, indexBranches } from '../core/book';
 import { devCounts } from '../core/drill';
 import { addDay } from '../core/streak';
 import type { Fault } from '../core/analysis';
@@ -11,6 +11,9 @@ import { emptyState, getAllGames, getAllGFaults, getState, migrateLegacy, putGFa
 
 export const REP = rep as unknown as Repertoire;
 export const BR = indexBranches(REP);
+/** Le livre du répertoire actuel : chaque partie y est recomparée au chargement, pour que ses sorties suivent les lignes ajoutées depuis son analyse. */
+const BOOK = buildBook(REP);
+const rematch = (g: Game): Game => { try { return { ...g, a: analyseGame(BOOK, BR, g.sans, g.color) }; } catch { return g; } };
 export const ALL_IDS = Object.keys(BR);
 
 /** Plans animés : chacun se rejoue aussi comme une ligne (« plan-<id> »), hors des tirages du répertoire. */
@@ -33,7 +36,7 @@ export const woodHistory = () => ((store.state.wood ?? []) as WoodCycle[]).filte
 export const woodCur = () => (store.state.woodCur ?? null) as WoodCur | null;
 
 export async function loadStore() {
-  await migrateLegacy(); store.state = await getState(); store.games = await getAllGames(); refreshDevs();
+  await migrateLegacy(); store.state = await getState(); store.games = (await getAllGames()).map(rematch); refreshDevs();
   store.faults = sortFaults(Object.values(await getAllGFaults()).flat() as Fault[]);
 }
 export function refreshDevs() { store.devs = devCounts(store.games, store.state.fixed, BR); }
@@ -47,7 +50,7 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 export function save() { clearTimeout(timer); timer = setTimeout(() => { void putState(store.state); }, 150); }
 export async function addGames(games: Game[]) {
   if (!games.length) return; await putGames(games);
-  const byId = new Map(store.games.map(g => [g.id, g])); for (const g of games) byId.set(g.id, g);
+  const byId = new Map(store.games.map(g => [g.id, g])); for (const g of games) byId.set(g.id, rematch(g));
   store.games = [...byId.values()]; refreshDevs();
 }
 const isFault = (f: Fault) => !!f && typeof f.id === 'string' && !!f.fen && !!f.best?.uci && !!f.played;

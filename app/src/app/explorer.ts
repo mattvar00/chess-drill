@@ -136,13 +136,13 @@ export function explorerSlot(board: Board, main: () => HTMLElement, panel: () =>
 
 /** Explorateur libre, depuis la position de départ : un échiquier, tes coups, l'avis du moteur. */
 /** Avec `rep` : sous l'explorateur, tes lignes du répertoire qui passent par la position jouée (chercher une ligne en jouant ses coups). */
-export function mountFreeExplorer(root: HTMLElement, back: string, rep = false): () => void {
+export function mountFreeExplorer(root: HTMLElement, back: string, rep = false, fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', orient: Color = 'w'): () => void {
   root.innerHTML = `<div class="trainer"><div class="tboard"><div id="board"></div></div><div class="tside">${rep ? '<div id="xrep" class="xrep"></div>' : ''}<div id="xp"></div></div></div>`;
   const repEl = root.querySelector<HTMLElement>('#xrep');
   const onPath = repEl ? (sans: string[]) => { repEl.innerHTML = repLines(sans); } : undefined;
   let x: Explorer | null = null;
   const board = new Board(root.querySelector<HTMLElement>('#board')!, { movable: () => x?.movable() ?? null, onMove: m => x?.onMove(m) });
-  x = createExplorer(board, root.querySelector<HTMLElement>('#xp')!, { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', orient: 'w', lines: [], close: () => { location.hash = back; }, onPath });
+  x = createExplorer(board, root.querySelector<HTMLElement>('#xp')!, { fen, orient, lines: [], close: () => { location.hash = back; }, onPath });
   return () => { x?.destroy(); board.destroy(); };
 }
 
