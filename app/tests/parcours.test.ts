@@ -51,3 +51,37 @@ describe('fautes par type', () => {
     expect(themeLabel('Coup calme')).toBe('Bon coup tranquille manqué');
   });
 });
+
+import { earnedQueen, linesThrough } from '../src/core/path';
+import plans from '../src/data/plans.json';
+describe('ouvertures regroupées', () => {
+  const R = rep as unknown as Repertoire;
+  it('chaque ligne est rangée une seule fois, les plans pointent vers des ouvertures qui existent', () => {
+    const ids = R.blocs.flatMap(b => b.systemes.flatMap(s => s.branches.map(x => x.id)));
+    expect(new Set(ids).size).toBe(ids.length);
+    const sys = new Set(R.blocs.flatMap(b => b.systemes.map(s => s.id)));
+    for (const p of plans as { sys: string[] }[]) for (const s of p.sys) expect(sys.has(s)).toBe(true);
+  });
+  it('trouve tes lignes en jouant les coups', () => {
+    const r = linesThrough(R.blocs, ['d4', 'd5', 'Bf4']);
+    expect(r.through.some(x => x.sys.id === 'A6')).toBe(true);
+    expect(r.through.every(x => x.br.moves[2].san === 'Bf4')).toBe(true);
+    expect(linesThrough(R.blocs, ['h4', 'h5', 'g4']).through).toHaveLength(0);
+  });
+});
+
+describe('dame gagnée', () => {
+  const sys: System = { id: 'Q', titre: 'T', statut: 'joué', resume: '', branches: Array.from({ length: 3 }, (_, i) => ({ id: 'q' + i, titre: '', moves: [], notes: {} })) };
+  const bloc: Bloc = { id: 'B', titre: '', sous: '', side: 'w', systemes: [sys] };
+  const ok = { ...newBranchState(), runs: 1, clean: 1, due: Date.now() + 864e5 * 9 };
+  it('se gagne quand toutes les cases sont réussies, et reste quand une ligne s\'ajoute', () => {
+    const st = { q0: ok, q1: ok, q2: ok };
+    const u = unitOf(bloc, sys, st);
+    expect(u.promoted).toBe(true); expect(earnedQueen(u)).toBe(true);
+    const more: System = { ...sys, branches: [...sys.branches, { id: 'q3', titre: '', moves: [], notes: {}, type: 'punir' }] };
+    expect(unitOf(bloc, more, st).promoted).toBe(false);
+    const kept = unitOf(bloc, more, st, {}, Date.now(), { Q: 1 });
+    expect(kept.promoted).toBe(true);
+    expect(kept.lessons.some(l => l.state === 'cur')).toBe(true);
+  });
+});

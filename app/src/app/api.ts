@@ -44,11 +44,13 @@ export async function sync(): Promise<{ games: number; lines: number }> {
     if (k.startsWith('br:')) { const id = k.slice(3); if (v.updated > (st.br[id]?.last || 0)) { st.br[id] = v.value as BranchState; lines++; } }
     else if (k.startsWith('fault:')) { const id = k.slice(6); if (v.updated > (st.fault[id]?.last || 0)) { st.fault[id] = v.value as PosState; lines++; } }
     else if (k === 'wood' && v.updated > woodStamp()) { st.wood = v.value as WoodCycle[]; lines++; }
+    else if (k === 'queens') { for (const [id, t] of Object.entries(v.value as Record<string, number>)) if (!st.queens?.[id]) { (st.queens ??= {})[id] = t; lines++; } }
   }
   const mine = (key: string, updated: number, value: unknown) => { if (updated > pushed && updated > (remote[key]?.updated || 0)) out[key] = { value, updated }; };
   for (const [id, s] of Object.entries(st.br)) mine('br:' + id, s.last, s);
   for (const [id, s] of Object.entries(st.fault)) mine('fault:' + id, s.last || 0, s);
   if (woodHistory().length) mine('wood', woodStamp(), woodHistory());
+  const q = st.queens ?? {}, qStamp = Math.max(0, ...Object.values(q)); if (qStamp) mine('queens', qStamp, q);
   if (Object.keys(out).length) await call('/progress', { method: 'PUT', body: JSON.stringify(out) });
   const now = Date.now(); localStorage.setItem(PUSHED, String(now)); localStorage.setItem(SYNCED, String(now));
   if (lines) save();

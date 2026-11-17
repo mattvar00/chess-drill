@@ -11,6 +11,8 @@ export interface AppState {
   br: Record<string, BranchState>; fault: Record<string, PosState>; ignored: Record<string, boolean>;
   pref: Record<string, string>; fixed: Record<string, boolean>; settings: Record<string, unknown>;
   wood?: unknown[]; woodCur?: unknown; maia?: unknown; planDone?: Record<string, unknown>;
+  /** Dames gagnées : ouverture → date de la promotion. Une dame gagnée reste gagnée, même si des lignes s'ajoutent. */
+  queens?: Record<string, number>;
 }
 export const emptyState = (): AppState => ({ br: {}, fault: {}, ignored: {}, pref: {}, fixed: {}, settings: { user: 'matt_chess00', depth: 12, movetime: 350 } });
 const DB_NAME = 'chess-drill', VERSION = 1, LEGACY_KEY = 'drill_matt_v3';

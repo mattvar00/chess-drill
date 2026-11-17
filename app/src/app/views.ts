@@ -5,8 +5,8 @@ import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
-import { devRow, openUnit, pathSummary, shortName } from './path';
-import { caseOf, knownLines, unitOf } from '../core/path';
+import { bindPath, devRow, pathBlock, pathSummary, shortName, unitFor } from './path';
+import { caseOf, knownLines } from '../core/path';
 import { lineName, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
@@ -45,7 +45,7 @@ const small = (h: string) => h.replace('class="mini"', 'class="mini sm"');
 /** Position après les `n` premiers demi-coups d'une partie. */
 function positionAt(sans: string[], n: number): Chess { const g = new Chess(); for (let i = 0; i < n; i++) if (!tryMove(g, sans[i])) break; return g; }
 /** Nom d'une ligne en mots simples : le camp et l'ouverture adverse, pas le nom de la variante. */
-const plainBloc = (id: string) => { const b = BR[id].bloc; return `${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'} : ${b.sous || b.titre}`; };
+const plainBloc = (id: string) => { const { bloc: b, sys } = BR[id]; return `${shortName(sys.titre)}, ${b.titre.toLowerCase()}`; };
 
 /** Les thèmes de faute, dits simplement. */
 const PLAIN_THEME: Record<string, string> = { 'Coup calme': 'un bon coup tranquille manqué', 'Pièce en prise oubliée': 'une pièce en prise oubliée', 'Pièce déposée en prise': 'une pièce donnée', 'Pièce mise en prise': 'une pièce laissée en prise',
@@ -117,42 +117,6 @@ export function viewTrain(root: HTMLElement) {
     <a class="quiet" href="#/explorer">Explorer une position</a>`;
 }
 
-/** Filtre de la liste des blocs, gardé le temps de la visite. */
-let sideFilter: 'all' | 'b' | 'w' = 'all';
-const FILTERS = [['all', 'Tout'], ['b', 'Avec les Noirs'], ['w', 'Avec les Blancs']] as const;
-export function viewBlocs(root: HTMLElement) {
-  const due = dueLines(ALL_IDS), blocs = REP.blocs.filter(b => sideFilter === 'all' || b.side === sideFilter), valid = validCount(ALL_IDS);
-  // les lignes que tu rencontres vraiment : on ne les apprendra pas toutes, autant commencer par celles-là
-  const meet = meetCounts(store.games), top = Object.entries(meet).filter(([id]) => BR[id] && !BR[id].sys.statut.startsWith('plan')).sort((x, y) => y[1] - x[1]).slice(0, 8).map(([id]) => id);
-  const since = Date.now() / 1000 - 180 * 86400, inRep = store.games.filter(g => g.t >= since && g.a?.branches?.length), topSet = new Set(top);
-  const cover = inRep.length ? Math.round(100 * inRep.filter(g => g.a.branches!.some(id => topSet.has(id))).length / inRep.length) : 0;
-  root.innerHTML = `
-    <header class="pagehead">
-      <div class="sumrow"><p>${validPhrase(valid, ALL_IDS.length)}</p>${due ? `<p class="duetxt">${due} à revoir</p>` : ''}</div>${bar(valid, ALL_IDS.length, 'big')}</header>
-    ${top.length ? `<section class="grp"><h2>Ce que tu joues vraiment</h2><div class="surf card list">
-      <p class="cover">Ces ${top.length} lignes reviennent dans <b>${cover} %</b> de tes parties des 6 derniers mois. Commence par elles.</p>
-      ${top.map(id => { const nm = lineName(BR[id].br.titre); return `<a class="rowi" href="${lineUrl(id, 'drill')}"><span class="body"><b>${esc(nm.title)}</b><small>${esc(shortName(BR[id].sys.titre))}${nm.detail ? ` : ${esc(nm.detail)}` : ''}, dans ${plural(meet[id], 'partie')}</small></span>${dueTag(st(id)?.runs && isDue(st(id)) ? 1 : 0)}${chev}</a>`; }).join('')}
-      <button class="rowi more" id="bTop">Drill sur ces ${top.length} lignes</button></div></section>` : ''}
-    <div class="seg" role="group" aria-label="Filtrer par couleur">${FILTERS.map(([v, l]) => `<button type="button" data-f="${v}" aria-pressed="${sideFilter === v}">${l}</button>`).join('')}</div>
-    <div class="surf card list">${blocs.map(b => { const ids = idsOf(b); return `<a class="rowi" href="#/rep/${b.id}"><span class="chip ${b.side}" role="img" aria-label="${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(b.titre)}</b><small>${esc(b.sous)}</small>${progLine(ids)}</span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>
-    <section class="grp"><h2>Plans</h2><div class="surf card list">
-      <a class="rowi" href="#/plans"><span class="ico">${icon('chart')}</span><span class="body"><b>Plans animés</b><small>${plural(PLANS.length, 'animation')} : ruptures, cases clés, pièces à échanger</small></span>${chev}</a>
-      <a class="rowi" href="#/structures"><span class="ico">${icon('pawn')}</span><span class="body"><b>Plans par structure de pions</b><small>Tes structures, ton score dans chacune, et tes fautes à y rejouer</small></span>${chev}</a>
-    </div></section>
-    <details class="help"><summary>Comment ça marche</summary><p>Le drill te fait rejouer une ligne de mémoire ; Voir la ligne la montre avec ses commentaires. L'explorateur, sur chaque position, te laisse essayer tes propres coups avec l'avis du moteur. Deux passages sans faute valident une ligne, qui revient ensuite à intervalles de plus en plus longs. Le tirage favorise les lignes neuves et celles où tu es sorti du répertoire en partie.</p></details>`;
-  root.querySelector<HTMLButtonElement>('#bTop')?.addEventListener('click', () => go('Ce que tu joues vraiment', top, '#/rep/tout'));
-  root.querySelectorAll<HTMLButtonElement>('[data-f]').forEach(b => b.addEventListener('click', () => {
-    sideFilter = b.dataset.f as typeof sideFilter; viewBlocs(root); root.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.focus({ preventScroll: true });
-  }));
-}
-
-const badge = (s: System) => `<span class="badge ${s.statut === 'joué' ? 'ok' : s.statut === 'à apprendre' ? 'learn' : ''}">${esc(s.statut)}</span>`;
-export function viewBloc(root: HTMLElement, bloc: Bloc) {
-  root.innerHTML = `<button class="btn pri block" id="bAll">Drill sur tout le bloc</button>
-    <div class="surf card list">${bloc.systemes.map(s => { const ids = idsOf(s); return `<a class="rowi" href="#/rep/${bloc.id}/${s.id}"><span class="body"><span><b>${esc(s.titre)}</b>${badge(s)}</span><small class="clamp">${esc(s.resume)}</small>${progLine(ids)}</span>${dueTag(dueLines(ids))}${chev}</a>`; }).join('')}</div>`;
-  $('#bAll', root).addEventListener('click', () => go(bloc.titre, idsOf(bloc), `#/rep/${bloc.id}`));
-}
-
 function lineStatus(br: Branch): string {
   const s = st(br.id), parts = [plural(Math.ceil(br.moves.length / 2), 'coup')];
   if (s?.runs) parts.push(isValid(s) ? (isDue(s) ? 'à revoir' : `validée, revient dans ${plural(Math.max(1, Math.ceil((s.due - Date.now()) / DAY)), 'jour')}`) : `${s.clean}/2 sans faute`);
@@ -173,25 +137,21 @@ function inYourGames(sys: System): string {
 /** Page d'une ouverture : où tu en es (une seule mesure), ce qu'il faut corriger, tes lignes, puis les liens vers ses fautes et ses plans. */
 export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   const back = `#/rep/${bloc.id}/${sys.id}`, played = gamesOfSystem(sys);
-  const u = unitOf(bloc, sys, store.state.br), c = caseOf(u), known = knownLines(u, store.state.br);
+  const u = unitFor(bloc, sys), known = knownLines(u, store.state.br);
   const devs = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 60, 10).filter(g => BR[refBranch(g, BR)!]?.sys.id === sys.id).slice(0, 3);
   const gids = new Set(played.map(g => g.id)), nFaults = store.faults.filter(f => gids.has(f.game)).length, plans = plansFor(sys.id);
   const cells = u.lessons.map(l => `<i class="${l.state}"></i>`).join('');
-  root.innerHTML = `<p class="intro">${esc(sys.resume)}</p>
-    <section class="surf card padded progcard">
-      <div class="pchead"><b>${u.promoted ? 'Ouverture promue' : `Case ${c.k} sur ${c.n}`}</b><span>${known} ${known > 1 ? 'lignes sues' : 'ligne sue'} sur ${sys.branches.length}</span></div>
-      <div class="pcells" role="img" aria-label="${u.done} cases réussies sur ${c.n}">${cells}</div>
-      <button class="btn pri block" id="bPath">${u.promoted ? 'Revoir ces lignes' : `Continuer : case ${c.k}`}</button>
-      ${inYourGames(sys)}
-    </section>
+  root.innerHTML = `
+    ${pathBlock(u)}
     ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
-    <section class="grp"><h2>Tes lignes</h2><div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id], nm = lineName(br.titre);
+    <section class="grp"><h2>Tes lignes <span class="dim">${known} ${known > 1 ? 'sues' : 'sue'} sur ${sys.branches.length}</span></h2><p class="pnote">${esc(sys.resume)}</p><div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id], nm = lineName(br.titre);
       return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : ''}${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
       <button class="quiet" id="bDrill">Drill libre sur les ${sys.branches.length} lignes</button></section>
     ${nFaults || plans.length ? `<div class="links2">
       ${nFaults ? `<a class="surf card lk" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Fautes de cette ouverture</b><small>${plural(nFaults, 'position')}</small></a>` : ''}
       ${plans.length ? `<a class="surf card lk" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Plans de cette ouverture</b><small>${plural(plans.length, 'plan animé', 'plans animés')}</small></a>` : ''}</div>` : ''}
-    ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2><div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
+    ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2>${inYourGames(sys)}<div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, idsOf(sys), back));
-  $('#bPath', root).addEventListener('click', () => u.promoted ? go(sys.titre, idsOf(sys), back) : openUnit(bloc.id, sys.id));
+  bindPath(root, u);
+
 }

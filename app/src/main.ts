@@ -5,7 +5,7 @@ import './styles.css';
 import { $, esc, icon } from './ui/dom';
 import { setSound, setSoundSet } from './ui/sound';
 import { BR, REP, loadStore, store, woodCur } from './app/store';
-import { viewBloc, viewBlocs, viewHome, viewSystem, viewTrain } from './app/views';
+import { viewHome, viewSystem, viewTrain } from './app/views';
 import { mountTrainer } from './app/trainer';
 import { viewSettings } from './app/settings';
 import { mountExercise, viewWood } from './app/wood';
@@ -85,10 +85,9 @@ function route() {
   } else {
     endSession();
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
-    if (bloc && sys) { shell(sys.titre, bloc.titre, `#/rep/${bloc.id}`, TRAIN); viewSystem(view, bloc, sys); }
-    else if (bloc) { shell(bloc.titre, bloc.sous, '#/rep/tout', TRAIN); viewBloc(view, bloc); }
-    else if (p[0] === 'rep' && p[1] === 'tout') { shell('Toutes les lignes', '', '#/rep', TRAIN); viewBlocs(view); }
-    else if (p[0] === 'rep') { shell('Tes ouvertures', '', TRAIN, TRAIN); viewPath(view); }
+    if (bloc && sys) { shell(shortName(sys.titre), `${bloc.titre}, ${bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`, '#/rep', TRAIN); viewSystem(view, bloc, sys); }
+    else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
+    else if (p[0] === 'rep') { shell('Ouvertures', '', TRAIN, TRAIN); viewPath(view); }
     else if (p[0] === 'lecon') { shell('Bilan', '', null, null); viewLessonEnd(view); }
     else if (p[0] === 'wood') { shell('Fautes', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', backOf(q, TRAIN), TRAIN); viewWood(view, q); }
     else if (p[0] === 'entrainer') { shell("S'entraîner", '', null, TRAIN); viewTrain(view); }

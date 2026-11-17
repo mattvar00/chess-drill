@@ -8,7 +8,11 @@ import { winPct } from '../core/winpct';
 import type { Color } from '../core/types';
 import { mainEngine } from '../engine/stockfish';
 import { Board } from '../ui/board';
-import { esc, icon } from '../ui/dom';
+import { esc, icon, plural } from '../ui/dom';
+import { linesThrough } from '../core/path';
+import { lineName, typeLabel } from '../core/names';
+import { REP } from './store';
+import { lineUrl } from './session';
 
 export interface ExplorerLine { label: string; sans: string[] }
 export interface Explorer { movable(): Color | null; onMove(m: Move): void; destroy(): void }
@@ -16,7 +20,7 @@ export interface Explorer { movable(): Color | null; onMove(m: Move): void; dest
 /** Lignes en notation « 20...Rxc4 21.Nd7 » → coups seuls. */
 export const sanTokens = (line: string) => line.split(/\s+/).map(t => t.replace(/^\d+\.(\.\.)?|^\d+…/, '')).filter(t => t && t !== '…');
 
-export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; orient: Color; lines: ExplorerLine[]; close: () => void }): Explorer {
+export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; orient: Color; lines: ExplorerLine[]; close: () => void; onPath?: (sans: string[]) => void }): Explorer {
   const startNo = parseInt(o.fen.split(' ')[5]) || 1, startW = o.fen.split(' ')[1] === 'w';
   // chaque ligne est rejouée une fois pour ne garder que les coups légaux
   const lines = o.lines.map(l => { const g = new Chess(o.fen), moves: Move[] = []; for (const s of l.sans) { const m = tryMove(g, s); if (!m) break; moves.push(m); } return { label: l.label, moves }; }).filter(l => l.moves.length);
@@ -46,6 +50,7 @@ export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; 
     const free = !lines.some((_, j) => isLine(j) && lines[j].moves.length >= path.length && path.every((m, k) => uciOf(m) === uciOf(lines[j].moves[k])));
     const mine = el.querySelector<HTMLElement>('#xMine')!; mine.hidden = !free || !path.length;
     if (free) el.querySelector('#xMineMoves')!.innerHTML = fmt(path, 0, k => (k === cur - 1 ? ' cur' : ''));
+    o.onPath?.(path.slice(0, cur).map(m => m.san));
     analyse(g);
   }
   /** Évaluation de la position affichée, après une courte pause (les clics rapides n'en lancent qu'une). */
@@ -130,10 +135,24 @@ export function explorerSlot(board: Board, main: () => HTMLElement, panel: () =>
 }
 
 /** Explorateur libre, depuis la position de départ : un échiquier, tes coups, l'avis du moteur. */
-export function mountFreeExplorer(root: HTMLElement, back: string): () => void {
-  root.innerHTML = '<div class="trainer"><div class="tboard"><div id="board"></div></div><div class="tside"><div id="xp"></div></div></div>';
+/** Avec `rep` : sous l'explorateur, tes lignes du répertoire qui passent par la position jouée (chercher une ligne en jouant ses coups). */
+export function mountFreeExplorer(root: HTMLElement, back: string, rep = false): () => void {
+  root.innerHTML = `<div class="trainer"><div class="tboard"><div id="board"></div></div><div class="tside">${rep ? '<div id="xrep" class="xrep"></div>' : ''}<div id="xp"></div></div></div>`;
+  const repEl = root.querySelector<HTMLElement>('#xrep');
+  const onPath = repEl ? (sans: string[]) => { repEl.innerHTML = repLines(sans); } : undefined;
   let x: Explorer | null = null;
   const board = new Board(root.querySelector<HTMLElement>('#board')!, { movable: () => x?.movable() ?? null, onMove: m => x?.onMove(m) });
-  x = createExplorer(board, root.querySelector<HTMLElement>('#xp')!, { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', orient: 'w', lines: [], close: () => { location.hash = back; } });
+  x = createExplorer(board, root.querySelector<HTMLElement>('#xp')!, { fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', orient: 'w', lines: [], close: () => { location.hash = back; }, onPath });
   return () => { x?.destroy(); board.destroy(); };
+}
+
+/** Tes lignes qui passent par ces coups : les prochains coups de ton répertoire, puis les lignes (au plus 8). */
+function repLines(sans: string[]): string {
+  if (!sans.length) return '<p class="hint">Joue les premiers coups de la partie : tes lignes qui passent par la position s\'affichent ici.</p>';
+  const { through, next } = linesThrough(REP.blocs, sans);
+  if (!through.length) return '<p class="hint">Aucune ligne de ton répertoire ne passe par cette position.</p>';
+  return `<p class="flabel">${plural(through.length, 'ligne de ton répertoire passe', 'lignes de ton répertoire passent')} par ici</p>
+    ${next.length ? `<p class="xnext">Ensuite : ${next.slice(0, 4).map(([m, k]) => `<b>${esc(m)}</b> (${k})`).join(', ')}</p>` : ''}
+    <div class="surf card list">${through.slice(0, 8).map(r => { const nm = lineName(r.br.titre);
+      return `<a class="rowi" href="${lineUrl(r.br.id, 'explore')}"><span class="body"><b>${r.br.type ? `<span class="ltype ${r.br.type}">${typeLabel(r.br.type)}</span>` : ''}${esc(nm.title)}</b><small>${esc(r.sys.titre)}, ${esc(r.bloc.titre.toLowerCase())}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div>`;
 }
