@@ -82,7 +82,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   }
   function prompt() {
     if (ply >= moves.length) return finish();
-    const key = br.notes[ply] ? ' <span class="tag">coup clé</span>' : '', turn = `<i class="stm ${side}"></i>À toi de jouer`;
+    const key = br.notes[ply] ? ` <span class="tag">${br.type === 'punir' ? 'la punition' : br.type === 'bon' ? 'le bon coup' : 'coup clé'}</span>` : '', turn = `<i class="stm ${side}"></i>À toi de jouer`;
     if (ply <= 1) say('you', turn + key, `<p class="why">${esc(sys.resume)}</p>`);
     else { const ok = steps[ply - 2] === 'ok';
       say('you', turn + key, `${ok ? `<p class="okline">${icon('check')}${num(ply - 2)}${esc(moves[ply - 2].san)}, réponse ${num(ply - 1)}${esc(moves[ply - 1].san)}</p>` : ''}${lastNote ? `<p class="why">${esc(lastNote)}</p>` : ok ? '' : '<p class="why">Continue la ligne.</p>'}`); }

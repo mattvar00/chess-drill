@@ -21,3 +21,5 @@ export function lineName(titre: string): { title: string; detail: string } {
 }
 /** Le titre seul, sans références internes : pour les en-têtes et les bulles. */
 export const lineTitle = (titre: string) => lineName(titre).title;
+/** Étiquette d'une ligne tirée de tes parties. */
+export const typeLabel = (t?: 'punir' | 'bon') => t === 'punir' ? 'Punir' : t === 'bon' ? 'Bon coup' : '';

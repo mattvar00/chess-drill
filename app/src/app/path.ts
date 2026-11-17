@@ -4,7 +4,7 @@
  * Chaque section commence par un bandeau et se termine par sa dame.
  */
 import { passed, unitsOf, type Lesson, type Unit } from '../core/path';
-import { lineName, lineTitle } from '../core/names';
+import { lineName, lineTitle, typeLabel } from '../core/names';
 import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
 import { isDue } from '../core/schedule';
@@ -49,7 +49,7 @@ const STATE: Record<Lesson['state'], string> = { done: 'réussie', crack: 'à re
 function bubble(u: Unit, L: Lesson, i: number, x: number) {
   const n = u.lessons.length, last = i === n - 1, st = store.state.br;
   const lineMark = (id: string) => { const s = st[id]; return !s?.runs ? ['new', 'nouvelle'] : s.clean >= 1 && isDue(s) ? ['rev', 'à revoir'] : s.clean >= 1 ? ['ok', 'sue'] : ['new', 'à finir']; };
-  const lines = L.ids.slice(0, 4).map(id => { const [c, t] = lineMark(id); const nm = lineName(BR[id].br.titre); return `<li><span class="lm ${c}">${t}</span><span>${esc(nm.title)}${nm.detail ? `<small>${esc(nm.detail)}</small>` : ''}</span></li>`; }).join('') + (L.ids.length > 4 ? `<li class="more">et ${plural(L.ids.length - 4, 'autre ligne', 'autres lignes')}</li>` : '');
+  const lines = L.ids.slice(0, 4).map(id => { const [c, t] = lineMark(id); const nm = lineName(BR[id].br.titre); const ty = BR[id].br.type; return `<li><span class="lm ${c}">${t}</span><span>${ty ? `<span class="ltype ${ty}">${typeLabel(ty)}</span>` : ''}${esc(nm.title)}${nm.detail ? `<small>${esc(nm.detail)}</small>` : ''}</span></li>`; }).join('') + (L.ids.length > 4 ? `<li class="more">et ${plural(L.ids.length - 4, 'autre ligne', 'autres lignes')}</li>` : '');
   const rest = lessonIds(L).length, partial = L.state === 'cur' && rest < L.ids.length;
   const why = L.state === 'cur' ? `Joue ces ${plural(L.ids.length, 'ligne')} une fois chacune sans faute pour avancer le pion.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`
     : L.state === 'crack' ? 'Une ligne de cette case revient en révision. Rejoue-la sans faute pour garder la case.'

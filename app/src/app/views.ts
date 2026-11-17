@@ -7,7 +7,7 @@ import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
 import { devRow, openUnit, pathSummary, shortName } from './path';
 import { caseOf, knownLines, unitOf } from '../core/path';
-import { lineName } from '../core/names';
+import { lineName, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
@@ -186,7 +186,7 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
     </section>
     ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
     <section class="grp"><h2>Tes lignes</h2><div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id], nm = lineName(br.titre);
-      return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
+      return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : ''}${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
       <button class="quiet" id="bDrill">Drill libre sur les ${sys.branches.length} lignes</button></section>
     ${nFaults || plans.length ? `<div class="links2">
       ${nFaults ? `<a class="surf card lk" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Fautes de cette ouverture</b><small>${plural(nFaults, 'position')}</small></a>` : ''}

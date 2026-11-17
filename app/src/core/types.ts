@@ -34,7 +34,8 @@ export interface Game {
 }
 
 export interface RepMove { san: string; uci: string }
-export interface Branch { id: string; titre: string; moves: RepMove[]; notes: Record<string, string> }
+/** `type` : ligne tirée de tes parties. « punir » : l'adversaire s'est trompé, la ligne apprend la punition ; « bon » : tu t'es trompé, elle apprend le coup normal. */
+export interface Branch { id: string; titre: string; moves: RepMove[]; notes: Record<string, string>; type?: 'punir' | 'bon' }
 export interface System { id: string; titre: string; statut: string; resume: string; branches: Branch[] }
 export interface Bloc { id: string; titre: string; sous: string; side: Color; systemes: System[] }
 export interface Repertoire { version: number; blocs: Bloc[]; faults: unknown[] }
