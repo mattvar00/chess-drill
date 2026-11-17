@@ -78,7 +78,7 @@ describe('dame gagnée', () => {
     const st = { q0: ok, q1: ok, q2: ok };
     const u = unitOf(bloc, sys, st);
     expect(u.promoted).toBe(true); expect(earnedQueen(u)).toBe(true);
-    const more: System = { ...sys, branches: [...sys.branches, { id: 'q3', titre: '', moves: [], notes: {}, type: 'punir' }] };
+    const more: System = { ...sys, branches: [...sys.branches, { id: 'q3', titre: '', moves: [], notes: {}, type: 'bon' }] };
     expect(unitOf(bloc, more, st).promoted).toBe(false);
     const kept = unitOf(bloc, more, st, {}, Date.now(), { Q: 1 });
     expect(kept.promoted).toBe(true);
@@ -134,14 +134,15 @@ describe('recommandations', () => {
   });
 });
 describe('cases stables', () => {
-  it('une ligne tirée de tes parties s\'ajoute à la fin sans déplacer les cases', () => {
+  it('un « Bon coup » s\'ajoute à la fin sans déplacer les cases, une punition reste hors du chemin', () => {
     const base = Array.from({ length: 12 }, (_, i) => ({ id: 'k' + i, titre: '', moves: [], notes: {} }));
     const sys: System = { id: 'K', titre: '', statut: 'joué', resume: '', branches: base };
     const bloc: Bloc = { id: 'B', titre: '', sous: '', side: 'w', systemes: [sys] };
     const before = unitOf(bloc, sys, {}).lessons.map(l => l.ids);
-    const more = { ...sys, branches: [...base, ...['x1', 'x2', 'x3', 'x4'].map(id => ({ id, titre: '', moves: [], notes: {}, type: 'punir' as const }))] };
+    const more = { ...sys, branches: [...base, ...['x1', 'x2', 'x3', 'x4'].map(id => ({ id, titre: '', moves: [], notes: {}, type: 'bon' as const })), { id: 'p1', titre: '', moves: [], notes: {}, type: 'punir' as const }] };
     const after = unitOf(bloc, more, {}).lessons.map(l => l.ids);
     expect(after.slice(0, before.length)).toEqual(before);
     expect(after.slice(before.length)).toEqual([['x1', 'x2', 'x3'], ['x4']]);
+    expect(after.flat()).not.toContain('p1');   // une punition n'entre pas dans le chemin
   });
 });

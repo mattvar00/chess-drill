@@ -87,7 +87,7 @@ function route() {
     endSession();
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
     if (bloc && sys) { shell(shortName(sys.titre), `${bloc.titre}, ${bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`, '#/rep', TRAIN); viewSystem(view, bloc, sys); }
-    else if (p[0] === 'rep' && p[1] === 'sorties') { shell('Punir les erreurs adverses', '', '#/rep', TRAIN); viewExits(view); }
+    else if (p[0] === 'rep' && p[1] === 'sorties') { shell('Punir les erreurs adverses', q.get('o') ? planSysTitle(q.get('o')!) : '', backOf(q, '#/rep'), TRAIN); viewExits(view, q); }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', TRAIN, TRAIN); viewPath(view); }
     else if (p[0] === 'lecon') { shell('Bilan', '', null, null); viewLessonEnd(view); }

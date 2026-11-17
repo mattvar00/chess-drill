@@ -25,7 +25,7 @@ export function todayPool(rep: Repertoire, st: States, now = Date.now(), maxNew 
   for (const bloc of rep.blocs) for (const sys of bloc.systemes) for (const br of sys.branches) {
     const s = st[br.id];
     if (s && s.runs) { if (s.due <= now) due.push(br.id); }
-    else if (sys.statut !== 'alternatif') fresh.push(br.id);
+    else if (sys.statut !== 'alternatif' && br.type !== 'punir') fresh.push(br.id);   // une punition s'apprend depuis sa catégorie, puis revient en révision comme les autres
   }
   fresh.sort((a, b) => branchWeight(st[b], now) - branchWeight(st[a], now));
   return { due, fresh: fresh.slice(0, maxNew) };

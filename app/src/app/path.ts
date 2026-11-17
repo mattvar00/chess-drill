@@ -3,7 +3,7 @@
  * (en haut de sa page), et le bilan d'une leçon. Une ouverture = une réponse à un plan adverse, 6 cases au plus ;
  * le pion avance d'une case par leçon réussie, la dame au bout. Une dame gagnée reste gagnée.
  */
-import { caseOf, earnedQueen, freshFromGames, passed, unitOf, unitsOf, type Lesson, type Unit } from '../core/path';
+import { caseOf, earnedQueen, freshFromGames, ownLines, passed, unitOf, unitsOf, type Lesson, type Unit } from '../core/path';
 import type { Bloc, System } from '../core/types';
 import { syncSoon } from './api';
 import { recommend, type Facts, type Reco, type RecoKind } from '../core/reco';
@@ -147,7 +147,7 @@ function factsOf(units: Unit[]): Facts[] {
     const gs = bySys[u.sys.id] ?? [], an = gs.filter(g => g.st && myWp(g));
     const at = (g: Game, ply: number) => { const w = myWp(g)!; return w[Math.min(ply, w.length - 1)]; };
     return { u, games: gs.length, score: gs.length ? (100 * gs.reduce((a, g) => a + (g.res === 'W' ? 1 : g.res === 'D' ? 0.5 : 0), 0)) / gs.length : null,
-      devs: devBy[u.sys.id] || 0, due: u.sys.branches.filter(b => { const s = store.state.br[b.id]; return s?.runs && isDue(s); }).length,
+      devs: devBy[u.sys.id] || 0, due: ownLines(u.sys).filter(b => { const s = store.state.br[b.id]; return s?.runs && isDue(s); }).length,
       fresh: freshFromGames(u.sys, store.state.br), punir: punBy[u.sys.id] || 0,
       drop: an.length >= 3 ? an.reduce((a, g) => a + at(g, 40) - at(g, 20), 0) / an.length : null, plans: plansFor(u.sys.id).length };
   });
@@ -171,7 +171,7 @@ function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {
     return g ? { label: 'Rejouer la ligne', href: lineUrl(refBranch(g, BR)!, 'drill', g.id) } : lesson; }
   if (r.kind === 'punir') return { label: 'Voir la punition', href: '#/rep/sorties' };
   if (r.kind === 'milieu') return { label: 'Voir ses plans', href: `#/plans?o=${u.sys.id}&r=${encodeURIComponent('#/rep')}` };
-  if (r.kind === 'revoir') { const ids = u.sys.branches.map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
+  if (r.kind === 'revoir') { const ids = ownLines(u.sys).map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
     return { label: 'Revoir maintenant', run: () => { setLS(LAST_KEY, u.sys.id); location.hash = startSession(`${shortName(u.sys.titre)}, à revoir`, ids, '#/rep'); } }; }
   return lesson;
 }
@@ -244,8 +244,8 @@ export function viewLessonEnd(root: HTMLElement) {
   const time = `${mins}:${String(secs).padStart(2, '0')}`;
   if (u.promoted && moved) {
     root.innerHTML = `<div class="lend unitdone"><p class="kick">Promotion</p><img class="bigq" src="${pieceSrc('q')}" alt="">
-      <h1>${esc(name)} terminée</h1><p class="sub">Les ${plural(u.sys.branches.length, 'ligne')} sont acquises. Elles reviendront de temps en temps pour ne pas s'effacer.</p>
-      <div class="etiles"><div><b>${u.sys.branches.length}</b><span>lignes</span></div>${u.meet ? `<div><b>${u.meet}</b><span>de tes parties couvertes</span></div>` : ''}<div><b>${time}</b><span>pour la dernière case</span></div></div>
+      <h1>${esc(name)} terminée</h1><p class="sub">Les ${plural(ownLines(u.sys).length, 'ligne')} sont acquises. Elles reviendront de temps en temps pour ne pas s'effacer.</p>
+      <div class="etiles"><div><b>${ownLines(u.sys).length}</b><span>lignes</span></div>${u.meet ? `<div><b>${u.meet}</b><span>de tes parties couvertes</span></div>` : ''}<div><b>${time}</b><span>pour la dernière case</span></div></div>
       </div><div class="lend-act"><a class="btn pri block" href="${back}">Voir l'ouverture</a></div>`;
     return;
   }

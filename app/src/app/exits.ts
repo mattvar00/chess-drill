@@ -58,11 +58,14 @@ export function punishRow(r: ReturnType<typeof punishLines>[number]) {
  * Punir les erreurs adverses : d'abord tes punitions (les lignes « Punir » du répertoire, à travailler d'un bouton),
  * puis les erreurs repérées dans tes parties qui n'ont pas encore de ligne, et, repliés, les coups normaux hors répertoire.
  */
-export function viewExits(root: HTMLElement) {
-  const s = scanExits(store.games, store.state.ignored), lines = punishLines(), todo = lines.filter(r => !passed(store.state.br[r.br.id]) || isDue(store.state.br[r.br.id]));
+export function viewExits(root: HTMLElement, q = new URLSearchParams()) {
+  const o = q.get('o'), inSys = (ids: string[]) => !o || ids.some(id => BR[id]?.sys.id === o);
+  const scan = scanExits(store.games, store.state.ignored), s = { punir: scan.punir.filter(c => inSys(c.branches)), connaitre: scan.connaitre.filter(c => inSys(c.branches)) };
+  const lines = punishLines().filter(r => !o || r.sys.id === o), todo = lines.filter(r => !passed(store.state.br[r.br.id]) || isDue(store.state.br[r.br.id]));
   const punir = s.punir.slice(0, 12), connaitre = s.connaitre.filter(c => c.count > 1).slice(0, 8);
   root.innerHTML = `
-    <p class="intro">Les erreurs que tes adversaires font dans l'ouverture, et le coup qui les punit. Tout vient de tes parties.</p>
+    <p class="intro">Les erreurs que tes adversaires font dans l'ouverture, et le coup qui les punit. Tout vient de tes parties. Ces lignes sont à part de ton répertoire : elles ne comptent pas dans le chemin ni pour la dame.</p>
+    ${o ? '<a class="quiet" href="#/rep/sorties">Voir toutes les punitions</a>' : ''}
     <section class="grp"><h2>Tes punitions</h2><p class="pnote">Des lignes courtes : tu rejoues l'ouverture jusqu'à l'erreur, puis tu trouves le coup qui punit.</p>
       ${lines.length ? `${todo.length ? `<button class="btn pri block" id="bPun">Travailler ${todo.length > 1 ? `les ${todo.length} punitions à apprendre` : 'la punition à apprendre'}</button>` : ''}
       <div class="surf card list">${lines.map(punishRow).join('')}</div>` : '<p class="pnote">Aucune pour l\'instant.</p>'}</section>

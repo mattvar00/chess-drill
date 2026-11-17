@@ -6,7 +6,7 @@ import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
 import { bindPath, devRow, pathBlock, pathSummary, shortName, unitFor } from './path';
-import { caseOf, knownLines } from '../core/path';
+import { caseOf, knownLines, ownLines } from '../core/path';
 import { lineName, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
@@ -138,20 +138,22 @@ function inYourGames(sys: System): string {
 export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   const back = `#/rep/${bloc.id}/${sys.id}`, played = gamesOfSystem(sys);
   const u = unitFor(bloc, sys), known = knownLines(u, store.state.br);
+  const own = ownLines(sys), nPun = sys.branches.length - own.length;
   const devs = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 60, 10).filter(g => BR[refBranch(g, BR)!]?.sys.id === sys.id).slice(0, 3);
   const gids = new Set(played.map(g => g.id)), nFaults = store.faults.filter(f => gids.has(f.game)).length, plans = plansFor(sys.id);
   const cells = u.lessons.map(l => `<i class="${l.state}"></i>`).join('');
   root.innerHTML = `
     ${pathBlock(u)}
     ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
-    <section class="grp"><h2>Tes lignes <span class="dim">${known} ${known > 1 ? 'sues' : 'sue'} sur ${sys.branches.length}</span></h2><p class="pnote">${esc(sys.resume)}</p><div class="surf card list">${sys.branches.map(br => { const d = store.devs[br.id], nm = lineName(br.titre);
+    <section class="grp"><h2>Tes lignes <span class="dim">${known} ${known > 1 ? 'sues' : 'sue'} sur ${own.length}</span></h2><p class="pnote">${esc(sys.resume)}</p><div class="surf card list">${own.map(br => { const d = store.devs[br.id], nm = lineName(br.titre);
       return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : ''}${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
-      <button class="quiet" id="bDrill">Drill libre sur les ${sys.branches.length} lignes</button></section>
-    ${nFaults || plans.length ? `<div class="links2">
+      <button class="quiet" id="bDrill">Drill libre sur les ${own.length} lignes</button></section>
+    ${nFaults || plans.length || nPun ? `<div class="links2">
+      ${nPun ? `<a class="surf card lk" href="#/rep/sorties?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Erreurs adverses à punir</b><small>${plural(nPun, 'punition')} dans cette ouverture</small></a>` : ''}
       ${nFaults ? `<a class="surf card lk" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Fautes de cette ouverture</b><small>${plural(nFaults, 'position')}</small></a>` : ''}
       ${plans.length ? `<a class="surf card lk" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Plans de cette ouverture</b><small>${plural(plans.length, 'plan animé', 'plans animés')}</small></a>` : ''}</div>` : ''}
     ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2>${inYourGames(sys)}<div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
-  $('#bDrill', root).addEventListener('click', () => go(sys.titre, idsOf(sys), back));
+  $('#bDrill', root).addEventListener('click', () => go(sys.titre, own.map(b => b.id), back));
   bindPath(root, u);
 
 }
