@@ -4,10 +4,10 @@
  * a été jouée une fois sans faute ; elle se « fissure » quand une de ses lignes est à revoir. Toutes réussies : promotion.
  */
 import { isDue } from './schedule';
-import type { Bloc, BranchState, System } from './types';
+import type { Bloc, Branch, BranchState, Color, RepMove, System } from './types';
 
 export type CaseState = 'done' | 'crack' | 'cur' | 'lock';
-export interface Lesson { ids: string[]; rank: number; state: CaseState }
+export interface Lesson { ids: string[]; rank: number; state: CaseState; name?: string }
 export interface Unit { bloc: Bloc; sys: System; lessons: Lesson[]; done: number; promoted: boolean; meet: number }
 
 /** Coupe une liste en `n` morceaux de tailles aussi égales que possible, dans l'ordre. */
@@ -24,17 +24,42 @@ export const passed = (s?: BranchState) => !!s && s.runs > 0 && s.clean >= 1;
  * dans « Punir les erreurs adverses » : elles ne font pas partie du chemin et ne comptent pas pour la dame.
  */
 export const ownLines = (sys: System) => sys.branches.filter(b => b.type !== 'punir');
+/** Les chapitres d'un cours, dans l'ordre où ils apparaissent ; `null` si les lignes n'ont pas de chapitre (ouverture sans cours). */
+export function chaptersOf(lines: Branch[]): { name: string; lines: Branch[] }[] | null {
+  if (!lines.length || !lines.every(b => b.ch)) return null;
+  const out: { name: string; lines: Branch[] }[] = [];
+  for (const b of lines) { let c = out.find(x => x.name === b.ch); if (!c) out.push(c = { name: b.ch!, lines: [] }); c.lines.push(b); }
+  return out;
+}
+/**
+ * Méthode du cours : où commence une variante. On rejoue tout seuls les coups qu'elle partage avec une variante déjà connue,
+ * jusqu'au coup adverse qui l'ouvre (compris) ; il reste toujours au moins un coup à jouer soi-même.
+ * `known` : les coups des autres variantes déjà sues. Renvoie le nombre de demi-coups joués d'office.
+ */
+export function trunkOf(moves: RepMove[], known: RepMove[][], side: Color): number {
+  let t = 0;
+  for (const o of known) { let k = 0; while (k < moves.length && k < o.length && o[k].uci === moves[k].uci) k++; t = Math.max(t, k); }
+  if (!t) return 0;
+  const mine = (i: number) => (i % 2 === 0) === (side === 'w');
+  if (t < moves.length && !mine(t)) t++;
+  let last = moves.length - 1; while (last >= 0 && !mine(last)) last--;
+  return Math.max(0, Math.min(t, last));
+}
 export function unitOf(bloc: Bloc, sys: System, st: Record<string, BranchState | undefined>, meet: Record<string, number> = {}, now = Date.now(), queens: Record<string, number> = {}): Unit {
   // Les lignes du répertoire de base sont coupées en 6 cases au plus. Les « Bon coup » tirés de tes parties forment leurs propres
   // cases de 3, ajoutées à la fin : en ajouter un ne déplace jamais une case déjà jouée. Les punitions n'entrent pas dans le chemin.
-  const ids = sys.branches.map(b => b.id), base = sys.branches.filter(b => !b.type).map(b => b.id), extra = sys.branches.filter(b => b.type === 'bon').map(b => b.id);
-  const parts = [...chunk(base, Math.min(6, base.length)), ...Array.from({ length: Math.ceil(extra.length / 3) }, (_, i) => extra.slice(3 * i, 3 * i + 3))], n = parts.length;
+  // Un cours (lignes rangées par chapitre) : une case par chapitre, dans l'ordre du cours. Ajouter une variante à un chapitre ne déplace rien.
+  const ids = sys.branches.map(b => b.id), baseBr = sys.branches.filter(b => !b.type), extra = sys.branches.filter(b => b.type === 'bon').map(b => b.id);
+  const chapters = chaptersOf(baseBr);
+  const parts: { ids: string[]; name?: string }[] = [
+    ...(chapters ? chapters.map(c => ({ ids: c.lines.map(b => b.id), name: c.name })) : chunk(baseBr.map(b => b.id), Math.min(6, baseBr.length)).map(p => ({ ids: p }))),
+    ...Array.from({ length: Math.ceil(extra.length / 3) }, (_, i) => ({ ids: extra.slice(3 * i, 3 * i + 3), name: chapters ? 'Tirées de tes parties' : undefined }))], n = parts.length;
   let cur = false;
-  const lessons = parts.map((p, i): Lesson => {
+  const lessons = parts.map(({ ids: p, name }, i): Lesson => {
     const rank = 8 - n + 1 + i, ok = p.every(id => passed(st[id]));
-    if (ok) return { ids: p, rank, state: p.some(id => isDue(st[id], now)) ? 'crack' : 'done' };
-    if (!cur) { cur = true; return { ids: p, rank, state: 'cur' }; }
-    return { ids: p, rank, state: 'lock' };
+    if (ok) return { ids: p, rank, name, state: p.some(id => isDue(st[id], now)) ? 'crack' : 'done' };
+    if (!cur) { cur = true; return { ids: p, rank, name, state: 'cur' }; }
+    return { ids: p, rank, name, state: 'lock' };
   });
   const done = lessons.filter(l => l.state === 'done' || l.state === 'crack').length;
   return { bloc, sys, lessons, done, promoted: done === n || !!queens[sys.id], meet: ids.reduce((s, id) => s + (meet[id] || 0), 0) };

@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import rep from '../src/data/repertoire.json';
 import type { Bloc, Repertoire, System } from '../src/core/types';
 import { lineName } from '../src/core/names';
-import { caseOf, knownLines, unitOf, type Unit } from '../src/core/path';
+import { caseOf, chaptersOf, knownLines, trunkOf, unitOf, type Unit } from '../src/core/path';
+import { Chess } from '../src/core/chess';
 import { newBranchState } from '../src/core/schedule';
 import { MIN_GAMES, playerCard, profile } from '../src/core/stats';
 import { themeCounts, themeLabel } from '../src/core/wood';
@@ -144,5 +145,46 @@ describe('cases stables', () => {
     expect(after.slice(0, before.length)).toEqual(before);
     expect(after.slice(before.length)).toEqual([['x1', 'x2', 'x3'], ['x4']]);
     expect(after.flat()).not.toContain('p1');   // une punition n'entre pas dans le chemin
+  });
+});
+
+describe('cours : chapitres et méthode', () => {
+  const R = rep as unknown as Repertoire, bloc = R.blocs.find(b => b.systemes.some(s => s.id === 'C5'))!, c5 = bloc.systemes.find(s => s.id === 'C5')!;
+  const course = c5.branches.filter(b => b.ch), mv = (id: string) => c5.branches.find(b => b.id === id)!.moves;
+  it('une case par chapitre, dans l\'ordre du cours, puis les lignes tirées des parties', () => {
+    const u = unitOf(bloc, c5, {});
+    expect(u.lessons.map(l => l.name)).toEqual([...chaptersOf(course)!.map(c => c.name), 'Tirées de tes parties']);
+    expect(u.lessons[1].ids).toEqual(['C5b1', 'C5b2', 'C5b3', 'C5b4', 'C5b5', 'C5b6']);
+  });
+  it('chaque variante du cours a un rôle, une explication, des coups légaux, et finit sur un coup à soi (sauf la ligne principale d\'origine)', () => {
+    expect(course.length).toBeGreaterThanOrEqual(18);
+    for (const b of course) {
+      expect(b.role, b.id).toMatch(/^(theorie|erreur)$/); expect(b.intro!.length, b.id).toBeGreaterThan(40);
+      const g = new Chess(); for (const m of b.moves) expect(g.move(m.san).san, `${b.id} ${m.san}`).toBe(m.san);
+      if (b.id !== 'C1d') expect(b.moves.length % 2, b.id).toBe(1);
+      for (const k of Object.keys(b.notes)) expect(+k % 2, `${b.id} note ${k}`).toBe(0);   // les notes sont sur tes coups
+    }
+  });
+  it('dans chaque chapitre, la théorie passe avant les erreurs', () => {
+    for (const c of chaptersOf(course)!) expect(c.lines[0].role, c.name).toBe('theorie');
+  });
+  it('rien de connu : la variante se joue depuis le premier coup', () => {
+    expect(trunkOf(mv('C5b1'), [], 'w')).toBe(0);
+  });
+  it('les coups communs se jouent tout seuls, jusqu\'au coup adverse qui ouvre la variante', () => {
+    // …Bd7 connue : pour …Qb6, on rejoue jusqu'à 6.Nc3 puis 6…Qb6 ; il reste 7.Nd5 à trouver
+    const t = trunkOf(mv('C5b2'), [mv('C5b1')], 'w');
+    expect(mv('C5b2')[t - 1].san).toBe('Qb6'); expect(mv('C5b2')[t].san).toBe('Nd5');
+    // d'un chapitre à l'autre : seuls 1.d4 d5 2.c4 dxc4 3.e4 sont communs, puis 3…b5
+    const t2 = trunkOf(mv('C5b1'), [mv('C1d'), mv('C1e')], 'w');
+    expect(mv('C5b1')[t2 - 1].san).toBe('b5'); expect(mv('C5b1')[t2].san).toBe('a4');
+  });
+  it('quand la variante s\'écarte par un coup à soi, on s\'arrête juste avant', () => {
+    const t = trunkOf(mv('C1x3'), [mv('C1d')], 'w');   // 5.Nxd4 au lieu de 5.Bxc4
+    expect(mv('C1x3')[t].san).toBe('Nxd4');
+  });
+  it('il reste toujours un coup à jouer soi-même', () => {
+    const a = mv('C5b5'), t = trunkOf(a, [a], 'w');
+    expect(t).toBeLessThan(a.length); expect(t % 2).toBe(0);
   });
 });

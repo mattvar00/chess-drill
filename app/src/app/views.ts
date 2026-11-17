@@ -6,8 +6,8 @@ import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
 import { bindPath, devRow, pathBlock, pathSummary, shortName, unitFor } from './path';
-import { caseOf, knownLines, ownLines } from '../core/path';
-import { lineName, typeLabel } from '../core/names';
+import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
+import { lineName, roleLabel, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
@@ -142,11 +142,15 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   const devs = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 60, 10).filter(g => BR[refBranch(g, BR)!]?.sys.id === sys.id).slice(0, 3);
   const gids = new Set(played.map(g => g.id)), nFaults = store.faults.filter(f => gids.has(f.game)).length, plans = plansFor(sys.id);
   const cells = u.lessons.map(l => `<i class="${l.state}"></i>`).join('');
+  // un cours : les lignes sous le nom de leur chapitre (une case du chemin), avec leur rôle ; sinon une seule liste
+  const chapters = chaptersOf(own.filter(b => !b.type)), rest = own.filter(b => b.type);
+  const groups: { name: string; lines: Branch[] }[] = chapters ? [...chapters, ...(rest.length ? [{ name: 'Tirées de tes parties', lines: rest }] : [])] : [{ name: '', lines: own }];
+  const row = (br: Branch) => { const d = store.devs[br.id], nm = lineName(br.titre);
+    return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : br.role ? `<span class="ltype ${br.role}">${roleLabel(br.role)}</span>` : ''}${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; };
   root.innerHTML = `
     ${pathBlock(u)}
     ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
-    <section class="grp"><h2>Tes lignes <span class="dim">${known} ${known > 1 ? 'sues' : 'sue'} sur ${own.length}</span></h2><p class="pnote">${esc(sys.resume)}</p><div class="surf card list">${own.map(br => { const d = store.devs[br.id], nm = lineName(br.titre);
-      return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : ''}${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; }).join('')}</div>
+    <section class="grp"><h2>Tes lignes <span class="dim">${known} ${known > 1 ? 'sues' : 'sue'} sur ${own.length}</span></h2><p class="pnote">${esc(sys.resume)}</p>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name)}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
       <button class="quiet" id="bDrill">Drill libre sur les ${own.length} lignes</button></section>
     ${nFaults || plans.length || nPun ? `<div class="links2">
       ${nPun ? `<a class="surf card lk" href="#/rep/sorties?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Erreurs adverses à punir</b><small>${plural(nPun, 'punition')} dans cette ouverture</small></a>` : ''}
