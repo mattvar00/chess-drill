@@ -18,13 +18,13 @@ interface Drag { from: string; ghost: HTMLElement; img: HTMLElement; w: number; 
 export class Board {
   private game = new Chess(); private orient: Color = 'w'; private built: Color | null = null;
   private last: Move | null = null; private sel: string | null = null; private legal: Move[] = [];
-  private drag: Drag | null = null; private dropped = false; private shown: string[] = [];
+  private drag: Drag | null = null; private dropped = false; private shown: string[] = []; private pin: { sq: string; text: string; cls: string; label: string } | null = null;
 
   constructor(private el: HTMLElement, private o: BoardOpts) { el.classList.add('board'); }
 
   /** Affiche une position. `animate` : fait glisser la pièce du dernier coup et joue son bruit. */
   set(game: Chess, orient: Color, last: Move | null = null, animate = false) {
-    this.game = game; this.last = last; this.sel = null; this.legal = []; this.shown = [];
+    this.game = game; this.last = last; this.sel = null; this.legal = []; this.shown = []; this.pin = null;
     if (this.built !== orient) { this.orient = orient; this.build(); }
     this.render();
     if (animate && last) {
@@ -37,6 +37,8 @@ export class Board {
   flash(sq: string, cls: 'good' | 'bad') { const e = this.sq(sq); if (!e) return; e.classList.remove(cls); void e.offsetWidth; e.classList.add(cls); if (cls === 'bad') SFX.bad(); }
   /** Montre un coup à jouer (découverte d'une variante) : ses deux cases restent en évidence jusqu'au prochain `set`, même si on touche une pièce. Ne redessine pas : l'animation en cours continue. */
   guide(squares: string[]) { this.shown = squares; for (const s of squares) this.sq(s)?.classList.add('hint'); }
+  /** Pastille sur une case (« ? » sur un coup adverse), qui reste jusqu'au prochain `set` même si on touche une pièce. */
+  mark(b: { sq: string; text: string; cls: string; label: string }) { this.pin = b; this.overlay({ badge: b }); }
   /** Met des cases en évidence (indice). */
   hint(squares: string[]) { this.sel = null; this.legal = []; this.render(); for (const s of squares) this.sq(s)?.classList.add('hint'); }
 
@@ -79,6 +81,7 @@ export class Board {
     });
     this.svg.innerHTML = '';
     for (const s of this.shown) this.sq(s)?.classList.add('hint');
+    if (this.pin) this.sq(this.pin.sq)?.insertAdjacentHTML('beforeend', `<span class="mvb mvb-${this.pin.cls}" role="img" aria-label="${this.pin.label}">${this.pin.text}</span>`);
     if (this.sel) { this.sq(this.sel)?.classList.add('sel'); for (const m of this.legal) this.sq(m.to)?.classList.add(m.captured ? 'cap' : 'dot'); }
   }
   private slide(from: string, to: string) {

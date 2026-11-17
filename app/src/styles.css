@@ -910,6 +910,17 @@ button.quiet{border:0;background:none;width:100%}
 .cbub p{margin:0}
 .cbub .lead{font-size:19px}
 .cbub .done .big{font:700 19px/1.2 var(--f-title)}
+.cbub .do{font-weight:700}
+/* cours : pas de liste de coups pendant l'entraînement ; sur téléphone le coach est au-dessus de l'échiquier, dans une hauteur fixe pour que l'échiquier ne bouge pas */
+.trainer.cours .moves{display:none}
+.trainer.cours .tside{padding-top:6px}
+.coach.ctop{flex:none;min-height:0;height:118px;justify-content:flex-end;padding:0 0 10px}
+body.fit .coach.ctop{padding:0 var(--pad) 10px}
+.coach.ctop .crow{align-items:flex-end}
+.coach.ctop .pawnc{width:50px;height:59px}
+.coach.ctop .cbub{border-radius:16px 16px 16px 4px;padding:10px 12px;gap:4px;font-size:14px;line-height:1.35}
+.coach.ctop .cbub .lead{font-size:17px}
+body.fit .trainer.cours .tboard .board{width:min(100%,calc(100dvh - var(--top) - 310px))}
 @media (prefers-reduced-motion:no-preference){
   .pawnc.m-happy,.pawnc.m-party{animation:pawnhop .45s ease-out}
   .pawnc.m-oops{animation:pawnshake .35s ease-out}

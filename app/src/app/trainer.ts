@@ -11,13 +11,14 @@ import { syncSoon } from './api';
 import { lineUrl, nextUrl, remaining, session } from './session';
 import { explorerSlot } from './explorer';
 import { passed, trunkOf } from '../core/path';
-import { lineTitle, roleLabel } from '../core/names';
+import { lineTitle, tell } from '../core/names';
 import { coachSay, type Mood } from '../ui/coach';
 
 /**
- * Méthode du cours (lignes rangées en chapitres), pour une variante pas encore réussie : tu rejoues toi-même, de mémoire,
- * les coups que tu connais déjà ; au coup adverse qui ouvre la variante, le coach l'explique ; tu la découvres coups montrés,
- * chacun avec sa raison ; puis tu la rejoues sans aide depuis ce point. Une variante déjà sue se rejoue simplement en entier.
+ * Méthode du cours (lignes rangées en chapitres), pour une variante pas encore réussie. Un seul passage continu depuis le premier coup :
+ * les coups déjà connus, tu les rejoues de mémoire ; à partir du coup adverse qui ouvre la variante, le coach dit en deux phrases
+ * pourquoi jouer quoi, sans rien arrêter. La variante finie, tu la rejoues de mémoire : c'est ce passage qui compte.
+ * Une variante déjà sue se rejoue simplement en entier.
  */
 /** Nom de la séance de lignes du plan du jour. */
 export const PLAN_LINES = 'Plan du jour';
@@ -42,10 +43,14 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   let game = new Chess(), ply = 0, last: Move | null = null;
   let errs = 0, wrongHere = 0, hintLevel = 0, locked = false, finished = false, lastNote: string | null = null;
   const steps: (Step | undefined)[] = []; let timer: ReturnType<typeof setTimeout> | undefined;
-  const course = mode === 'drill' && !fromGame && !!br.ch, known = passed(store.state.br[id]);
+  const course = mode === 'drill' && !fromGame && !!br.ch;
   const trunk = course ? trunkOf(moves, sys.branches.filter(o => o.id !== id && o.ch && (passed(store.state.br[o.id]) || S?.done.has(o.id))).map(o => o.moves), side) : 0;
-  /** `introduced` : le coach a présenté la variante (d'office pour une variante déjà sue, ou hors cours). `trunkErrs` : fautes faites avant ce moment. */
-  let guided = false, opening = false, introduced = !course || known, trunkErrs = 0;
+  /** `fork` : le coup où cette variante quitte celles d'avant dans le cours (là où l'adversaire l'ouvre). */
+  const fork = course ? trunkOf(moves, sys.branches.slice(0, sys.branches.findIndex(o => o.id === id)).filter(o => o.ch).map(o => o.moves), side) : 0;
+  /** `learn` : premier passage d'une variante jamais jouée de mémoire. Le coach dit chaque coup nouveau et pourquoi ; rien n'est noté. */
+  let learn = course && !store.state.br[id]?.runs;   // déjà tentée de mémoire, même ratée : on la retente directement
+  // le coach en haut, au-dessus de l'échiquier, sur téléphone : on lit, puis on joue
+  if (course) { const t = $('.trainer', root); t.classList.add('cours'); if (matchMedia('(max-width:899px)').matches) { coach.classList.add('ctop'); t.insertBefore(coach, t.firstChild); } }
 
   const xa = () => XS.active();
   const board = new Board($('#board', root), {
@@ -81,7 +86,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     target = Math.max(0, Math.min(moves.length, target)); const forward = target === ply + 1;
     game = new Chess(); last = null; for (let i = 0; i < target; i++) apply(i);
     ply = target; show(forward); paintMoves();
-    if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(sys.resume)}</p><p class="why">Avance avec les flèches, à l'écran ou au clavier. Les coups soulignés portent un commentaire.</p>`);
+    if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(br.intro ?? sys.resume)}</p><p class="why">Avance avec les flèches, à l'écran ou au clavier. Les coups soulignés portent un commentaire.</p>`);
     else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)}${esc(moves[ply - 1].san)}`, note ? `<p>${esc(note)}</p>` : '<p class="why">Coup de la ligne.</p>'); }
     actions.innerHTML = ply >= moves.length ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">Passer au drill</a>` : '';
   }
@@ -89,23 +94,26 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
 
   /* ---------- Drill ---------- */
   function drillActions() {
-    actions.innerHTML = `<button class="btn" id="bHint">${icon('bulb')}Indice</button><a class="btn" href="${lineUrl(id, 'drill')}" id="bRestart">${icon('restart')}Recommencer</a>${!course && Object.keys(br.notes).length && ply < theoryStart(br.notes, side) ? '<button class="btn" id="bSkip">Aller à la théorie</button>' : ''}`;
+    if (course) { actions.innerHTML = `<button class="btn" id="bHint">${icon('bulb')}Indice</button>`; $('#bHint', actions).onclick = hint; return; }
+    actions.innerHTML = `<button class="btn" id="bHint">${icon('bulb')}Indice</button><a class="btn" href="${lineUrl(id, 'drill')}" id="bRestart">${icon('restart')}Recommencer</a>${Object.keys(br.notes).length && ply < theoryStart(br.notes, side) ? '<button class="btn" id="bSkip">Aller à la théorie</button>' : ''}`;
     $('#bHint', actions).onclick = hint; const sk = $('#bSkip', actions); if (sk) sk.onclick = skip;
     $('#bRestart', actions).onclick = e => { e.preventDefault(); remount(); };
   }
   const nb = (t: string) => t.replace(/ ([:?!;])/g, '\u00a0$1');
-  const bare = (note: string) => { const t = note.replace(/^[^:]*:\s*/, ''); return nb(t.charAt(0).toUpperCase() + t.slice(1)); };
+  const bare = (note?: string) => { const t = (note ?? '').replace(/^[^:]*:\s*/, ''); return nb(t.charAt(0).toUpperCase() + t.slice(1)); };
+  /** Ce que dit le coach avant un nouveau coup : pourquoi, puis quoi jouer, en mots. */
+  const lesson = (i: number) => `${br.notes[i] ? `<p>${esc(bare(br.notes[i]))}</p>` : ''}<p class="do">${esc(tell(moves[i]))}</p>`;
   function prompt() {
     if (ply >= moves.length) return end();
-    if (!introduced && ply >= trunk) return explain();
-    if (guided) {   // découverte : le coup est montré, avec sa raison
-      const want = moves[ply]; board.guide([want.uci.slice(0, 2), want.uci.slice(2, 4)]);
-      say('you', `<i class="stm ${side}"></i>Joue ${num(ply)}${esc(want.san)}`, br.notes[ply] ? `<p>${esc(bare(br.notes[ply]))}</p>` : '<p class="why">Le coup est montré sur l\'échiquier.</p>', 'talk');
-      actions.innerHTML = `<button class="btn" id="bMem">Je la connais, à moi de jouer</button>`; $('#bMem', actions).onclick = fromMemory; return;
+    if (course) {
+      // le coup adverse qui ouvre la variante porte un « ? » quand c'est une erreur
+      if (ply === fork && br.role === 'erreur' && last) board.mark({ sq: last.to, text: '?', cls: 'mistake', label: 'Erreur de ton adversaire' });
+      if (learn && ply >= trunk) coach.innerHTML = coachSay('talk', lesson(ply));   // un coup nouveau : le coach l'explique, sans rien arrêter
+      else say('you', `<i class="stm ${side}"></i>À toi`, learn ? '<p class="why">Tu connais ce coup.</p>' : ply <= 1 ? `<p class="why">${esc(nb(lineTitle(br.titre)))}</p>` : '');
+      return drillActions();
     }
-    if (opening) { opening = false; say('you', `<i class="stm ${side}"></i>À toi de jouer`, `<p class="why">${br.role ? roleLabel(br.role) + '. ' : ''}${esc(lineTitle(br.titre))}</p>`); return drillActions(); }
-    const key = br.notes[ply] && !course ? ` <span class="tag">${br.type === 'punir' ? 'la punition' : br.type === 'bon' ? 'le bon coup' : 'coup clé'}</span>` : '', turn = `<i class="stm ${side}"></i>À toi de jouer`;
-    if (ply <= 1) say('you', turn + key, `<p class="why">${!introduced ? 'On repart du premier coup. Rejoue ceux que tu connais : la nouvelle variante commence juste après.' : course ? (br.role ? roleLabel(br.role) + '. ' : '') + esc(lineTitle(br.titre)) : esc(sys.resume)}</p>`);
+    const key = br.notes[ply] ? ` <span class="tag">${br.type === 'punir' ? 'la punition' : br.type === 'bon' ? 'le bon coup' : 'coup clé'}</span>` : '', turn = `<i class="stm ${side}"></i>À toi de jouer`;
+    if (ply <= 1) say('you', turn + key, `<p class="why">${esc(sys.resume)}</p>`);
     else { const ok = steps[ply - 2] === 'ok';
       say('you', turn + key, `${ok ? `<p class="okline">${icon('check')}${num(ply - 2)}${esc(moves[ply - 2].san)}, réponse ${num(ply - 1)}${esc(moves[ply - 1].san)}</p>` : ''}${lastNote ? `<p class="why">${esc(lastNote)}</p>` : ok ? '' : '<p class="why">Continue la ligne.</p>'}`); }
     drillActions();
@@ -115,14 +123,15 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     const want = moves[ply];
     if (uciOf(m) === want.uci) {
       last = tryMove(game, m); steps[ply] ??= 'ok'; lastNote = br.notes[ply] || null; wrongHere = 0; hintLevel = 0;
-      if (S && !guided) { S.combo++; S.best = Math.max(S.best, S.combo); }
-      say('ok', `${icon('check')}${num(ply)}${esc(want.san)}`, lastNote ? `<p>${esc(lastNote)}</p>` : `<p class="why">${PRAISE[ply % PRAISE.length]}</p>`);
+      if (S && !learn) { S.combo++; S.best = Math.max(S.best, S.combo); }
+      if (!course) say('ok', `${icon('check')}${num(ply)}${esc(want.san)}`, lastNote ? `<p>${esc(lastNote)}</p>` : `<p class="why">${PRAISE[ply % PRAISE.length]}</p>`);
       ply++; show(true); board.flash(m.to, 'good'); paintMoves(); paintStepper();
       if (ply >= moves.length) return end();
-      locked = true; timer = setTimeout(reply, guided ? 450 : 220);
-    } else if (guided) {   // en découverte, une erreur ne coûte rien : le coup reste montré
-      show(); board.flash(m.to, 'bad'); board.guide([want.uci.slice(0, 2), want.uci.slice(2, 4)]);
-      say('bad', `Ici, c'est ${num(ply)}${esc(want.san)}`, br.notes[ply] ? `<p>${esc(bare(br.notes[ply]))}</p>` : '<p class="why">Le coup est montré sur l\'échiquier.</p>');
+      locked = true; timer = setTimeout(reply, course ? 320 : 220);
+    } else if (course) {
+      // en découverte une erreur ne coûte rien ; de mémoire elle compte, et le coach rappelle l'idée du coup attendu
+      if (!learn) { miss(); if (S) S.combo = 0; } wrongHere++; show(); board.flash(m.to, 'bad');
+      coach.innerHTML = coachSay('oops', `<p class="lead bad">Pas celui-là.</p>${learn ? lesson(ply) : br.notes[ply] ? `<p>${esc(bare(br.notes[ply]))}</p>` : ''}`);
     } else {
       miss(); wrongHere++; show(); board.flash(m.to, 'bad'); if (S) S.combo = 0;
       const plan = br.notes[ply]?.replace(/^[^:]*:\s*/, '');
@@ -134,9 +143,10 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     apply(ply); ply++; show(true); paintMoves(); paintStepper();
     if (ply >= moves.length) end(); else prompt();
   }
-  /** 1er indice : la pièce à jouer. 2e : le coup entier, et il compte alors comme une erreur. */
+  /** 1er indice : la pièce à jouer. 2e : le coup entier, et il compte alors comme une erreur. En découverte, l'indice montre le coup et ne coûte rien. */
   function hint() {
     if (finished || locked || game.turn() !== side) return; const uci = moves[ply].uci; hintLevel++;
+    if (learn) return board.hint([uci.slice(0, 2), uci.slice(2, 4)]);
     if (hintLevel >= 2) { miss(); if (S) S.combo = 0; }
     board.hint(hintLevel >= 2 ? [uci.slice(0, 2), uci.slice(2, 4)] : [uci.slice(0, 2)]);
   }
@@ -144,27 +154,15 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   function skip() { playTo(theoryStart(br.notes, side)); if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 220); } else prompt(); }
 
   /* ---------- Méthode du cours ---------- */
-  /** Fin des coups : en découverte, on enchaîne sur le passage de mémoire ; sinon la ligne est finie. */
-  function end() { if (!guided) return finish(); locked = true;
-    say('ok', 'Variante vue', '<p>À toi maintenant, sans aide, depuis le début de la variante.</p>');
-    actions.innerHTML = '<button class="btn pri" id="bGo">La rejouer de mémoire</button>'; $('#bGo', actions).onclick = fromMemory; }
-  /** Revient au début de la variante pour la jouer sans aide (les coups d'avant viennent d'être rejoués, on ne les redemande pas). */
-  function fromMemory() {
-    clearTimeout(timer); game = new Chess(); last = null; ply = 0; steps.length = 0; errs = trunkErrs; wrongHere = 0; hintLevel = 0; lastNote = null;
-    playTo(trunk); begin(false);
-  }
-  function begin(g: boolean) {
-    guided = g; opening = !g; locked = false;
-    if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 300); } else prompt();
-  }
-  /** Le coach présente la variante, au moment où elle commence (le coup adverse qui l'ouvre vient d'être joué). */
-  function explain() {
-    introduced = true; trunkErrs = errs; locked = true;
-    const sibs = sys.branches.filter(b => b.ch === br.ch), k = sibs.findIndex(b => b.id === id) + 1;
-    coach.innerHTML = coachSay('talk', `<p class="vhead">${br.role ? `<span class="ltype ${br.role}">${roleLabel(br.role)}</span>` : ''}<small>${esc(br.ch!)}, variante ${k} sur ${sibs.length}</small></p>
-      <p class="lead">${esc(nb(lineTitle(br.titre)))}</p>${br.intro ? `<p>${esc(nb(br.intro))}</p>` : ''}`);
-    actions.innerHTML = '<button class="btn pri" id="bGo">Montre-moi la variante</button><button class="btn" id="bAlt">Je la connais, à moi de jouer</button>';
-    $('#bGo', actions).onclick = () => begin(true); $('#bAlt', actions).onclick = () => begin(false);
+  /** Fin des coups. Après la découverte, on rejoue la variante de mémoire, depuis le premier coup : c'est ce passage qui compte. */
+  function end() {
+    if (!learn) return finish(); locked = true; SFX.done();
+    coach.innerHTML = coachSay('happy', '<p class="lead">Variante vue.</p><p>Maintenant sans aide.</p>');
+    actions.innerHTML = '<button class="btn pri" id="bGo">À toi, de mémoire</button>';
+    $('#bGo', actions).onclick = () => {
+      clearTimeout(timer); learn = false; game = new Chess(); last = null; ply = 0; steps.length = 0; errs = 0; wrongHere = 0; hintLevel = 0; lastNote = null; locked = false;
+      show(); paintMoves(); paintStepper(); if (game.turn() !== side) { locked = true; timer = setTimeout(reply, 350); } else prompt();
+    };
   }
 
   function finish() {
@@ -182,9 +180,14 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     const when = s.ivl <= 1 ? 'demain' : `dans ${s.ivl} jours`, next = S ? nextUrl(id) : null, left = remaining().length;
     const verdict = errs === 0 ? (isValid(s) ? `Ligne validée. Prochaine révision ${when}.` : 'Encore un passage sans faute et elle est validée.')
       : errs === 1 ? `Presque. Elle revient ${s.ivl ? when : 'tout de suite'}.` : "Le compteur repart à zéro : il faut deux passages sans faute d'affilée.";
-    const nextId = S?.ordered ? remaining()[0] : null;
-    coach.innerHTML = coachSay(errs === 0 ? 'party' : 'idle', `<div class="done"><p class="big">${errs === 0 ? (course ? 'Variante sans faute' : 'Ligne sans faute') : plural(errs, 'erreur')}</p><p>${verdict}</p>${nextId ? `<p class="why">Ensuite : ${esc(lineTitle(BR[nextId].br.titre))}</p>` : ''}${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${course ? plural(left, 'variante') : plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`);
-    actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">${course ? 'Variante suivante' : 'Ligne suivante'}</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S || plan ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn${plan ? ' pri' : ''}" href="${listUrl}">${plan ? 'Voir le plan' : 'Liste'}</a>`; XS.available(true);
+    if (course) {
+      coach.innerHTML = coachSay(errs === 0 ? 'party' : 'idle', `<p class="lead">${errs === 0 ? 'Variante réussie' : plural(errs, 'erreur')}</p><p class="why">${errs ? 'Elle reviendra. ' : ''}${S ? (left ? `Encore ${left} dans ce chapitre.` : 'Chapitre terminé.') : ''}</p>`);
+      actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a>${S ? '' : `<a class="btn" href="${listUrl}">Liste</a>`}`;
+    } else {
+    coach.innerHTML = coachSay(errs === 0 ? 'party' : 'idle', `<div class="done"><p class="big">${errs === 0 ? 'Ligne sans faute' : plural(errs, 'erreur')}</p><p>${verdict}</p>${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`);
+    actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S || plan ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn${plan ? ' pri' : ''}" href="${listUrl}">${plan ? 'Voir le plan' : 'Liste'}</a>`;
+    }
+    XS.available(true);
     $('#bAgain', actions).onclick = e => { e.preventDefault(); remount(); };
   }
   /** Relance la même ligne (l'adresse ne change pas, donc pas de navigation). */

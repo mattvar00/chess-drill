@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import rep from '../src/data/repertoire.json';
 import type { Bloc, Repertoire, System } from '../src/core/types';
-import { lineName } from '../src/core/names';
+import { lineName, tell } from '../src/core/names';
 import { caseOf, chaptersOf, knownLines, trunkOf, unitOf, type Unit } from '../src/core/path';
 import { Chess } from '../src/core/chess';
 import { newBranchState } from '../src/core/schedule';
@@ -187,5 +187,25 @@ describe('cours : chapitres et méthode', () => {
   it('il reste toujours un coup à jouer soi-même', () => {
     const a = mv('C5b5'), t = trunkOf(a, [a], 'w');
     expect(t).toBeLessThan(a.length); expect(t % 2).toBe(0);
+  });
+});
+
+describe('le coach dit les coups en mots', () => {
+  it('pion, pièce, prise, roque', () => {
+    expect(tell({ san: 'd4', uci: 'd2d4' })).toBe('Joue le pion en d4.');
+    expect(tell({ san: 'Nf3', uci: 'g1f3' })).toBe('Joue le cavalier en f3.');
+    expect(tell({ san: 'Qb3', uci: 'd1b3' })).toBe('Joue la dame en b3.');
+    expect(tell({ san: 'axb5', uci: 'a4b5' })).toBe('Prends en b5 avec le pion.');
+    expect(tell({ san: 'Rxa8', uci: 'a1a8' })).toBe('Prends en a8 avec la tour.');
+    expect(tell({ san: 'Bxf7+', uci: 'c4f7' })).toBe('Prends en f7 avec le fou.');
+    expect(tell({ san: 'O-O', uci: 'e1g1' })).toBe('Roque.');
+  });
+  it('dit quelle pièce quand deux pouvaient y aller', () => {
+    expect(tell({ san: 'Nbxd2', uci: 'b1d2' })).toBe('Prends en d2 avec le cavalier b1.');
+    expect(tell({ san: 'Nbc3', uci: 'b1c3' })).toBe('Joue le cavalier b1 en c3.');
+  });
+  it('les explications du cours restent courtes : deux phrases, pas un paragraphe', () => {
+    const c5 = (rep as unknown as Repertoire).blocs.flatMap(b => b.systemes).find(s => s.id === 'C5')!;
+    for (const b of c5.branches.filter(x => x.ch)) for (const n of Object.values(b.notes)) expect(n.replace(/^[^:]*: /, '').length, `${b.id} ${n}`).toBeLessThanOrEqual(110);
   });
 });

@@ -23,5 +23,14 @@ export function lineName(titre: string): { title: string; detail: string } {
 export const lineTitle = (titre: string) => lineName(titre).title;
 /** Étiquette d'une variante de cours : ce que joue la théorie, ou une erreur classique de l'adversaire. */
 export const roleLabel = (r?: 'theorie' | 'erreur') => r === 'theorie' ? 'Théorie' : r === 'erreur' ? 'Erreur classique' : '';
+const PIECE: Record<string, string> = { N: 'le cavalier', B: 'le fou', R: 'la tour', Q: 'la dame', K: 'le roi' };
+/** Un coup dit en mots, comme le dirait un coach : « Joue le cavalier en f3. », « Prends en a8 avec la tour. », « Roque. » */
+export function tell(m: { san: string; uci: string }): string {
+  if (m.san.startsWith('O-O-O')) return 'Fais le grand roque.';
+  if (m.san.startsWith('O-O')) return 'Roque.';
+  const piece = PIECE[m.san[0]] ?? 'le pion', from = m.uci.slice(0, 2), to = m.uci.slice(2, 4);
+  const which = /^[NBRQ][a-h1-8]x?[a-h][1-8]/.test(m.san) ? `${piece} ${from}` : piece;   // deux pièces pouvaient y aller : on dit laquelle
+  return m.san.includes('x') ? `Prends en ${to} avec ${which}.` : `Joue ${which} en ${to}.`;
+}
 /** Étiquette d'une ligne tirée de tes parties. */
 export const typeLabel = (t?: 'punir' | 'bon') => t === 'punir' ? 'Punir' : t === 'bon' ? 'Bon coup' : '';
