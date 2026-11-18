@@ -5,7 +5,7 @@ import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
-import { bindPath, devRow, pathBlock, pathSummary, shortName, unitFor } from './path';
+import { bindPath, devRow, nextUp, pathBlock, shortName, unitFor } from './path';
 import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
 import { lineName, roleLabel, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
@@ -75,14 +75,18 @@ function weekStrip(days: string[]) {
 }
 
 export function viewHome(root: HTMLElement) {
-  const steps = dailyPlan(), todo = steps.filter(s => !s.done), next = todo[0], later = todo.slice(1), did = steps.filter(s => s.done);
+  // le cours à continuer vient des recommandations (un seul endroit en décide) ; les autres étapes du jour suivent
+  const up = nextUp(), steps = dailyPlan().filter(s => !up || s.key !== 'lines'), todo = steps.filter(s => !s.done), next = up ? undefined : todo[0], later = up ? todo : todo.slice(1), did = steps.filter(s => s.done);
   const days = trainingDays(), n = streak(days), cold = coldStart(store.games);
   const games = store.games.filter(g => !store.state.ignored[g.id]), last = lastSession(games), res = (r: string) => last ? last.games.filter(g => g.res === r).length : 0;
-  const hero = next ? `<section class="surf today now">
+  const hero = up ? `<section class="surf today now">
+      <div class="today-top"><div class="today-text"><h2>${esc(shortName(up.u.sys.titre))}</h2><p class="rside">${esc(up.side)}</p><p>${up.why}</p></div></div>
+      <button class="btn pri block" id="bGo">Continuer : ${up.label.toLowerCase()}</button><a class="quiet" href="#/rep/${up.u.bloc.id}/${up.u.sys.id}">Voir le cours</a></section>`
+    : next ? `<section class="surf today now">
       <div class="today-top"><div class="today-text"><h2>${esc(next.title)}</h2><p>${esc(next.sub)}</p></div>${next.thumb}</div>
       <button class="btn pri block" id="bGo">${did.length ? 'Continuer' : 'Commencer'}, ${next.min} min</button></section>`
     : `<section class="surf today now"><div class="today-text"><h2>${steps.length ? 'Séance du jour terminée' : 'Tout est à jour'}</h2><p>${steps.length ? `${did.map(s => s.title.toLowerCase()).join(', ')}.` : 'Rien à revoir aujourd\'hui. Tu peux avancer dans ton répertoire ou rejouer tes fautes.'}</p></div>
-      <a class="btn pri block" href="#/entrainer">S'entraîner en libre</a></section>`;
+      <a class="btn pri block" href="#/rep">Voir mes cours</a></section>`;
   root.innerHTML = `
     <header class="hello">
       <div><p class="date">${cap(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</p><h1>Aujourd'hui</h1></div>
@@ -91,30 +95,14 @@ export function viewHome(root: HTMLElement) {
     ${weekStrip(days)}
     ${hero}
     ${next && !did.length && next.key === 'tac' && cold && cold.rest - cold.first >= 5 ? `<p class="hint">À faire avant de jouer : tu gagnes ${cold.first} % de tes 3 premières parties d'une session, ${cold.rest} % des suivantes.</p>` : ''}
-    ${later.length || (next && did.length) ? `<section class="grp"><h2>${next ? 'Le reste de la séance' : 'Ta séance'}</h2><div class="surf card list">${[...later, ...did].map(s => `<button class="rowi${s.done ? ' isdone' : ''}" data-step="${steps.indexOf(s)}">${small(s.thumb)}<span class="body"><b>${esc(s.title)}</b><small>${s.done ? 'Fait. Touche pour le refaire' : esc(s.sub)}</small></span>${s.done ? icon('check', 'tick') : `<span class="dim">${s.min} min</span>`}${chev}</button>`).join('')}</div></section>` : ''}
+    ${later.length || ((next || up) && did.length) ? `<section class="grp"><h2>${up ? 'Ensuite' : next ? 'Le reste de la séance' : 'Ta séance'}</h2><div class="surf card list">${[...later, ...did].map(s => `<button class="rowi${s.done ? ' isdone' : ''}" data-step="${steps.indexOf(s)}">${small(s.thumb)}<span class="body"><b>${esc(s.title)}</b><small>${s.done ? 'Fait. Touche pour le refaire' : esc(s.sub)}</small></span>${s.done ? icon('check', 'tick') : `<span class="dim">${s.min} min</span>`}${chev}</button>`).join('')}</div></section>` : ''}
     ${last ? `<section class="grp"><h2>Tes dernières parties</h2>
       <div class="surf card list"><a class="rowi sess" href="#/progres"><span class="body"><b>${cap(ago(last.t * 1000))}, ${plural(last.games.length, 'partie')}</b><small>${[res('W') ? plural(res('W'), 'gagnée') : '', res('D') ? plural(res('D'), 'nulle') : '', res('L') ? plural(res('L'), 'perdue') : ''].filter(Boolean).join(', ')}</small></span>
         <span class="dots" aria-hidden="true">${last.games.slice(-12).map(g => `<i class="${g.res}"></i>`).join('')}</span>${chev}</a>
       ${[...last.games].reverse().slice(0, 2).map(g => gameRow(g, '#/')).join('')}</div></section>` : ''}
-    ${next ? `<a class="quiet" href="#/entrainer">Choisir moi-même</a>` : ''}`;
+    `;
   root.querySelectorAll<HTMLButtonElement>('[data-step]').forEach(b => b.addEventListener('click', () => steps[+b.dataset.step!].go()));
-  $('#bGo', root)?.addEventListener('click', () => next!.go());
-}
-
-/** S'entraîner : trois portes, pas plus. Les ouvertures (le chemin), les fautes (Woodpecker), les plans (animations et structures). */
-export function viewTrain(root: HTMLElement) {
-  const devs = recentDeviations(store.games, store.state.fixed, BR), due = dueLines(ALL_IDS), posDue = duePositions(store.faults, store.state.fault);
-  const { due: d, fresh } = todayPool(REP, store.state.br), firstLine = d[0] ?? fresh[0] ?? ALL_IDS[0];
-  const plan = PLANS[0], planPos = plan ? positionAt(plan.sans, plan.steps[0].p) : new Chess();
-  const P = pathSummary(), u = P.u, c = caseOf(u), nStruct = Object.keys(structureStats(store.games.filter(g => g.st && g.wp && !store.state.ignored[g.id]))).length;
-  root.innerHTML = `
-    <header class="pagehead"><h1>S'entraîner</h1></header>
-    <a class="surf card feat door" href="#/rep">${preview(u.lessons.find(l => l.state === 'cur')?.ids[0] ?? firstLine)}<span class="body"><b>Ouvertures</b><small>${esc(shortName(u.sys.titre))} : ${u.promoted ? 'promue' : `case ${c.k} sur ${c.n}`}</small>
-      <span class="estrip mini">${P.cells.map((x, i) => `<span class="ecell ${x}${x === 'cur' ? ' pawn' : ''}">${x === 'cur' ? `<img src="${pieceSrc('p')}" alt="">` : i === P.cells.length - 1 && x === 'lock' ? `<img class="qghost" src="${pieceSrc('q')}" alt="">` : ''}</span>`).join('')}</span>
-      <span class="tags">${due ? `<span class="due">${due} à revoir</span>` : ''}${devs.length ? `<span class="due bad">${plural(devs.length, 'quittée', 'quittées')} en partie</span>` : ''}</span></span>${chev}</a>
-    <a class="surf card feat count door" href="#/wood"><b class="num">${store.faults.length}</b><span class="body"><b>Fautes</b><small>${store.faults.length ? `${store.faults.length > 1 ? 'Positions tirées' : 'Position tirée'} de tes parties, à rejouer jusqu'à ne plus les rater` : 'Elles arrivent après la première analyse de tes parties'}</small>${posDue ? `<span class="tags"><span class="due">${posDue} à revoir</span></span>` : ''}</span>${chev}</a>
-    <a class="surf card feat door" href="#/plans">${miniBoard(planPos, plan?.side ?? 'w')}<span class="body"><b>Plans</b><small>Quoi faire après l'ouverture : ${plural(PLANS.length, 'plan animé', 'plans animés')}${nStruct ? `, ${plural(nStruct, 'structure de pions', 'structures de pions')} tirées de tes parties` : ''}</small></span>${chev}</a>
-    <a class="quiet" href="#/explorer">Explorer une position</a>`;
+  $('#bGo', root)?.addEventListener('click', () => { if (up) { if (up.run) up.run(); else location.hash = up.href!; } else next!.go(); });
 }
 
 function lineStatus(br: Branch): string {
@@ -149,13 +137,11 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
     return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : br.role ? `<span class="ltype ${br.role}">${roleLabel(br.role)}</span>` : ''}${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; };
   root.innerHTML = `
     ${pathBlock(u)}
+    ${plans.length ? `<a class="surf card lk1" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Les plans de cette ouverture</b><span class="dim">${plans.length}</span>${chev}</a>` : ''}
     ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
-    <section class="grp"><h2>Tes lignes <span class="dim">${known} ${known > 1 ? 'sues' : 'sue'} sur ${own.length}</span></h2><p class="pnote">${esc(sys.resume)}</p>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name)}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
-      <button class="quiet" id="bDrill">Drill libre sur les ${own.length} lignes</button></section>
-    ${nFaults || plans.length || nPun ? `<div class="links2">
-      ${nPun ? `<a class="surf card lk" href="#/rep/sorties?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Erreurs adverses à punir</b><small>${plural(nPun, 'punition')} dans cette ouverture</small></a>` : ''}
-      ${nFaults ? `<a class="surf card lk" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Fautes de cette ouverture</b><small>${plural(nFaults, 'position')}</small></a>` : ''}
-      ${plans.length ? `<a class="surf card lk" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Plans de cette ouverture</b><small>${plural(plans.length, 'plan animé', 'plans animés')}</small></a>` : ''}</div>` : ''}
+    <details class="others allv"><summary>Toutes les variantes (${own.length})</summary><p class="pnote">${esc(sys.resume)}</p>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name)}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
+      <button class="quiet" id="bDrill">Rejouer les ${own.length} variantes à la suite</button></details>
+    ${nFaults ? `<a class="surf card lk1" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Tes fautes dans cette ouverture</b><span class="dim">${nFaults}</span>${chev}</a>` : ''}
     ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2>${inYourGames(sys)}<div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, own.map(b => b.id), back));
   bindPath(root, u);

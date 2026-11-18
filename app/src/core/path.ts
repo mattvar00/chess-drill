@@ -23,7 +23,7 @@ export const passed = (s?: BranchState) => !!s && s.runs > 0 && s.clean >= 1;
  * Les lignes propres à une ouverture : ce que tu joues, toi. Les punitions (réponses à une erreur adverse) sont à part,
  * dans « Punir les erreurs adverses » : elles ne font pas partie du chemin et ne comptent pas pour la dame.
  */
-export const ownLines = (sys: System) => sys.branches.filter(b => b.type !== 'punir');
+export const ownLines = (sys: System) => sys.branches;
 /** Les chapitres d'un cours, dans l'ordre où ils apparaissent ; `null` si les lignes n'ont pas de chapitre (ouverture sans cours). */
 export function chaptersOf(lines: Branch[]): { name: string; lines: Branch[] }[] | null {
   if (!lines.length || !lines.every(b => b.ch)) return null;
@@ -49,7 +49,7 @@ export function unitOf(bloc: Bloc, sys: System, st: Record<string, BranchState |
   // Les lignes du répertoire de base sont coupées en 6 cases au plus. Les « Bon coup » tirés de tes parties forment leurs propres
   // cases de 3, ajoutées à la fin : en ajouter un ne déplace jamais une case déjà jouée. Les punitions n'entrent pas dans le chemin.
   // Un cours (lignes rangées par chapitre) : une case par chapitre, dans l'ordre du cours. Ajouter une variante à un chapitre ne déplace rien.
-  const ids = sys.branches.map(b => b.id), baseBr = sys.branches.filter(b => !b.type), extra = sys.branches.filter(b => b.type === 'bon').map(b => b.id);
+  const ids = sys.branches.map(b => b.id), baseBr = sys.branches.filter(b => !b.type), extra = sys.branches.filter(b => b.type).map(b => b.id);
   const chapters = chaptersOf(baseBr);
   const parts: { ids: string[]; name?: string }[] = [
     ...(chapters ? chapters.map(c => ({ ids: c.lines.map(b => b.id), name: c.name })) : chunk(baseBr.map(b => b.id), Math.min(6, baseBr.length)).map(p => ({ ids: p }))),

@@ -135,7 +135,7 @@ describe('recommandations', () => {
   });
 });
 describe('cases stables', () => {
-  it('un « Bon coup » s\'ajoute à la fin sans déplacer les cases, une punition reste hors du chemin', () => {
+  it('les lignes tirées des parties (bon coup ou punition) s\'ajoutent à la fin sans déplacer les cases', () => {
     const base = Array.from({ length: 12 }, (_, i) => ({ id: 'k' + i, titre: '', moves: [], notes: {} }));
     const sys: System = { id: 'K', titre: '', statut: 'joué', resume: '', branches: base };
     const bloc: Bloc = { id: 'B', titre: '', sous: '', side: 'w', systemes: [sys] };
@@ -143,8 +143,7 @@ describe('cases stables', () => {
     const more = { ...sys, branches: [...base, ...['x1', 'x2', 'x3', 'x4'].map(id => ({ id, titre: '', moves: [], notes: {}, type: 'bon' as const })), { id: 'p1', titre: '', moves: [], notes: {}, type: 'punir' as const }] };
     const after = unitOf(bloc, more, {}).lessons.map(l => l.ids);
     expect(after.slice(0, before.length)).toEqual(before);
-    expect(after.slice(before.length)).toEqual([['x1', 'x2', 'x3'], ['x4']]);
-    expect(after.flat()).not.toContain('p1');   // une punition n'entre pas dans le chemin
+    expect(after.slice(before.length)).toEqual([['x1', 'x2', 'x3'], ['x4', 'p1']]);
   });
 });
 

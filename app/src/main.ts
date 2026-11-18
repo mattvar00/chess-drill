@@ -5,7 +5,7 @@ import './styles.css';
 import { $, esc, icon } from './ui/dom';
 import { setSound, setSoundSet } from './ui/sound';
 import { BR, REP, loadStore, store, woodCur } from './app/store';
-import { viewHome, viewSystem, viewTrain } from './app/views';
+import { viewHome, viewSystem, } from './app/views';
 import { mountTrainer } from './app/trainer';
 import { viewSettings } from './app/settings';
 import { mountExercise, viewWood } from './app/wood';
@@ -17,13 +17,12 @@ import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
 import { shortName, viewLessonEnd, viewPath } from './app/path';
-import { viewExits } from './app/exits';
 import { lineTitle } from './core/names';
 
 restoreLook();
-/** Trois onglets, rangés par intention : ce que je dois faire, ce que je peux faire, où j'en suis. */
-const TABS = [['#/', "Aujourd'hui"], ['#/entrainer', "S'entraîner"], ['#/progres', 'Progrès']] as const;
-const TRAIN = '#/entrainer', PROG = '#/progres';
+/** Quatre onglets : ce que je fais maintenant, mes cours d'ouvertures, mes fautes à rejouer, où j'en suis. */
+const TABS = [['#/', "Aujourd'hui"], ['#/rep', 'Ouvertures'], ['#/wood', 'Fautes'], ['#/progres', 'Progrès']] as const;
+const TRAIN = '#/rep', WOOD = '#/wood', PROG = '#/progres';
 document.getElementById('app')!.innerHTML = `
   <header class="top" id="top" hidden><a class="back" id="back" aria-label="Retour">${icon('back')}</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><span class="hright" id="hright"></span><button class="xtool" id="xtool" type="button" hidden>${icon('search')}<span>Explorer</span></button></header>
   <main id="view" tabindex="-1"></main>
@@ -74,7 +73,7 @@ function route() {
     endSession(); const id = decodeURIComponent(p[1]), r = q.get('r'), backTo = r && r.startsWith('#/') ? r : PROG, [t, sub] = reviewTitle(id);
     shell(t, sub, backTo, PROG, '', 'review'); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
   } else if (p[0] === 'plan' && p[1]) {
-    endSession(); shell(planTitle(p[1]), 'Plan animé', '#/plans', TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
+    shell(planTitle(p[1]), 'Plan animé', '#/plans', TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
   } else if (p[0] === 'structure' && p[1]) {
     endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/plans', TRAIN, '', 'board'); cleanup = mountStruct(view, p[1]);
   } else if (p[0] === 'wood' && p[1] === 'go') {
@@ -84,15 +83,14 @@ function route() {
       $('#hright').innerHTML = clock ? `<span class="pill clock surf">${icon('clock')}${esc(clock)}</span>` : '';
     });
   } else {
-    endSession();
+    if (p[0] !== 'plans') endSession();   // les plans se consultent entre deux variantes sans quitter le cours
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
     if (bloc && sys) { shell(shortName(sys.titre), `${bloc.titre}, ${bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`, '#/rep', TRAIN); viewSystem(view, bloc, sys); }
-    else if (p[0] === 'rep' && p[1] === 'sorties') { shell('Punir les erreurs adverses', q.get('o') ? planSysTitle(q.get('o')!) : '', backOf(q, '#/rep'), TRAIN); viewExits(view, q); }
+    else if ((p[0] === 'rep' && p[1] === 'sorties') || p[0] === 'entrainer') { location.replace('#/rep'); return; }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
-    else if (p[0] === 'rep') { shell('Ouvertures', '', TRAIN, TRAIN); viewPath(view); }
+    else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewPath(view); }
     else if (p[0] === 'lecon') { shell('Bilan', '', null, null); viewLessonEnd(view); }
-    else if (p[0] === 'wood') { shell('Fautes', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', backOf(q, TRAIN), TRAIN); viewWood(view, q); }
-    else if (p[0] === 'entrainer') { shell("S'entraîner", '', null, TRAIN); viewTrain(view); }
+    else if (p[0] === 'wood') { shell('Fautes', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', q.get('r') ? backOf(q, WOOD) : null, WOOD); viewWood(view, q); }
     else if (p[0] === 'explorer') { const back = backOf(q, TRAIN); shell('Explorer une position', q.get('fen') ? 'Le moteur montre le meilleur coup' : '', back, TRAIN, '', 'board');
       cleanup = mountFreeExplorer(view, back, false, q.get('fen') ?? undefined, q.get('o') === 'b' ? 'b' : 'w'); }
     else if (p[0] === 'progres' || p[0] === 'parties') { shell('Progrès', '', null, PROG); viewGames(view); }

@@ -6,7 +6,7 @@ import type { Game } from '../core/types';
 import { Board } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
-import { BR, markActive, markPlan, refreshDevs, save, setLastLesson, store } from './store';
+import { BR, markActive, markPlan, plansFor, refreshDevs, save, setLastLesson, store } from './store';
 import { syncSoon } from './api';
 import { lineUrl, nextUrl, remaining, session } from './session';
 import { explorerSlot } from './explorer';
@@ -192,13 +192,17 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     if (course) {
       talk(errs === 0 ? 'party' : 'idle', `<p class="lead ${errs ? 'bad' : 'ok'}">${errs === 0 ? 'Variante validée' : `Pas encore validée : ${plural(errs, 'erreur')}`}</p>`,
         `${br.bilan ?? ''}${errs ? ' Elle reviendra.' : ''}`.trim(), S ? `<p class="why">${left ? `Encore ${left} dans ce chapitre.` : 'Chapitre terminé.'}</p>` : '', 120);
-      actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a>${S ? '' : `<a class="btn" href="${listUrl}">Liste</a>`}`;
+      // toujours le même écran entre deux variantes : où tu en es dans le chapitre, ce qui vient, et le plan s'il y en a un
+      const chap = sys.branches.filter(b => b.ch === br.ch), nid = S?.ordered ? remaining()[0] : null, stop = S?.exit ?? listUrl;
+      const info = `<p class="cinfo"><span class="cdots" aria-hidden="true">${chap.map(b => `<i class="${passed(store.state.br[b.id]) ? 'ok' : ''}${b.id === id ? ' now' : ''}"></i>`).join('')}</span><span>${esc(br.ch!)} : ${chap.filter(b => passed(store.state.br[b.id])).length} sur ${chap.length}</span>${nid ? `<span class="nx">Ensuite : ${esc(lineTitle(BR[nid].br.titre))}</span>` : ''}</p>`;
+      const planBtn = !errs && br.role === 'theorie' && plansFor(sys.id).length ? `<a class="btn" href="#/plans?o=${sys.id}&r=${encodeURIComponent(next ?? stop)}">Voir le plan</a>` : '';
+      actions.innerHTML = `${info}${next ? `<a class="btn pri" href="${next}">Suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Chapitre terminé' : 'Terminer'}</a>` : `<a class="btn pri" href="${stop}">Retour au cours</a>`}${errs ? `<a class="btn" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a>` : planBtn}${next ? `<a class="btn" href="${stop}">Arrêter là</a>` : ''}`;
     } else {
     coach.innerHTML = coachSay(errs === 0 ? 'party' : 'idle', `<div class="done"><p class="big">${errs === 0 ? 'Ligne sans faute' : plural(errs, 'erreur')}</p><p>${verdict}</p>${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`);
     actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S || plan ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn${plan ? ' pri' : ''}" href="${listUrl}">${plan ? 'Voir le plan' : 'Liste'}</a>`;
     }
     XS.available(true);
-    $('#bAgain', actions).onclick = e => { e.preventDefault(); remount(); };
+    const again = actions.querySelector<HTMLElement>('#bAgain'); if (again) again.onclick = e => { e.preventDefault(); remount(); };
   }
   /** Relance la même ligne (l'adresse ne change pas, donc pas de navigation). */
   function remount() { dispose(); mountTrainer(root, id, 'drill', fromGame); }

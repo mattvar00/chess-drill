@@ -87,6 +87,7 @@ function step(u: Unit, L: Lesson, i: number, sel: number) {
   const inner = cur ? `<img src="${pieceSrc('p')}" alt="">` : last ? `<img class="${u.promoted ? '' : 'qghost'}" src="${pieceSrc('q')}" alt="">` : L.state === 'lock' ? `<span class="pn">${i + 1}</span>` : icon('check');
   return `<div class="prow${on ? ' issel' : ''}${cur ? ' iscur' : ''}${last ? ' isgoal' : ''}">
     <button class="psq ${L.state}${last ? ' goal' : ''}${last && u.promoted ? ' won' : ''}${on ? ' sel' : ''}" style="left:${x}%" data-i="${i}" aria-expanded="${on}" aria-label="Case ${i + 1} sur ${u.lessons.length}, ${STATE[L.state]}">${inner}${L.state === 'crack' ? '<i class="dot"></i>' : ''}</button>
+    ${L.name && !on ? `<span class="plab ${x <= 50 ? 'r' : 'l'}" style="${x <= 50 ? `left:calc(${x}% + 46px);max-width:calc(${100 - x}% - 50px)` : `right:calc(${100 - x}% + 46px);max-width:calc(${x}% - 50px)`}"><b>${esc(L.name)}</b><small>${L.ids.filter(id => passed(store.state.br[id])).length} sur ${L.ids.length}</small></span>` : ''}
     ${on ? bubble(u, L, i, x) : ''}</div>`;
 }
 const legend = `<p class="plegend"><span><i class="lg done"></i>réussie</span><span><i class="lg crack"></i>à revoir</span><span><i class="lg cur"></i>le pion : en cours</span><span><i class="lg lock"></i>à venir</span></p>`;
@@ -103,27 +104,25 @@ export function strip(u: Unit) {
 const where = (u: Unit) => { const c = caseOf(u), fresh = u.lessons.some(l => l.state === 'cur');
   return u.promoted ? (fresh ? `Promue, nouvelle case : ${c.k} sur ${c.n}` : 'Promue') : `Case ${c.k} sur ${c.n}`; };
 
+/** Les variantes à revoir d'un cours (déjà jouées, et dues). */
+const dueIds = (u: Unit) => ownLines(u.sys).map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
+const knownN = (u: Unit) => ownLines(u.sys).filter(b => passed(store.state.br[b.id])).length;
 /**
- * Le chemin d'une ouverture, en haut de sa page : le bandeau (où en est le pion), le bouton pour jouer la case en cours,
- * puis les cases en zigzag ; toucher une case ouvre sa bulle. `bindPath` branche les gestes.
+ * La page d'un cours : où tu en es, « Apprendre » (la suite du chapitre en cours) et « Réviser » (ce qui est à revoir),
+ * puis le chemin, une case par chapitre avec son nom ; toucher une case ouvre sa bulle. `bindPath` branche les gestes.
  */
 export function pathBlock(u: Unit): string {
-  const c = caseOf(u), cur = u.lessons.findIndex(l => l.state === 'cur'), crack = u.lessons.findIndex(l => l.state === 'crack');
-  const go = cur >= 0 ? cur : crack, left = u.lessons.length - u.done;
-  const L = go >= 0 ? u.lessons[go] : null, rest = L ? lessonIds(L).length : 0, partial = L?.state === 'cur' && rest < L.ids.length;
-  const msg = u.promoted && cur < 0 ? (crack >= 0 ? 'Ouverture promue. Une case est à revoir pour garder la dame bien en place.' : 'Ouverture promue : ses lignes reviendront de temps en temps pour ne pas s\'effacer.')
-    : u.promoted ? 'Ouverture promue. De nouvelles lignes sont arrivées : elles forment une case avant la dame, la dame reste à toi.'
-    : L?.name ? 'Une case par réponse de l\'adversaire. Dans chaque case : d\'abord les pièges courts à punir, puis la théorie.'
-    : 'Joue chaque ligne de la case une fois sans faute : le pion avance d\'une case. Au bout, la dame.';
-  const btn = L ? `<button class="btn pri block" data-go="${go}">${L.state === 'crack' ? `Revoir la case ${go + 1}` : partial ? `Finir la case ${go + 1} : ${L.name ? plural(rest, 'variante restante', 'variantes restantes') : plural(rest, 'ligne restante', 'lignes restantes')}` : `Jouer la case ${go + 1}`}</button>` : '';
-  return `<section class="surf card padded pathhead${u.promoted ? ' won' : ''}">
-      <div class="pchead"><b>${where(u)}</b>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : `<span>${c.n - u.done} ${c.n - u.done > 1 ? 'cases' : 'case'} avant la dame</span>`}</div>
-      <p class="pnote">${msg}</p>${L?.name ? `<p class="pchap">${L.state === 'crack' ? 'À revoir' : 'Case en cours'} : <b>${esc(L.name)}</b></p>` : ''}${btn}</section>
-    <div class="pboard"><section class="psec">${legend}<div class="ppath" data-sys="${u.sys.id}">${pathCells(u)}</div></section></div>`;
+  const cur = u.lessons.findIndex(l => l.state === 'cur'), n = ownLines(u.sys).length, k = knownN(u), due = dueIds(u).length;
+  return `<section class="chead${u.promoted ? ' won' : ''}">
+      <p class="cprog"><b>${k} ${k > 1 ? 'variantes sues' : 'variante sue'} sur ${n}</b>${due ? `<span class="due">${due} à revoir</span>` : ''}${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</p>
+      <div class="cbtns">${cur >= 0 ? `<button class="btn pri" data-go="${cur}">Apprendre</button>` : ''}<button class="btn${cur >= 0 ? '' : ' pri'}" id="bRev">${due ? `Réviser (${due})` : k ? 'Tout rejouer' : 'Jouer librement'}</button></div></section>
+    <div class="pboard"><section class="psec"><div class="ppath" data-sys="${u.sys.id}">${pathCells(u)}</div></section></div>`;
 }
 export function bindPath(root: HTMLElement, u: Unit) {
   setLS(LAST_KEY, u.sys.id); setLS(SIDE_KEY, u.bloc.side);
-  root.querySelector('.pathhead [data-go]')?.addEventListener('click', e => startLesson(u, +(e.currentTarget as HTMLElement).dataset.go!));
+  root.querySelector('.chead [data-go]')?.addEventListener('click', e => startLesson(u, +(e.currentTarget as HTMLElement).dataset.go!));
+  root.querySelector('#bRev')?.addEventListener('click', () => { const due = dueIds(u), known = ownLines(u.sys).map(b => b.id).filter(id => passed(store.state.br[id])), ids = due.length ? due : known.length ? known : ownLines(u.sys).map(b => b.id);
+    location.hash = startSession(`${shortName(u.sys.titre)}, révision`, ids, openingUrl(u), ids[0], { exit: openingUrl(u), ordered: true }); });
   const path = root.querySelector<HTMLElement>('.ppath');
   path?.addEventListener('click', e => {
     const t = e.target as HTMLElement, go = t.closest<HTMLElement>('[data-go]'), sq = t.closest<HTMLElement>('.psq');
@@ -168,10 +167,9 @@ const WHY: Record<RecoKind, (f: Facts) => string> = {
 /** L'action qui va avec une recommandation : son libellé, et soit un lien, soit un geste. */
 function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {
   const u = r.f.u, i = u.lessons.findIndex(l => l.state === 'cur' || l.state === 'crack');
-  const lesson = i >= 0 ? { label: `${u.lessons[i].state === 'crack' ? 'Revoir' : 'Jouer'} la case ${i + 1}`, run: () => startLesson(u, i) } : { label: 'Voir l\'ouverture', href: openingUrl(u) };
+  const lesson = i >= 0 ? { label: u.lessons[i].state === 'crack' ? 'Réviser' : 'Apprendre la suite', run: () => startLesson(u, i) } : { label: 'Voir l\'ouverture', href: openingUrl(u) };
   if (r.kind === 'oubli') { const g = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50).find(x => BR[refBranch(x, BR)!]?.sys.id === u.sys.id);
     return g ? { label: 'Rejouer la ligne', href: lineUrl(refBranch(g, BR)!, 'drill', g.id) } : lesson; }
-  if (r.kind === 'punir') return { label: 'Voir la punition', href: '#/rep/sorties' };
   if (r.kind === 'milieu') return { label: 'Voir ses plans', href: `#/plans?o=${u.sys.id}&r=${encodeURIComponent('#/rep')}` };
   if (r.kind === 'revoir') { const ids = ownLines(u.sys).map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
     return { label: 'Revoir maintenant', run: () => { setLS(LAST_KEY, u.sys.id); location.hash = startSession(`${shortName(u.sys.titre)}, à revoir`, ids, '#/rep'); } }; }
@@ -179,48 +177,38 @@ function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {
 }
 const sideWord = (u: Unit) => `${u.bloc.titre}, ${u.bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`;
 
-/**
- * Ouvertures : l'appli recommande. En haut, quoi travailler maintenant (une ouverture, une raison, un bouton), puis la suite ;
- * ensuite ce que tu joues bien ; enfin tout le répertoire, rangé par couleur et par premier coup adverse, avec la recherche.
- */
+/** Quoi faire maintenant : le cours que les recommandations mettent en tête, sa raison et son action. Le seul endroit qui en décide. */
+export function nextUp(): { u: Unit; why: string; side: string; label: string; href?: string; run?: () => void } | null {
+  const top = recommend(factsOf(allUnits())).todo[0]; if (!top) return null;
+  return { u: top.f.u, why: WHY[top.kind](top.f), side: sideWord(top.f.u), ...actionOf(top) };
+}
+
+/** Ouvertures : la liste des cours, rangés par couleur puis par premier coup adverse, avec l'avancement de chacun. Rien d'autre. */
 export function viewPath(root: HTMLElement) {
-  const units = allUnits(), R = recommend(factsOf(units)), top = R.todo[0], rest = R.todo.slice(1);
-  const side = (getLS(SIDE_KEY) || top?.f.u.bloc.side || 'b') as 'w' | 'b';
+  const units = allUnits(), up = nextUp();
+  const side = (getLS(SIDE_KEY) || up?.u.bloc.side || 'b') as 'w' | 'b';
   const mine = units.filter(u => u.bloc.side === side), playedU = mine.filter(played), others = mine.filter(u => !played(u));
-  const allPlayed = units.filter(played), nQ = allPlayed.filter(u => u.promoted).length;
-  const row = (u: Unit) => `<a class="rowi orow" href="${openingUrl(u)}"><span class="body"><b>${esc(shortName(u.sys.titre))}</b><small>${where(u)}</small>${strip(u)}</span>
-      ${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Promue">` : ''}${icon('chev', 'chev')}</a>`;
-  const act = top ? actionOf(top) : null;
-  const pun = punishLines();
-  const recoRow = (r: Reco) => `<a class="rowi rrow" href="${openingUrl(r.f.u)}"><span class="chip ${r.f.u.bloc.side}" role="img" aria-label="${r.f.u.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(shortName(r.f.u.sys.titre))}</b><small>${WHY[r.kind](r.f)}</small></span>${icon('chev', 'chev')}</a>`;
-  const strongRow = (f: Facts) => `<a class="rowi rrow" href="${openingUrl(f.u)}"><span class="chip ${f.u.bloc.side}" role="img" aria-label="${f.u.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span><span class="body"><b>${esc(shortName(f.u.sys.titre))}</b><small>${f.u.promoted ? 'Promue, et tes résultats suivent.' : 'Tu y prends plus de points qu\'ailleurs, sans quitter tes lignes.'}</small></span>${f.u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Promue">` : ''}${icon('chev', 'chev')}</a>`;
+  const row = (u: Unit) => { const n = ownLines(u.sys).length, k = knownN(u), due = dueIds(u).length;
+    return `<a class="rowi crow" href="${openingUrl(u)}"><span class="body"><span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${due ? `<span class="due">${due} à revoir</span>` : ''}${k} sur ${n}</small></span>
+      <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}${icon('chev', 'chev')}</a>`; };
   const blocs = REP.blocs.filter(b => b.side === side);
-  root.innerHTML = `
-    ${top ? `<section class="surf today resume"><div class="today-top"><div class="today-text"><p class="label">Ta priorité</p><h2>${esc(shortName(top.f.u.sys.titre))}</h2><p class="rside">${esc(sideWord(top.f.u))}</p><p>${WHY[top.kind](top.f)}</p>${strip(top.f.u)}</div></div>
-      ${act!.href ? `<a class="btn pri block" href="${act!.href}">${act!.label}</a>` : `<button class="btn pri block" id="bReco">${act!.label}</button>`}<a class="quiet" href="${openingUrl(top.f.u)}">Voir l'ouverture</a></section>` : ''}
-    ${rest.length ? `<section class="grp"><h2>À travailler ensuite</h2><p class="pnote">Choisies d'après tes dernières parties et ce que tu as déjà appris.</p><div class="surf card list">${rest.map(recoRow).join('')}</div></section>` : ''}
-    ${pun.length ? `<section class="grp"><h2>Punir les erreurs adverses</h2><p class="pnote">Les erreurs que tes adversaires font dans l'ouverture, et le coup qui les punit.</p>
-      <div class="surf card list">${pun.slice(0, 3).map(punishRow).join('')}<a class="rowi more" href="#/rep/sorties">${pun.length > 3 ? `Toutes les punitions (${pun.length})` : 'Voir la page des punitions'}</a></div></section>` : ''}
-    <section class="grp"><h2>Tes points forts</h2><p class="pnote">Les ouvertures où tu prends le plus de points.</p>${R.strong.length ? `<div class="surf card list">${R.strong.map(strongRow).join('')}</div>` : '<p class="pnote">Encore trop peu de parties par ouverture pour le dire. Ça viendra tout seul en jouant.</p>'}</section>
-    <section class="grp allrep"><h2>Tout ton répertoire <span class="dim">${nQ} ${nQ > 1 ? 'dames' : 'dame'} sur ${allPlayed.length}</span></h2><p class="pnote">Toutes tes ouvertures, rangées par le premier coup de l'adversaire.</p>
-    <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture ou une ligne</label><input id="qRep" type="search" placeholder="Chercher : Londres, Bowdler, Meran…" autocomplete="off"><a class="hchip" href="#/rep/chercher">Jouer les coups</a></div>
+  root.innerHTML = `<header class="pagehead"><h1>Ouvertures</h1></header>
+    <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture ou une variante</label><input id="qRep" type="search" placeholder="Chercher : Londres, Alapin, Slave…" autocomplete="off"></div>
     <div id="qRes"></div>
     <div id="olist"><div class="seg" role="group" aria-label="Couleur"><button type="button" data-side="b" aria-pressed="${side === 'b'}">Avec les Noirs</button><button type="button" data-side="w" aria-pressed="${side === 'w'}">Avec les Blancs</button></div>
     ${blocs.map(b => { const us = playedU.filter(u => u.bloc.id === b.id); return us.length ? `<section class="grp"><h2>${esc(b.titre)}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; }).join('')}
-    ${others.length ? `<details class="others"><summary>Autres options (${others.length})</summary><p class="pnote">Des ouvertures de rechange, que tu ne joues pas d'habitude.</p><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
-    </div></section>`;
+    ${others.length ? `<details class="others"><summary>Ouvertures de rechange (${others.length})</summary><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
+    <a class="quiet" href="#/explorer?r=${encodeURIComponent('#/rep')}">Explorer une position</a></div>`;
   root.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.onclick = () => { setLS(SIDE_KEY, b.dataset.side!); const y = window.scrollY; viewPath(root); window.scrollTo(0, y); });
-  if (act?.run) $('#bReco', root)?.addEventListener('click', act.run);
-  // recherche par nom : ouvertures et lignes, toutes couleurs confondues
   const q = $<HTMLInputElement>('#qRep', root), res = $('#qRes', root), list = $('#olist', root);
-  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   q.addEventListener('input', () => {
     const t = norm(q.value.trim()); list.hidden = !!t; if (!t) { res.innerHTML = ''; return; }
     const us = units.filter(u => norm(u.sys.titre + ' ' + u.bloc.titre).includes(t));
-    const ls = Object.values(BR).filter(r => r.sys.statut !== 'plan' && norm(r.br.titre).includes(t)).slice(0, 12);
-    res.innerHTML = us.length || ls.length ? `${us.length ? `<section class="grp"><h2>Ouvertures</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''}
-      ${ls.length ? `<section class="grp"><h2>Lignes</h2><div class="surf card list">${ls.map(r => { const nm = lineName(r.br.titre); return `<a class="rowi" href="${lineUrl(r.br.id, 'explore')}"><span class="body"><b>${r.br.type ? `<span class="ltype ${r.br.type}">${typeLabel(r.br.type)}</span>` : ''}${esc(nm.title)}</b><small>${esc(shortName(r.sys.titre))}${nm.detail ? ` · ${esc(nm.detail)}` : ''}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}`
-      : '<p class="pnote">Rien trouvé. Essaie un autre nom, ou cherche en jouant les coups.</p>';
+    const ls = Object.values(BR).filter(r => r.sys.statut !== 'plan' && norm(r.br.titre + ' ' + (r.br.ch ?? '')).includes(t)).slice(0, 12);
+    res.innerHTML = us.length || ls.length ? `${us.length ? `<section class="grp"><h2>Cours</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''}
+      ${ls.length ? `<section class="grp"><h2>Variantes</h2><div class="surf card list">${ls.map(r => { const nm = lineName(r.br.titre); return `<a class="rowi" href="${lineUrl(r.br.id, 'explore')}"><span class="body"><b>${esc(nm.title)}</b><small>${esc(shortName(r.sys.titre))}${nm.detail ? ` · ${esc(nm.detail)}` : ''}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}`
+      : '<p class="pnote">Rien trouvé. Essaie un autre nom.</p>';
   });
 }
 
