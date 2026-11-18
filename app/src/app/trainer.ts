@@ -116,6 +116,8 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
       // une faute de l'adversaire porte sa marque sur sa case : « ? », « ?? », « ?! »
       const mk = br.marks?.[ply - 1]; if (mk && last) board.mark({ sq: last.to, text: mk, cls: mk === '??' ? 'blunder' : mk === '?!' ? 'inacc' : 'mistake', label: 'Erreur de ton adversaire' });
       if (learn && ply >= trunk) talk('talk', '', bare(br.notes[ply]), doLine(ply));   // un coup nouveau : le coach l'explique, sans rien arrêter
+      // de mémoire : après un bon coup, le coach dit en une phrase ce que ce coup faisait, pendant que tu cherches le suivant
+      else if (ply >= 2 && steps[ply - 2] === 'ok' && br.notes[ply - 2]) talk('happy', `<p class="lead ok">Bien joué, ${esc(moves[ply - 2].san)} !</p>`, bare(br.notes[ply - 2]));
       else say('you', `<i class="stm ${side}"></i>À toi`, learn ? '<p class="why">Tu connais ce coup.</p>' : ply <= 1 ? `<p class="why">${esc(nb(lineTitle(br.titre)))}</p>` : '');
       return drillActions();
     }
