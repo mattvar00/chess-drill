@@ -20,11 +20,12 @@ export interface Explorer { movable(): Color | null; onMove(m: Move): void; dest
 /** Lignes en notation « 20...Rxc4 21.Nd7 » → coups seuls. */
 export const sanTokens = (line: string) => line.split(/\s+/).map(t => t.replace(/^\d+\.(\.\.)?|^\d+…/, '')).filter(t => t && t !== '…');
 
-export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; orient: Color; lines: ExplorerLine[]; close: () => void; onPath?: (sans: string[]) => void }): Explorer {
+export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; orient: Color; lines: ExplorerLine[]; close: () => void; onPath?: (sans: string[]) => void; start?: number }): Explorer {
   const startNo = parseInt(o.fen.split(' ')[5]) || 1, startW = o.fen.split(' ')[1] === 'w';
   // chaque ligne est rejouée une fois pour ne garder que les coups légaux
   const lines = o.lines.map(l => { const g = new Chess(o.fen), moves: Move[] = []; for (const s of l.sans) { const m = tryMove(g, s); if (!m) break; moves.push(m); } return { label: l.label, moves }; }).filter(l => l.moves.length);
-  let path: Move[] = [], cur = 0, closed = false, ticket = 0, timer: ReturnType<typeof setTimeout> | undefined;
+  // `start` : on ouvre sur la première ligne, déjà avancée de `start` coups ; on peut donc revenir en arrière jusqu'au premier coup
+  let path: Move[] = o.start != null && lines[0] ? lines[0].moves.slice() : [], cur = Math.min(o.start ?? 0, path.length), closed = false, ticket = 0, timer: ReturnType<typeof setTimeout> | undefined;
   const label = (k: number) => { const ply = k + (startW ? 0 : 1); return `${startNo + Math.floor(ply / 2)}${ply % 2 ? '…' : '.'}`; };
   const fmt = (moves: Move[], from = 0, cls = (_k: number) => '') => moves.map((m, k) => { const ply = from + k; const showNo = ply === from || (ply + (startW ? 0 : 1)) % 2 === 0;
     return `${showNo ? `<span class="n">${label(ply)}</span>` : ''}<span class="m${cls(k)}" data-k="${k}">${esc(m.san)}</span>`; }).join(' ');
@@ -33,7 +34,7 @@ export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; 
     <div class="xhead"><b>Explorateur</b><span class="ev" id="xEval"></span><button class="iconbtn xclose" id="xClose" aria-label="Fermer l'explorateur">${icon('close')}</button></div>
     <div class="xbar" role="img" aria-label="Tes chances de gain"><b id="xBar" style="width:50%"></b></div>
     <p class="xeng" id="xEngine"></p>
-    <p class="hint">Joue tes propres coups sur l'échiquier, ou touche un coup d'une variante.</p>
+    <p class="hint">Reviens en arrière avec les flèches, joue tes propres coups sur l'échiquier, ou touche un coup d'une variante.</p>
     <div class="explnav">${[['first', 'Position de départ', 'first'], ['prev', 'Coup précédent', 'back'], ['next', 'Coup suivant', 'chev'], ['last', 'Dernier coup', 'last']].map(([to, l, ic]) => `<button class="btn" data-x="${to}" aria-label="${l}">${icon(ic)}</button>`).join('')}</div>
     <div class="xlines">${lines.map((l, j) => `<div class="xline" data-j="${j}"><p class="flabel">${esc(l.label)}</p><p class="moves">${fmt(l.moves)}</p></div>`).join('')}
       <div class="xline" id="xMine" hidden><p class="flabel">Ta variante</p><p class="moves" id="xMineMoves"></p></div></div></div>`;

@@ -55,9 +55,9 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     movable: () => xa() ? xa()!.movable() : mode === 'drill' && !locked && !finished && game.turn() === side ? side : null,
     onMove: m => xa() ? xa()!.onMove(m) : userMove(m),
   });
-  /** Explorateur (bouton de la barre du haut) depuis la position affichée : la suite de la ligne, ou tes propres coups. */
+  /** Explorateur (bouton de la barre du haut) : toute la ligne depuis le premier coup, ouverte sur la position affichée ; on recule, on avance, on joue ses propres coups. */
   const XS = explorerSlot(board, () => $('#tmain', root), () => $('#xp', root),
-    () => ({ fen: game.fen(), orient: side, lines: ply < moves.length ? [{ label: 'Suite de la ligne', sans: moves.slice(ply).map(m => m.san) }] : [] }), () => show());
+    () => ({ fen: new Chess().fen(), orient: side, lines: [{ label: course ? 'La variante' : 'La ligne', sans: moves.map(m => m.san) }], start: ply }), () => show());
   const show = (animate = false) => board.set(game, side, last, animate);
   const apply = (i: number) => { last = tryMove(game, uciToObj(moves[i].uci)); };
   const num = (i: number) => `${Math.floor(i / 2) + 1}${i % 2 ? '…' : '.'}`;
