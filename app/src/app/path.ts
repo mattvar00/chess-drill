@@ -11,7 +11,7 @@ import { punishLines, punishRow } from './exits';
 import { scanExits } from '../core/scan';
 import { myWp } from '../core/stats';
 import type { Game } from '../core/types';
-import { lineName, lineTitle, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
+import { lineName, lineTitle, plainName, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
 import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
 import { isDue } from '../core/schedule';
@@ -70,17 +70,16 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
   // Peu de mots : le nom de la case, à quelle fréquence on la rencontre, ses variantes (cochées quand elles sont sues), un bouton.
   const n = u.lessons.length, st = store.state.br;
   const mark = (id: string) => { const s = st[id]; return s?.clean && s.clean >= 1 ? (isDue(s) ? 'rev' : 'ok') : 'new'; };
-  const max = L.name ? 8 : 4;
-  const lines = L.ids.slice(0, max).map(id => `<li class="${mark(id)}">${mark(id) === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${esc(lineName(BR[id].br.titre).title)}${mark(id) === 'rev' ? ' <small>à revoir</small>' : ''}</span></li>`).join('')
-    + (L.ids.length > max ? `<li class="more">et ${plural(L.ids.length - max, 'autre', 'autres')}</li>` : '');
+  const pips = `<span class="ppips" role="img" aria-label="${L.ids.filter(id => mark(id) === 'ok').length} sur ${L.ids.length}">${L.ids.map(id => `<i class="${mark(id)}"></i>`).join('')}</span>`;
+  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary><ul class="plines simple">${L.ids.map(id => `<li class="${mark(id)}">${mark(id) === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${esc(plainName(BR[id].br.titre).title)}</span></li>`).join('')}</ul></details>`;
   const share = L.name ? u.sys.shares?.[L.name] : undefined, rest = lessonIds(L).length;
   const note = L.state === 'lock' ? `Finis d'abord la case ${i}.` : '';
   const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">${rest < L.ids.length ? 'Continuer' : 'Commencer'}</button>`
     : L.state === 'crack' ? `<button class="btn pri" data-go="${i}">Réviser</button>`
     : L.state === 'done' ? `<button class="btn" data-go="${i}">Rejouer</button>` : '';
   return `<div class="pbubble ${L.state}" style="--x:${x}%" role="region" aria-label="Case ${i + 1} sur ${n}, ${STATE[L.state]}">
-    ${L.name ? `<p class="pbn">${esc(L.name)}</p>` : `<p class="pbn">Case ${i + 1}</p>`}
-    ${share ? `<p class="pbf">Environ 1 partie sur ${Math.max(2, Math.round(1 / share))}</p>` : ''}${note ? `<p class="pbw">${note}</p>` : ''}<ul class="plines simple">${lines}</ul>${act}</div>`;
+    ${L.name ? `<p class="pbn">${esc(shortChap(L.name))}</p>` : `<p class="pbn">Case ${i + 1}</p>`}
+    ${share ? `<p class="pbf">Environ 1 partie sur ${Math.max(2, Math.round(1 / share))}</p>` : ''}${note ? `<p class="pbw">${note}</p>` : ''}${pips}${act}${lines}</div>`;
 }
 /** Nom court d'un chapitre pour le chemin : ce qui précède la virgule, les deux-points ou la parenthèse (le nom complet est dans la bulle). */
 /** Sur le chemin : un chapitre nommé par ses coups (« 7.Bc4 Nb6… ») prend le nom officiel que partagent ses variantes, quand il y en a un. */
@@ -168,14 +167,14 @@ function factsOf(units: Unit[]): Facts[] {
 }
 /** La raison d'une recommandation, en une phrase, sans chiffres. */
 const WHY: Record<RecoKind, (f: Facts) => string> = {
-  oubli: f => f.devs > 1 ? 'Tu as quitté tes lignes plusieurs fois ces dernières semaines : c\'est ta priorité.' : 'Tu as quitté ta ligne dans une partie récente : rejoue-la tant que c\'est frais.',
-  punir: () => 'Un adversaire s\'y est trompé et tu n\'as pas trouvé la punition.',
-  revoir: () => 'Des lignes que tu sais reviennent en révision, avant qu\'elles s\'effacent.',
-  fragile: () => 'Tu la rencontres souvent, et tu y perds plus de points qu\'ailleurs.',
-  milieu: () => 'Tu sors bien de l\'ouverture, mais tu perds le fil juste après : regarde ses plans.',
-  nouveau: f => f.games ? 'De nouvelles lignes tirées de tes parties t\'attendent.' : 'Ce cours a des lignes que tu n\'as pas encore apprises.',
-  avancer: f => f.games ? 'Tu la joues souvent, et il te reste des lignes à apprendre.' : 'La suite de ton chemin.',
-  apprendre: () => 'Tu n\'as pas encore de réponse apprise ici.',
+  oubli: f => f.devs > 1 ? 'Tu en es sorti plusieurs fois en partie.' : 'Tu en es sorti dans une partie récente.',
+  punir: () => 'Un adversaire s\'y est trompé, et tu ne l\'as pas puni.',
+  revoir: () => 'À revoir avant d\'oublier.',
+  fragile: () => 'Tu la rencontres souvent et tu y perds des points.',
+  milieu: () => 'Tu sors bien de l\'ouverture, puis tu perds le fil.',
+  nouveau: f => f.games ? 'Vue dans tes parties, pas encore apprise.' : 'La suite de ton cours.',
+  avancer: f => f.games ? 'Tu la joues souvent.' : 'La suite de ton cours.',
+  apprendre: () => 'Tu n\'as pas encore de réponse ici.',
 };
 /** L'action qui va avec une recommandation : son libellé, et soit un lien, soit un geste. */
 function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {

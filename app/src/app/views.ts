@@ -7,7 +7,7 @@ import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
 import { bindPath, courseBoard, devRow, familyColor, nextUp, openCourse, otherUps, pathBlock, runUp, shortName, unitFor } from './path';
 import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
-import { lineName, lineTitle, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
+import { lineName, lineTitle, plainName, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
@@ -140,8 +140,9 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   // un cours : les lignes sous le nom de leur chapitre (une case du chemin), avec leur rôle ; sinon une seule liste
   const chapters = chaptersOf(own.filter(b => !b.type)), rest = own.filter(b => b.type);
   const groups: { name: string; lines: Branch[] }[] = chapters ? [...chapters, ...(rest.length ? [{ name: 'Tirées de tes parties', lines: rest }] : [])] : [{ name: '', lines: own }];
-  const row = (br: Branch) => { const d = store.devs[br.id], nm = lineName(br.titre);
-    return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${popBars(br.pop)}${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : br.role ? `<span class="ltype ${br.role}">${roleLabel(br.role)}</span>` : ''}${esc(nm.title)}</b><small>${br.nom ? `${esc(shortNom(br.nom))} · ` : nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; };
+  // une ligne par variante : son nom en mots, et une coche quand elle est sue. Le reste (coups, fréquence, type) se voit en l'ouvrant.
+  const row = (br: Branch) => { const st = store.state.br[br.id], known = !!st?.clean && st.clean >= 1, due = known && isDue(st!);
+    return `<a class="rowi vrow" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(plainName(br.titre).title)}</b>${due ? '<small class="due">à revoir</small>' : ''}</span>${known && !due ? `<span class="vok">${icon('check')}</span>` : ''}${chev}</a>`; };
   const plusIds = own.filter(b => b.plus).map(b => b.id), plusLeft = plusIds.filter(id => !store.state.br[id]?.clean);
   root.innerHTML = `
     ${pathBlock(u)}
@@ -151,7 +152,7 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
     ${plans.length ? `<a class="surf card lk1" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Les plans de cette ouverture</b><span class="dim">${plans.length}</span>${chev}</a>` : ''}
     ${(sys.modeles ?? []).map(m => `<a class="surf card lk1" href="${lineUrl(m.id, 'explore')}"><b>Partie modèle</b><span class="dim">${esc(m.titre)}</span>${chev}</a>`).join('')}
     ${nFaults ? `<a class="surf card lk1" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Tes fautes dans cette ouverture</b><span class="dim">${nFaults}</span>${chev}</a>` : ''}
-    <h3 class="chap">Toutes les variantes (${own.length})</h3><p class="pnote">${esc(sys.resume)}</p>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name)}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
+    <h3 class="chap">Toutes les variantes</h3>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name.split(' : ')[0])}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
       <button class="quiet" id="bDrill">Rejouer les ${own.length} variantes à la suite</button>
     ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2>${inYourGames(sys)}<div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}</details>`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, own.map(b => b.id), back));

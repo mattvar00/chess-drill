@@ -86,8 +86,8 @@ body[data-board="wood"]{--sq-l:#F0D9B5;--sq-d:#B58863;--hl-l:#CDD26A;--hl-d:#AAA
 body[data-board="green"]{--sq-l:#EBECD0;--sq-d:#739552;--hl-l:#F5F682;--hl-d:#B9CA43}
 
 :root{
-  --f-text:"Inter Variable",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  --f-title:"Space Grotesk Variable",var(--f-text);
+  --f-text:"Figtree Variable",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --f-title:"Bricolage Grotesque Variable",var(--f-text);
   --pad:20px; --tabs:60px; --top:60px;
 }
 
@@ -1098,3 +1098,13 @@ button.rowi.crow{width:100%;border:0;background:none;text-align:left;font:inheri
 .fdots{position:fixed;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:3}
 .fdots i{width:5px;height:5px;border-radius:50%;background:var(--c-mute);opacity:.35;transition:all .2s}.fdots i.on{height:14px;border-radius:3px;opacity:1;background:var(--c-ink)}
 @media(min-width:900px){.feed{height:auto;overflow:visible;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}.fcard{height:auto}.fboard .mini{width:220px}.fdots,.fnext{display:none}}
+
+/* passe « moins de texte » : la police, les pastilles de la bulle, la vignette du cours */
+h1,h2,.pbn,.ftext h2,.cpick b{letter-spacing:-.015em}
+.cpick .mini.cthumb{width:64px;height:64px;border-radius:10px}
+.ppips{display:flex;gap:6px;margin:2px 0 4px}.ppips i{flex:1;max-width:38px;height:8px;border-radius:4px;background:var(--line)}.ppips i.ok{background:var(--ok)}.ppips i.rev{background:var(--bad)}
+.pmore{margin-top:2px}.pmore>summary{list-style:none;cursor:pointer;font-size:13px;font-weight:600;color:var(--mute);padding:6px 0}.pmore>summary::-webkit-details-marker{display:none}
+.pmore>summary::after{content:" ›"}.pmore[open]>summary::after{content:" ⌄"}
+.pbn{font:700 18px/1.2 var(--f-title);margin:0}
+.pbf{font-size:14px}
+.vrow .body b{font-weight:500}.vrow .vok .ic{width:18px;height:18px;color:var(--ok)}.vrow small.due{color:var(--bad)}

@@ -20,7 +20,14 @@ export function lineName(titre: string): { title: string; detail: string } {
   return { title: left, detail: right };
 }
 /** Le titre seul, sans références internes : pour les en-têtes et les bulles. */
-export const lineTitle = (titre: string) => lineName(titre).title;
+/** Le titre d'une variante en mots seulement : « Il s'accroche au pion : 3…b5 ?! » → « Il s'accroche au pion ». Les coups restent dans le détail. */
+export function plainName(titre: string): { title: string; detail: string } {
+  const n = lineName(titre), k = n.title.lastIndexOf(' : ');
+  if (k > 0 && /^[\d…(]|^[KQRBN]?[a-h]?x?[a-h][1-8]|^O-O/.test(n.title.slice(k + 3).trim()) && /\p{L}{3}/u.test(n.title.slice(0, k)))
+    return { title: n.title.slice(0, k).replace(/\s*[?!]+$/, '').trim(), detail: n.detail || n.title.slice(k + 3).trim() };
+  return { title: n.title.replace(/\s+[?!]{1,2}$/, ''), detail: n.detail };
+}
+export const lineTitle = (titre: string) => plainName(titre).title;
 /** Étiquette d'une variante de cours : ce que joue la théorie, ou une erreur classique de l'adversaire. */
 export const roleLabel = (r?: 'theorie' | 'erreur') => r === 'theorie' ? 'Théorie' : r === 'erreur' ? 'Piège' : '';
 const PIECE: Record<string, string> = { N: 'le cavalier', B: 'le fou', R: 'la tour', Q: 'la dame', K: 'le roi' };
