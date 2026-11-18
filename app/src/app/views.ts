@@ -5,9 +5,9 @@ import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
-import { bindPath, devRow, featured, nextUp, pathBlock, runUp, shortName, unitFor } from './path';
+import { bindPath, courseBoard, devRow, familyColor, nextUp, openCourse, otherUps, pathBlock, runUp, shortName, unitFor } from './path';
 import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
-import { lineName, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
+import { lineName, lineTitle, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
@@ -75,33 +75,41 @@ function weekStrip(days: string[]) {
   return `<div class="week" role="img" aria-label="${plural(n, "jour d'entraînement", "jours d'entraînement")} sur les 7 derniers">${cells.join('')}</div>`;
 }
 
+/**
+ * Aujourd'hui = « Pour toi » : une pile de cartes plein écran, une chose à faire par carte, la plus utile d'abord.
+ * Pas d'étiquette « recommandé » : c'est l'ordre qui recommande. On glisse vers le haut pour la suivante.
+ */
 export function viewHome(root: HTMLElement) {
-  // le cours à continuer vient des recommandations (un seul endroit en décide) ; les autres étapes du jour suivent
-  const up = nextUp(), steps = dailyPlan(), todo = steps.filter(s => !s.done), next = up ? undefined : todo[0], later = up ? todo : todo.slice(1), did = steps.filter(s => s.done);
-  const days = trainingDays(), n = streak(days), cold = coldStart(store.games);
-  const games = store.games.filter(g => !store.state.ignored[g.id]), last = lastSession(games), res = (r: string) => last ? last.games.filter(g => g.res === r).length : 0;
-  const hero = up ? featured(up, 'bGo')
-    : next ? `<section class="surf today now">
-      <div class="today-top"><div class="today-text"><h2>${esc(next.title)}</h2><p>${esc(next.sub)}</p></div>${next.thumb}</div>
-      <button class="btn pri block" id="bGo">${did.length ? 'Continuer' : 'Commencer'}, ${next.min} min</button></section>`
-    : `<section class="surf today now"><div class="today-text"><h2>${steps.length ? 'Séance du jour terminée' : 'Tout est à jour'}</h2><p>${steps.length ? `${did.map(s => s.title.toLowerCase()).join(', ')}.` : 'Rien à revoir aujourd\'hui. Tu peux avancer dans ton répertoire ou rejouer tes fautes.'}</p></div>
-      <a class="btn pri block" href="#/rep">Voir mes cours</a></section>`;
-  root.innerHTML = `
-    <header class="hello">
-      <div><p class="date">${cap(new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }))}</p><h1>Aujourd'hui</h1></div>
-      <div class="hello-r">${n ? `<span class="pill${trainedToday(days) ? '' : ' off'}" title="${trainedToday(days) ? 'Série d\'entraînement en cours' : 'Entraîne-toi aujourd\'hui pour garder ta série'}">${n > 1 ? `${n} jours de suite` : '1 jour'}</span>` : ''}<a class="iconbtn" href="#/reglages" aria-label="Réglages">${icon('sliders')}</a></div>
-    </header>
-    ${weekStrip(days)}
-    ${hero}
-    ${next && !did.length && next.key === 'tac' && cold && cold.rest - cold.first >= 5 ? `<p class="hint">À faire avant de jouer : tu gagnes ${cold.first} % de tes 3 premières parties d'une session, ${cold.rest} % des suivantes.</p>` : ''}
-    ${later.length || ((next || up) && did.length) ? `<section class="grp"><h2>${up ? 'Ensuite' : next ? 'Le reste de la séance' : 'Ta séance'}</h2><div class="surf card list">${[...later, ...did].map(s => `<button class="rowi${s.done ? ' isdone' : ''}" data-step="${steps.indexOf(s)}">${small(s.thumb)}<span class="body"><b>${esc(s.title)}</b><small>${s.done ? 'Fait. Touche pour le refaire' : esc(s.sub)}</small></span>${s.done ? icon('check', 'tick') : `<span class="dim">${s.min} min</span>`}${chev}</button>`).join('')}</div></section>` : ''}
-    ${last ? `<section class="grp"><h2>Tes dernières parties</h2>
-      <div class="surf card list"><a class="rowi sess" href="#/progres"><span class="body"><b>${cap(ago(last.t * 1000))}, ${plural(last.games.length, 'partie')}</b><small>${[res('W') ? plural(res('W'), 'gagnée') : '', res('D') ? plural(res('D'), 'nulle') : '', res('L') ? plural(res('L'), 'perdue') : ''].filter(Boolean).join(', ')}</small></span>
-        <span class="dots" aria-hidden="true">${last.games.slice(-12).map(g => `<i class="${g.res}"></i>`).join('')}</span>${chev}</a>
-      ${[...last.games].reverse().slice(0, 2).map(g => gameRow(g, '#/')).join('')}</div></section>` : ''}
-    `;
-  root.querySelectorAll<HTMLButtonElement>('[data-step]').forEach(b => b.addEventListener('click', () => steps[+b.dataset.step!].go()));
-  $('#bGo', root)?.addEventListener('click', () => { if (up) runUp(up); else next!.go(); });
+  const up = nextUp(), steps = dailyPlan(), todo = steps.filter(s => !s.done), did = steps.filter(s => s.done);
+  const days = trainingDays(), n = streak(days);
+  type Card = { kick: string; fam?: string; title: string; why: string; board: string; cta: string; go: () => void };
+  const cards: Card[] = [];
+  if (up) {
+    let board = courseBoard(up.u);
+    if (up.line && BR[up.line]) { const { br, bloc } = BR[up.line], g = new Chess(), stop = br.marks ? Math.max(...Object.keys(br.marks).map(Number)) + 1 : Math.min(br.moves.length, 10);
+      for (const m of br.moves.slice(0, stop)) if (!tryMove(g, uciToObj(m.uci))) break; board = miniBoard(g, bloc.side); }
+    cards.push({ kick: shortName(up.u.sys.titre), fam: familyColor(up.u.bloc.id), title: up.line ? lineTitle(BR[up.line].br.titre) : shortName(up.u.sys.titre), why: up.why, board, cta: up.label, go: () => runUp(up) });
+  }
+  for (const s of todo) cards.push({ kick: 'Ta séance', title: s.title, why: s.sub, board: s.thumb, cta: `Commencer · ${s.min} min`, go: s.go });
+  for (const a of up ? otherUps(up.u.sys.id) : []) cards.push({ kick: shortName(a.u.sys.titre), fam: familyColor(a.u.bloc.id), title: shortName(a.u.sys.titre), why: a.why, board: courseBoard(a.u), cta: 'Ouvrir le cours', go: () => openCourse(a.u) });
+  const head = `<header class="hello fhead"><h1>Pour toi</h1>
+      <div class="hello-r">${n ? `<span class="pill${trainedToday(days) ? '' : ' off'}" title="${trainedToday(days) ? 'Série d\'entraînement en cours' : 'Entraîne-toi aujourd\'hui pour garder ta série'}">${n > 1 ? `${n} jours` : '1 jour'}</span>` : ''}<a class="iconbtn" href="#/reglages" aria-label="Réglages">${icon('sliders')}</a></div></header>`;
+  if (!cards.length) {
+    root.innerHTML = `${head}<section class="surf today now"><div class="today-text"><h2>${did.length ? 'Séance terminée' : 'Tout est à jour'}</h2><p>${did.length ? 'Reviens demain, ou avance dans un cours.' : 'Rien à revoir aujourd\'hui.'}</p></div><a class="btn pri block" href="#/rep">Voir mes cours</a></section>`;
+    return;
+  }
+  root.innerHTML = `${head}
+    <div class="feed" id="feed">${cards.map((c, i) => `<section class="fcard" style="${c.fam ? `--fam:${c.fam}` : ''}" aria-label="${esc(c.title)}">
+      <p class="fkick"><i class="famdot" aria-hidden="true"></i>${esc(c.kick)}</p>
+      <div class="fboard">${c.board}</div>
+      <div class="ftext"><h2>${esc(c.title)}</h2><p>${c.why}</p></div>
+      <button class="btn pri block" data-card="${i}">${esc(c.cta)}</button>
+      ${i < cards.length - 1 ? `<button class="fnext" data-next="${i + 1}" aria-label="Carte suivante">${icon('chev')}</button>` : ''}</section>`).join('')}</div>
+    ${cards.length > 1 ? `<div class="fdots" aria-hidden="true">${cards.map((_, i) => `<i${i ? '' : ' class="on"'}></i>`).join('')}</div>` : ''}`;
+  const feed = $('#feed', root), dots = [...root.querySelectorAll<HTMLElement>('.fdots i')];
+  feed.addEventListener('click', e => { const t = e.target as HTMLElement, c = t.closest<HTMLElement>('[data-card]'), nx = t.closest<HTMLElement>('[data-next]');
+    if (c) cards[+c.dataset.card!].go(); else if (nx) feed.children[+nx.dataset.next!].scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  feed.addEventListener('scroll', () => { const k = Math.round(feed.scrollTop / Math.max(1, feed.clientHeight)); dots.forEach((d, i) => d.classList.toggle('on', i === k)); }, { passive: true });
 }
 
 function lineStatus(br: Branch): string {

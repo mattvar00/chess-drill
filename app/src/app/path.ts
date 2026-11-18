@@ -215,12 +215,12 @@ export const runUp = (up: NonNullable<ReturnType<typeof nextUp>>) => { if (up.ru
 const FAMILY: Record<string, string> = { A: '#7FB0FF', B: '#F58CA8', F: '#4FD1C5', C: '#5FC58A', D: '#F0A35E', E: '#B79CFF' };
 export const familyColor = (blocId: string) => FAMILY[blocId] ?? 'var(--accent-text)';
 /** Les recommandations suivantes, après celle de la carte : pour avoir le choix sans chercher. */
-function otherUps(skip: string): { u: Unit; why: string }[] {
+export function otherUps(skip: string): { u: Unit; why: string }[] {
   return recommend(factsOf(allUnits()), 6).todo.filter(r => r.f.u.sys.id !== skip).slice(0, 2).map(r => ({ u: r.f.u, why: WHY[r.kind](r.f) }));
 }
 /** Ouvertures : la liste des cours, rangés par couleur puis par premier coup adverse, avec l'avancement de chacun. Rien d'autre. */
 /** La vignette d'un cours : la position où ses variantes se séparent, vue de ton côté. */
-function courseBoard(u: Unit): string {
+export function courseBoard(u: Unit): string {
   const ls = ownLines(u.sys).map(b => b.moves); let k = ls.length ? ls[0].length : 0;
   for (const m of ls) { let j = 0; while (j < k && j < m.length && m[j].uci === ls[0][j].uci) j++; k = j; }
   const g = new Chess(); for (let i = 0; i < k; i++) if (!tryMove(g, uciToObj(ls[0][i].uci))) break;
@@ -234,20 +234,17 @@ export function viewPath(root: HTMLElement) {
   const units = allUnits(), up = nextUp(), cur = units.find(u => u.sys.id === getLS(LAST_KEY)) ?? up?.u ?? currentUnit(units);
   if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur, up?.u.sys.id);
   // la recommandation reste visible : une ligne en haut quand elle porte sur un autre cours, un mot sous le nom quand c'est celui-ci
-  const other = up && up.u.sys.id !== cur.sys.id ? up : null;
-  root.innerHTML = `${other ? `<button type="button" class="recob" id="bReco" style="--fam:${familyColor(other.u.bloc.id)}"><span class="rtag">Recommandé</span><span class="body"><b>${esc(shortName(other.u.sys.titre))}</b><small>${other.why}</small></span>${icon('chev', 'chev')}</button>` : ''}
-    <a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}${up && !other ? ' · recommandé' : ''}</small></span>${icon('chev', 'chev')}</a>
+  root.innerHTML = `<a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}</small></span>${icon('chev', 'chev')}</a>
     ${pathBlock(cur)}
     <a class="quiet" href="${openingUrl(cur)}">Plus sur ce cours</a>`;
   bindPath(root, cur);
-  root.querySelector('#bReco')?.addEventListener('click', () => { setLS(LAST_KEY, other!.u.sys.id); viewPath(root); window.scrollTo(0, 0); });
 }
 /** « Tes cours » : ceux que tu rencontres ou que tu as commencés, Blancs puis Noirs ; les autres sont repliés. */
 function pickCourse(root: HTMLElement, units: Unit[], cur: Unit, reco?: string) {
   const seen = (u: Unit) => u.sys.id === cur.sys.id || (played(u) && (u.meet > 0 || knownN(u) > 0));
   const mine = units.filter(seen).length >= 4 ? seen : (u: Unit) => seen(u) || played(u);   // pas encore de parties : on montre tout ton répertoire
-  const row = (u: Unit) => { const n = pathLines(u).length, k = knownN(u), on = u.sys.id === cur.sys.id, rec = u.sys.id === reco;
-    return `<button type="button" class="rowi crow${rec ? ' reco' : ''}" data-pick="${u.sys.id}" data-name="${esc(norm(u.sys.titre))}" style="--fam:${familyColor(u.bloc.id)}">${courseBoard(u)}<span class="body">${rec ? '<span class="rtag">Recommandé</span>' : ''}<span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${on ? 'en cours' : `${k} sur ${n}`}</small></span>
+  const row = (u: Unit) => { const n = pathLines(u).length, k = knownN(u), on = u.sys.id === cur.sys.id;
+    return `<button type="button" class="rowi crow" data-pick="${u.sys.id}" data-name="${esc(norm(u.sys.titre))}" style="--fam:${familyColor(u.bloc.id)}">${courseBoard(u)}<span class="body"><span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${on ? 'en cours' : `${k} sur ${n}`}</small></span>
       <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</button>`; };
   const sec = (side: 'w' | 'b', title: string) => { const us = units.filter(u => u.bloc.side === side && mine(u)).sort((a, b) => +(b.sys.id === reco) - +(a.sys.id === reco)); return us.length ? `<section class="grp"><h2>${title}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; };
   const others = units.filter(u => !mine(u));
@@ -304,3 +301,6 @@ export function viewLessonEnd(root: HTMLElement) {
   if (moved) confetti(36);
   root.querySelector('#bNext')?.addEventListener('click', () => startLesson(u, ni));
 }
+
+/** Le cours d'une carte « Pour toi » : on l'ouvre comme cours en cours. */
+export function openCourse(u: Unit) { setLS(LAST_KEY, u.sys.id); location.hash = '#/rep'; }

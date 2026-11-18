@@ -21,7 +21,7 @@ import { popLevel, lineTitle } from './core/names';
 
 restoreLook();
 /** Quatre onglets : ce que je fais maintenant, mes cours d'ouvertures, mes fautes à rejouer, où j'en suis. */
-const TABS = [['#/', "Aujourd'hui"], ['#/rep', 'Ouvertures'], ['#/wood', 'Fautes'], ['#/progres', 'Progrès']] as const;
+const TABS = [['#/', 'Pour toi'], ['#/rep', 'Ouvertures'], ['#/wood', 'Fautes'], ['#/progres', 'Progrès']] as const;
 const TRAIN = '#/rep', WOOD = '#/wood', PROG = '#/progres';
 document.getElementById('app')!.innerHTML = `
   <header class="top" id="top" hidden><a class="back" id="back" aria-label="Retour">${icon('back')}</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><span class="hright" id="hright"></span><button class="xtool" id="xtool" type="button" hidden>${icon('search')}<span>Explorer</span></button></header>

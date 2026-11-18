@@ -1083,3 +1083,18 @@ button.rowi.crow{width:100%;border:0;background:none;text-align:left;font:inheri
 .recob{display:flex;align-items:center;gap:10px;width:100%;margin:0 0 10px;padding:10px 12px;border:1px solid color-mix(in srgb,var(--fam,var(--accent)) 55%,transparent);border-radius:14px;background:color-mix(in srgb,var(--fam,var(--accent)) 12%,transparent);color:var(--c-ink);font:inherit;text-align:left;cursor:pointer}
 .recob .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}.recob b{font-weight:600}.recob small{font-size:12px;color:var(--c-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .recob .rtag{flex:none;font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--fam,var(--accent));color:#0B1626}
+
+/* « Pour toi » : des cartes plein écran, une par chose à faire ; on glisse pour la suivante */
+.fhead{align-items:center;margin-bottom:8px}
+.feed{height:calc(100dvh - var(--tabs) - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom));overflow-y:auto;scroll-snap-type:y mandatory;overscroll-behavior:contain;scrollbar-width:none;border-radius:24px}
+.feed::-webkit-scrollbar{display:none}
+.fcard{position:relative;height:100%;box-sizing:border-box;scroll-snap-align:start;scroll-snap-stop:always;display:flex;flex-direction:column;gap:12px;padding:16px 16px 18px;border-radius:24px;background:linear-gradient(180deg,color-mix(in srgb,var(--fam,var(--accent)) 16%,var(--surface)) 0%,var(--surface) 46%);color:var(--ink);--c-ink:var(--ink);--c-mute:var(--mute)}
+.fkick{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;font-weight:600;color:var(--mute)}
+.fkick .famdot{width:9px;height:9px;border-radius:50%;background:var(--fam,var(--accent-text))}
+.fboard{flex:1;min-height:0;display:grid;place-items:center}
+.fboard .mini{width:min(100%,calc(100dvh - var(--tabs) - 96px - 270px));height:auto;aspect-ratio:1;border-radius:12px;box-shadow:0 14px 34px rgba(0,0,0,.4);transform:none;opacity:1}
+.ftext h2{margin:0;font:700 22px/1.2 var(--f-title);letter-spacing:-.01em}.ftext p{margin:6px 0 0;font-size:14px;color:var(--mute);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.fnext{position:absolute;left:50%;bottom:-2px;transform:translateX(-50%) rotate(90deg);width:44px;height:22px;border:0;background:none;color:var(--mute);display:grid;place-items:center;opacity:.6}
+.fdots{position:fixed;right:6px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:3}
+.fdots i{width:5px;height:5px;border-radius:50%;background:var(--c-mute);opacity:.35;transition:all .2s}.fdots i.on{height:14px;border-radius:3px;opacity:1;background:var(--c-ink)}
+@media(min-width:900px){.feed{height:auto;overflow:visible;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}.fcard{height:auto}.fboard .mini{width:220px}.fdots,.fnext{display:none}}
