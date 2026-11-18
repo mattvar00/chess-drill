@@ -1055,3 +1055,9 @@ body.fit .trainer.cours .tboard .board{width:min(100%,calc(100dvh - var(--top) -
 .trainer.fin .coach.ctop{height:auto;min-height:132px}
 
 .cbub .suite{margin-top:2px;font-size:14px;color:var(--mute)}.cbub .suite b{color:var(--ink);font-weight:600}
+
+/* à quel point une variante est jouée : trois barres */
+.pop{display:inline-flex;align-items:flex-end;gap:2px;height:12px;margin-right:6px;vertical-align:-1px}
+.pop i{width:3px;border-radius:1px;background:var(--c-pend)}
+.pop i:nth-child(1){height:5px}.pop i:nth-child(2){height:8px}.pop i:nth-child(3){height:12px}
+.pop.p1 i:nth-child(1),.pop.p2 i:nth-child(-n+2),.pop.p3 i{background:var(--c-ok)}

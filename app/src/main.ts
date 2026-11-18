@@ -17,7 +17,7 @@ import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
 import { shortName, viewLessonEnd, viewPath } from './app/path';
-import { lineTitle } from './core/names';
+import { popLevel, lineTitle } from './core/names';
 
 restoreLook();
 /** Quatre onglets : ce que je fais maintenant, mes cours d'ouvertures, mes fautes à rejouer, où j'en suis. */
@@ -62,7 +62,7 @@ function route() {
     const cur = session(), g = q.get('g');
     const kind = br.role === 'erreur' ? 'Piège' : br.role === 'theorie' ? 'Théorie' : '';   // on sait toujours si on apprend une punition ou la théorie
     // en séance : le nom de l'ouverture en titre (lisible sur téléphone), et où on en est en dessous ; le nom de la variante, c'est le coach qui le dit
-    const where = `${kind ? kind + ' · ' : ''}${cur ? `${cur.done.size + (cur.done.has(br.id) ? 0 : 1)} sur ${cur.pool.length}` : sys.titre}`;
+    const where = `${kind ? kind + ' · ' : ''}${cur ? `${cur.done.size + (cur.done.has(br.id) ? 0 : 1)} sur ${cur.pool.length}${popLevel(br.pop) === 3 ? ' · très jouée' : ''}` : sys.titre}`;
     shell(cur && bloc.id !== 'plans' ? shortName(sys.titre) : lineTitle(br.titre), where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, (cur && mode === 'drill') || br.model ? '' : `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'De mémoire'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
     cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
   } else if (p[0] === 'partie' && p[1] && p[2] === 'refaire') {

@@ -34,3 +34,9 @@ export function tell(m: { san: string; uci: string }): string {
 }
 /** Étiquette d'une ligne tirée de tes parties. */
 export const typeLabel = (t?: 'punir' | 'bon') => t === 'punir' ? 'Punir' : t === 'bon' ? 'Bon coup' : '';
+
+/** À quel point une variante est jouée à ton niveau (parties Lichess entre 1600 et 2000, blitz et rapide) : 0 inconnu, 1 rare, 2 jouée, 3 très jouée. */
+export const popLevel = (pop?: number): 0 | 1 | 2 | 3 => pop == null ? 0 : pop >= 100000 ? 3 : pop >= 5000 ? 2 : 1;
+export const popLabel = (pop?: number) => ['', 'rare à ton niveau', 'jouée à ton niveau', 'très jouée à ton niveau'][popLevel(pop)];
+/** Trois petites barres, comme un signal : plus il y en a de pleines, plus la variante est jouée. */
+export const popBars = (pop?: number) => { const l = popLevel(pop); return l ? `<span class="pop p${l}" role="img" aria-label="${popLabel(pop)}" title="${popLabel(pop)}"><i></i><i></i><i></i></span>` : ''; };
