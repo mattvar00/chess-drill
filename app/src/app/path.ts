@@ -231,21 +231,25 @@ function courseBoard(u: Unit): string {
  * est un bouton : il ouvre « Tes cours » (#/rep/choisir) pour en changer.
  */
 export function viewPath(root: HTMLElement) {
-  const units = allUnits(), cur = units.find(u => u.sys.id === getLS(LAST_KEY)) ?? nextUp()?.u ?? currentUnit(units);
-  if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur);
-  root.innerHTML = `<a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}</small></span>${icon('chev', 'chev')}</a>
+  const units = allUnits(), up = nextUp(), cur = units.find(u => u.sys.id === getLS(LAST_KEY)) ?? up?.u ?? currentUnit(units);
+  if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur, up?.u.sys.id);
+  // la recommandation reste visible : une ligne en haut quand elle porte sur un autre cours, un mot sous le nom quand c'est celui-ci
+  const other = up && up.u.sys.id !== cur.sys.id ? up : null;
+  root.innerHTML = `${other ? `<button type="button" class="recob" id="bReco" style="--fam:${familyColor(other.u.bloc.id)}"><span class="rtag">Recommandé</span><span class="body"><b>${esc(shortName(other.u.sys.titre))}</b><small>${other.why}</small></span>${icon('chev', 'chev')}</button>` : ''}
+    <a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}${up && !other ? ' · recommandé' : ''}</small></span>${icon('chev', 'chev')}</a>
     ${pathBlock(cur)}
     <a class="quiet" href="${openingUrl(cur)}">Plus sur ce cours</a>`;
   bindPath(root, cur);
+  root.querySelector('#bReco')?.addEventListener('click', () => { setLS(LAST_KEY, other!.u.sys.id); viewPath(root); window.scrollTo(0, 0); });
 }
 /** « Tes cours » : ceux que tu rencontres ou que tu as commencés, Blancs puis Noirs ; les autres sont repliés. */
-function pickCourse(root: HTMLElement, units: Unit[], cur: Unit) {
+function pickCourse(root: HTMLElement, units: Unit[], cur: Unit, reco?: string) {
   const seen = (u: Unit) => u.sys.id === cur.sys.id || (played(u) && (u.meet > 0 || knownN(u) > 0));
   const mine = units.filter(seen).length >= 4 ? seen : (u: Unit) => seen(u) || played(u);   // pas encore de parties : on montre tout ton répertoire
-  const row = (u: Unit) => { const n = pathLines(u).length, k = knownN(u), on = u.sys.id === cur.sys.id;
-    return `<button type="button" class="rowi crow" data-pick="${u.sys.id}" data-name="${esc(norm(u.sys.titre))}" style="--fam:${familyColor(u.bloc.id)}">${courseBoard(u)}<span class="body"><span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${on ? 'en cours' : `${k} sur ${n}`}</small></span>
+  const row = (u: Unit) => { const n = pathLines(u).length, k = knownN(u), on = u.sys.id === cur.sys.id, rec = u.sys.id === reco;
+    return `<button type="button" class="rowi crow${rec ? ' reco' : ''}" data-pick="${u.sys.id}" data-name="${esc(norm(u.sys.titre))}" style="--fam:${familyColor(u.bloc.id)}">${courseBoard(u)}<span class="body">${rec ? '<span class="rtag">Recommandé</span>' : ''}<span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${on ? 'en cours' : `${k} sur ${n}`}</small></span>
       <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</button>`; };
-  const sec = (side: 'w' | 'b', title: string) => { const us = units.filter(u => u.bloc.side === side && mine(u)); return us.length ? `<section class="grp"><h2>${title}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; };
+  const sec = (side: 'w' | 'b', title: string) => { const us = units.filter(u => u.bloc.side === side && mine(u)).sort((a, b) => +(b.sys.id === reco) - +(a.sys.id === reco)); return us.length ? `<section class="grp"><h2>${title}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; };
   const others = units.filter(u => !mine(u));
   root.innerHTML = `<header class="pagehead pickhead"><h1>Tes cours</h1><a class="btn" href="#/rep">Fermer</a></header>
     <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture</label><input id="qRep" type="search" placeholder="Chercher : Londres, Alapin, Slave…" autocomplete="off"></div>
