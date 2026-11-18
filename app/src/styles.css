@@ -1073,3 +1073,8 @@ button.rowi.crow{width:100%;border:0;background:none;text-align:left;font:inheri
 
 .pagehead.pickhead{flex-direction:row;align-items:center;justify-content:space-between;text-align:left}
 .pbo{margin:-2px 0 0;font-size:13px;color:var(--mute)}
+
+.plines.simple{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.plines.simple li{display:flex;align-items:flex-start;gap:8px;font-size:14px}.plines.simple li .ic{width:16px;height:16px;flex:none;margin-top:2px;color:var(--ok)}
+.plines.simple .pdot{width:6px;height:6px;border-radius:50%;background:var(--line);flex:none;margin:7px 5px 0}
+.plines.simple li.ok span{color:var(--mute)}.plines.simple small{color:var(--bad);font-size:12px}

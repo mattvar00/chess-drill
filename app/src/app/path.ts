@@ -67,24 +67,20 @@ const STATE: Record<Lesson['state'], string> = { done: 'réussie', crack: 'à re
 
 /** La bulle sous la case choisie : ce qu'elle contient, où elle en est, et l'action qui va avec. */
 function bubble(u: Unit, L: Lesson, i: number, x: number) {
-  const n = u.lessons.length, last = i === n - 1, st = store.state.br;
-  const lineMark = (id: string) => { const s = st[id]; return !s?.runs ? ['new', 'nouvelle'] : s.clean >= 1 && isDue(s) ? ['rev', 'à revoir'] : s.clean >= 1 ? ['ok', 'sue'] : ['new', 'à finir']; };
-  // le nom officiel que partagent les variantes de la case se dit une fois, sous son titre ; une variante ne redit le sien que s'il diffère
-  const noms = new Set(L.ids.map(id => BR[id].br.nom ?? '')), common = noms.size === 1 ? [...noms][0] : '';
-  const lines = L.ids.slice(0, L.name ? 8 : 4).map(id => { const [c, t] = lineMark(id); const nm = lineName(BR[id].br.titre); const ty = BR[id].br.type, ro = BR[id].br.role; return `<li><span class="lm ${c}">${t}</span><span>${popBars(BR[id].br.pop)}${ty ? `<span class="ltype ${ty}">${typeLabel(ty)}</span>` : ro ? `<span class="ltype ${ro}">${roleLabel(ro)}</span>` : ''}${esc(nm.title)}${BR[id].br.nom && BR[id].br.nom !== common ? `<small>${esc(shortNom(BR[id].br.nom!))}</small>` : nm.detail ? `<small>${esc(nm.detail)}</small>` : ''}</span></li>`; }).join('') + (L.ids.length > (L.name ? 8 : 4) ? `<li class="more">et ${plural(L.ids.length - (L.name ? 8 : 4), 'autre ligne', 'autres lignes')}</li>` : '');
-  const share = L.name ? u.sys.shares?.[L.name] : undefined;
-  const rest = lessonIds(L).length, partial = L.state === 'cur' && rest < L.ids.length;
-  const why = L.state === 'cur' ? (L.name ? `${plural(L.ids.length, 'variante')}, de la plus courte à la plus longue : le coach t'explique chaque coup, puis tu la rejoues de mémoire.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`
-      : `Joue ces ${plural(L.ids.length, 'ligne')} une fois chacune sans faute pour avancer le pion.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`)
-    : L.state === 'crack' ? 'Une ligne de cette case revient en révision. Rejoue-la sans faute pour garder la case.'
-    : L.state === 'done' ? 'Case réussie. Tu peux rejouer ses lignes quand tu veux.'
-    : last ? `La dame : termine les ${n} cases pour promouvoir l'ouverture.` : `S'ouvre quand la case ${i} est réussie.`;
-  const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">${partial ? `Finir la case ${i + 1} : ${L.name ? plural(rest, 'variante restante', 'variantes restantes') : plural(rest, 'ligne restante', 'lignes restantes')}` : `Jouer la case ${i + 1}`}</button>`
-    : L.state === 'crack' ? `<button class="btn pri" data-go="${i}">Revoir maintenant</button>`
-    : L.state === 'done' ? `<button class="btn" data-go="${i}">Rejouer ces lignes</button>` : '';
-  return `<div class="pbubble ${L.state}" style="--x:${x}%" role="region" aria-label="Case ${i + 1} sur ${n}">
-    <p class="pbh"><b>Case ${i + 1} sur ${n}</b><span class="pst ${L.state}">${STATE[L.state]}</span></p>${L.name ? `<p class="pbn">${esc(L.name)}</p>` : ''}${common ? `<p class="pbo">${esc(common)}</p>` : ''}
-    ${share ? `<p class="pbf">Tu la verras environ 1 partie sur ${Math.max(2, Math.round(1 / share))}. ${trapsOf(L)}.</p>` : ''}<p class="pbw">${why}</p><ul class="plines">${lines}</ul>${act}</div>`;
+  // Peu de mots : le nom de la case, à quelle fréquence on la rencontre, ses variantes (cochées quand elles sont sues), un bouton.
+  const n = u.lessons.length, st = store.state.br;
+  const mark = (id: string) => { const s = st[id]; return s?.clean && s.clean >= 1 ? (isDue(s) ? 'rev' : 'ok') : 'new'; };
+  const max = L.name ? 8 : 4;
+  const lines = L.ids.slice(0, max).map(id => `<li class="${mark(id)}">${mark(id) === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${esc(lineName(BR[id].br.titre).title)}${mark(id) === 'rev' ? ' <small>à revoir</small>' : ''}</span></li>`).join('')
+    + (L.ids.length > max ? `<li class="more">et ${plural(L.ids.length - max, 'autre', 'autres')}</li>` : '');
+  const share = L.name ? u.sys.shares?.[L.name] : undefined, rest = lessonIds(L).length;
+  const note = L.state === 'lock' ? `Finis d'abord la case ${i}.` : '';
+  const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">${rest < L.ids.length ? 'Continuer' : 'Commencer'}</button>`
+    : L.state === 'crack' ? `<button class="btn pri" data-go="${i}">Réviser</button>`
+    : L.state === 'done' ? `<button class="btn" data-go="${i}">Rejouer</button>` : '';
+  return `<div class="pbubble ${L.state}" style="--x:${x}%" role="region" aria-label="Case ${i + 1} sur ${n}, ${STATE[L.state]}">
+    ${L.name ? `<p class="pbn">${esc(L.name)}</p>` : `<p class="pbn">Case ${i + 1}</p>`}
+    ${share ? `<p class="pbf">Environ 1 partie sur ${Math.max(2, Math.round(1 / share))}</p>` : ''}${note ? `<p class="pbw">${note}</p>` : ''}<ul class="plines simple">${lines}</ul>${act}</div>`;
 }
 /** Nom court d'un chapitre pour le chemin : ce qui précède la virgule, les deux-points ou la parenthèse (le nom complet est dans la bulle). */
 /** Sur le chemin : un chapitre nommé par ses coups (« 7.Bc4 Nb6… ») prend le nom officiel que partagent ses variantes, quand il y en a un. */
@@ -131,7 +127,7 @@ export function pathBlock(u: Unit): string {
   const cur = u.lessons.findIndex(l => l.state === 'cur'), n = pathLines(u).length, k = knownN(u), due = dueIds(u).length;
   return `<section class="chead${u.promoted ? ' won' : ''}" style="--fam:${familyColor(u.bloc.id)}">
       <span class="prog cbar" role="img" aria-label="${k} sur ${n}"><b style="width:${n ? Math.max(k ? 3 : 0, Math.round(100 * k / n)) : 0}%"></b></span>
-      <p class="cprog"><b>${k} ${k > 1 ? 'variantes sues' : 'variante sue'} sur ${n}</b>${due ? `<span class="due">${due} à revoir</span>` : ''}${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</p>
+      <p class="cprog"><b>${k} sur ${n}</b>${due ? `<span class="due">${due} à revoir</span>` : ''}${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</p>
       <div class="cbtns">${cur >= 0 ? `<button class="btn pri" data-go="${cur}">Continuer</button>` : ''}${due || k || cur < 0 ? `<button class="btn${cur >= 0 ? '' : ' pri'}" id="bRev">${due ? `Réviser (${due})` : 'Tout rejouer'}</button>` : ''}</div></section>
     <div class="pboard"><section class="psec"><div class="ppath" data-sys="${u.sys.id}">${pathCells(u)}</div></section></div>`;
 }
@@ -237,7 +233,7 @@ function courseBoard(u: Unit): string {
 export function viewPath(root: HTMLElement) {
   const units = allUnits(), cur = units.find(u => u.sys.id === getLS(LAST_KEY)) ?? nextUp()?.u ?? currentUnit(units);
   if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur);
-  root.innerHTML = `<a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'} · changer de cours</small></span>${icon('chev', 'chev')}</a>
+  root.innerHTML = `<a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}</small></span>${icon('chev', 'chev')}</a>
     ${pathBlock(cur)}
     <a class="quiet" href="${openingUrl(cur)}">Plus sur ce cours</a>`;
   bindPath(root, cur);
