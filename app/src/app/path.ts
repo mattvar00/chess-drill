@@ -146,7 +146,7 @@ function factsOf(units: Unit[]): Facts[] {
   const bySys: Record<string, Game[]> = {};
   for (const g of store.games) { if (store.state.ignored[g.id]) continue; const id = refBranch(g, BR), s = id ? BR[id].sys : null; if (s && s.statut !== 'plan') (bySys[s.id] ??= []).push(g); }
   const devBy: Record<string, number> = {};
-  for (const g of recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50)) { const s = BR[refBranch(g, BR)!]?.sys.id; if (s) devBy[s] = (devBy[s] || 0) + 1; }
+  for (const g of recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50)) { const s = BR[refBranch(g, BR)!]?.sys.id; if (s && !devBy[s]) devBy[s] = 1; else if (s && passed(store.state.br[refBranch(g, BR)!])) devBy[s]++; }   // quitter une variante jamais apprise ne s'additionne pas : avec beaucoup de lignes, ça arrive à chaque partie
   const punBy: Record<string, number> = {};
   for (const c of scanExits(store.games, store.state.ignored).punir) { if (!c.missed) continue; const s = c.branches.map(id => BR[id]).find(Boolean)?.sys.id; if (s) punBy[s] = (punBy[s] || 0) + 1; }
   return units.map(u => {
@@ -185,6 +185,11 @@ const sideWord = (u: Unit) => `${u.bloc.titre}, ${u.bloc.side === 'w' ? 'avec le
 /** Quoi faire maintenant : le cours que les recommandations mettent en tête, sa raison et son action. Le seul endroit qui en décide. */
 export function nextUp(): { u: Unit; why: string; side: string; label: string; href?: string; run?: () => void } | null {
   const top = recommend(factsOf(allUnits())).todo[0]; if (!top) return null;
+  // une partie récente est passée par une variante précise : c'est elle qu'on lance, pas le chapitre en cours
+  if (top.kind === 'oubli') { const g = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50).find(x => BR[refBranch(x, BR)!]?.sys.id === top.f.u.sys.id), id = g ? refBranch(g, BR)! : null;
+    if (g && id) { const br = BR[id].br, known = passed(store.state.br[id]), name = lineTitle(br.titre);
+      return { u: top.f.u, side: sideWord(top.f.u), href: lineUrl(id, 'drill', g.id), label: known ? 'Rejouer cette variante' : 'Apprendre cette variante',
+        why: `${known ? 'Tu la connaissais et tu l\'as quittée' : br.role === 'erreur' ? 'Ton adversaire a joué ce piège et tu n\'as pas trouvé la punition' : 'Tu l\'as rencontrée et tu ne la connais pas encore'} contre ${esc(g.opp)} : ${esc(name)}.` }; } }
   return { u: top.f.u, why: WHY[top.kind](top.f), side: sideWord(top.f.u), ...actionOf(top) };
 }
 
