@@ -51,6 +51,8 @@ function shell(title: string, sub: string, backHref: string | null, tab: string 
 /** Retour : la page d'où l'on vient quand elle est passée dans l'adresse (`r`), sinon `dflt`. */
 const backOf = (q: URLSearchParams, dflt: string) => { const r = q.get('r'); return r && r.startsWith('#/') ? r : dflt; };
 const planSysTitle = (o: string) => { for (const b of REP.blocs) for (const sy of b.systemes) if (sy.id === o) return shortName(sy.titre); return ''; };
+/** La liste des plans d'où l'on vient (avec son retour vers la variante en cours), pour y revenir depuis un plan. */
+let lastPlans = '#/plans';
 function route() {
   cleanup?.(); cleanup = null;
   const [path, query = ''] = location.hash.slice(1).split('?'), p = path.split('/').filter(Boolean), q = new URLSearchParams(query);
@@ -58,9 +60,9 @@ function route() {
     const { br, sys, bloc } = BR[p[1]], mode = p[2] === 'drill' ? 'drill' : 'explore', S = session();
     if (S && !S.pool.includes(br.id)) endSession();
     const cur = session(), g = q.get('g');
-    const kind = br.role === 'erreur' ? 'Piège à punir' : br.role === 'theorie' ? 'Théorie' : '';   // on sait toujours si on apprend une punition ou la théorie
+    const kind = br.role === 'erreur' ? 'Piège' : br.role === 'theorie' ? 'Théorie' : '';   // on sait toujours si on apprend une punition ou la théorie
     const where = `${kind ? kind + ' · ' : ''}${cur ? `${cur.done.size + (cur.done.has(br.id) ? 0 : 1)} sur ${cur.pool.length}, ${cur.label}` : sys.titre}`;
-    shell(lineTitle(br.titre), where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'Drill'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
+    shell(lineTitle(br.titre), where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, cur && mode === 'drill' ? '' : `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'De mémoire'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
     cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
   } else if (p[0] === 'partie' && p[1] && p[2] === 'refaire') {
     const id = decodeURIComponent(p[1]), ply = +p[3], f = retryFault(id, ply), backTo = gameUrl(id, ply + 1);
@@ -74,7 +76,7 @@ function route() {
     endSession(); const id = decodeURIComponent(p[1]), r = q.get('r'), backTo = r && r.startsWith('#/') ? r : PROG, [t, sub] = reviewTitle(id);
     shell(t, sub, backTo, PROG, '', 'review'); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
   } else if (p[0] === 'plan' && p[1]) {
-    shell(planTitle(p[1]), 'Plan animé', '#/plans', TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
+    shell(planTitle(p[1]), 'Plan animé', lastPlans, TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
   } else if (p[0] === 'structure' && p[1]) {
     endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/plans', TRAIN, '', 'board'); cleanup = mountStruct(view, p[1]);
   } else if (p[0] === 'wood' && p[1] === 'go') {
@@ -96,7 +98,7 @@ function route() {
       cleanup = mountFreeExplorer(view, back, false, q.get('fen') ?? undefined, q.get('o') === 'b' ? 'b' : 'w'); }
     else if (p[0] === 'progres' || p[0] === 'parties') { shell('Progrès', '', null, PROG); viewGames(view); }
     else if (p[0] === 'profil') { shell('Ta carte joueur', '', PROG, PROG); viewProfile(view); }
-    else if (p[0] === 'plans') { shell('Plans', q.get('o') ? planSysTitle(q.get('o')!) : 'Quoi faire une fois l\'ouverture jouée', backOf(q, TRAIN), TRAIN); viewPlans(view, q); }
+    else if (p[0] === 'plans') { lastPlans = location.hash || '#/plans'; shell('Plans', q.get('o') ? planSysTitle(q.get('o')!) : 'Quoi faire une fois l\'ouverture jouée', backOf(q, TRAIN), TRAIN); viewPlans(view, q); }
     else if (p[0] === 'structures') { shell('Structures de pions', '', '#/plans', TRAIN); viewStructs(view); }
     else if (p[0] === 'reglages') { shell('Réglages', '', '#/', '#/reglages'); viewSettings(view); }
     else { shell('Chess Drill', '', null, '#/'); viewHome(view); }

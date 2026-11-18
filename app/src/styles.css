@@ -1042,3 +1042,8 @@ details.allv{margin-top:12px}
 .arow .famdot{margin-right:0}
 .cbar{display:block;height:6px;border-radius:3px;background:var(--line);overflow:hidden}.cbar b{display:block;height:100%;border-radius:3px;background:var(--fam,var(--accent-text));transition:width .6s ease-out}
 .lend-act{display:flex;flex-direction:column;gap:10px}
+
+/* fin de variante : la bulle du coach prend la place qu'il lui faut, l'échiquier rétrécit pour laisser les boutons à l'écran */
+.trainer.fin .coach.ctop{height:auto;min-height:118px}
+body.fit .trainer.cours.fin .tboard .board{width:min(100%,calc(100dvh - var(--top) - 430px))}
+.iconbtn{appearance:none;border:0;background:none;padding:0}

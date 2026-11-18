@@ -22,7 +22,7 @@ export function lineName(titre: string): { title: string; detail: string } {
 /** Le titre seul, sans références internes : pour les en-têtes et les bulles. */
 export const lineTitle = (titre: string) => lineName(titre).title;
 /** Étiquette d'une variante de cours : ce que joue la théorie, ou une erreur classique de l'adversaire. */
-export const roleLabel = (r?: 'theorie' | 'erreur') => r === 'theorie' ? 'Théorie' : r === 'erreur' ? 'Erreur classique' : '';
+export const roleLabel = (r?: 'theorie' | 'erreur') => r === 'theorie' ? 'Théorie' : r === 'erreur' ? 'Piège' : '';
 const PIECE: Record<string, string> = { N: 'le cavalier', B: 'le fou', R: 'la tour', Q: 'la dame', K: 'le roi' };
 /** Un coup dit en mots, comme le dirait un coach : « Joue le cavalier en f3. », « Prends en a8 avec la tour. », « Roque. » */
 export function tell(m: { san: string; uci: string }): string {

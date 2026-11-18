@@ -123,7 +123,7 @@ export function pathBlock(u: Unit): string {
   return `<section class="chead${u.promoted ? ' won' : ''}" style="--fam:${familyColor(u.bloc.id)}">
       <span class="prog cbar" role="img" aria-label="${k} sur ${n}"><b style="width:${n ? Math.max(k ? 3 : 0, Math.round(100 * k / n)) : 0}%"></b></span>
       <p class="cprog"><b>${k} ${k > 1 ? 'variantes sues' : 'variante sue'} sur ${n}</b>${due ? `<span class="due">${due} à revoir</span>` : ''}${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</p>
-      <div class="cbtns">${cur >= 0 ? `<button class="btn pri" data-go="${cur}">Apprendre</button>` : ''}<button class="btn${cur >= 0 ? '' : ' pri'}" id="bRev">${due ? `Réviser (${due})` : k ? 'Tout rejouer' : 'Jouer librement'}</button></div></section>
+      <div class="cbtns">${cur >= 0 ? `<button class="btn pri" data-go="${cur}">Apprendre</button>` : ''}${due || k || cur < 0 ? `<button class="btn${cur >= 0 ? '' : ' pri'}" id="bRev">${due ? `Réviser (${due})` : 'Tout rejouer'}</button>` : ''}</div></section>
     <div class="pboard"><section class="psec"><div class="ppath" data-sys="${u.sys.id}">${pathCells(u)}</div></section></div>`;
 }
 export function bindPath(root: HTMLElement, u: Unit) {
@@ -168,7 +168,7 @@ const WHY: Record<RecoKind, (f: Facts) => string> = {
   revoir: () => 'Des lignes que tu sais reviennent en révision, avant qu\'elles s\'effacent.',
   fragile: () => 'Tu la rencontres souvent, et tu y perds plus de points qu\'ailleurs.',
   milieu: () => 'Tu sors bien de l\'ouverture, mais tu perds le fil juste après : regarde ses plans.',
-  nouveau: () => 'De nouvelles lignes tirées de tes parties t\'attendent.',
+  nouveau: f => f.games ? 'De nouvelles lignes tirées de tes parties t\'attendent.' : 'Ce cours a des lignes que tu n\'as pas encore apprises.',
   avancer: f => f.games ? 'Tu la joues souvent, et il te reste des lignes à apprendre.' : 'La suite de ton chemin.',
   apprendre: () => 'Tu n\'as pas encore de réponse apprise ici.',
 };
@@ -264,12 +264,12 @@ export function pathSummary() {
 export function viewLessonEnd(root: HTMLElement) {
   const L = lastLesson; if (!L) { location.replace('#/rep'); return; }
   const u = allUnits().find(x => x.sys.id === L.sys); if (!u) { location.replace('#/rep'); return; }
-  const back = openingUrl(u), moved = u.done > L.doneBefore, name = shortName(u.sys.titre), mins = Math.floor(L.ms / 60000), secs = Math.round((L.ms % 60000) / 1000);
+  const back = openingUrl(u), moved = u.done > L.doneBefore, name = shortName(u.sys.titre), tsec = Math.round(L.ms / 1000), mins = Math.floor(tsec / 60), secs = tsec % 60;
   const time = `${mins}:${String(secs).padStart(2, '0')}`;
   if (u.promoted && moved) {
     confetti(90);
     root.innerHTML = `<div class="lend unitdone"><p class="kick">Promotion</p><img class="bigq" src="${pieceSrc('q')}" alt="">
-      <h1>${esc(name)} terminée</h1><p class="sub">Les ${plural(ownLines(u.sys).length, 'variante')} sont acquises. Elles reviendront de temps en temps pour ne pas s'effacer.</p>
+      <h1>${esc(name)} : cours terminé</h1><p class="sub">Les ${plural(ownLines(u.sys).length, 'variante')} sont acquises. Elles reviendront de temps en temps pour ne pas s'effacer.</p>
       <div class="etiles"><div><b>${ownLines(u.sys).length}</b><span>variantes</span></div>${u.meet ? `<div><b>${u.meet}</b><span>de tes parties couvertes</span></div>` : ''}<div><b>${time}</b><span>pour la dernière case</span></div></div>
       </div><div class="lend-act"><a class="btn pri block" href="${back}">Voir le cours</a></div>`;
     return;
