@@ -187,7 +187,7 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
     root.innerHTML = `<div class="trainer review">
       <div class="tboard">
         <div class="mstrip" id="strip" role="list" aria-label="Coups de la partie"><button class="mc" data-i="0" role="listitem">Départ</button>${A.R.map(r => `<button class="mc${NOTABLE.includes(r.k) ? ' c-' + r.k : ''}" data-i="${r.i + 1}" role="listitem">${r.i % 2 === 0 ? `<span class="n">${r.i / 2 + 1}.</span>` : ''}${esc(r.m.san)}${NOTABLE.includes(r.k) ? `<i>${CLASS[r.k][1]}</i>` : ''}</button>`).join('')}</div>
-        <div class="bwrap"><div class="evbar" aria-hidden="true"><b id="evb"></b></div><div id="board"></div></div>
+        <div class="bwrap"><div class="evbar${g.color === 'b' ? ' b' : ''}" aria-hidden="true"><b id="evb"></b></div><div id="board"></div></div>
       </div>
       <div class="tside"><div id="xp" hidden></div><div id="rv" class="rvside">
         <div class="coachb" id="coach" aria-live="polite"></div>

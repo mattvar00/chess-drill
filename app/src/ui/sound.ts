@@ -1,7 +1,7 @@
 /** Sons synthétisés (aucun fichier audio). */
 import type { Move } from '../core/chess';
 let ac: AudioContext | null = null; let enabled = true;
-export const setSound = (on: boolean) => { enabled = on; };
+export const setSound = (on: boolean) => { enabled = on; if (!on && ac && ac.state === 'running') void ac.suspend(); };
 
 /**
  * Jeux de sons pour les coups. « classique » : pièces sur un plateau en bois, enregistrées (PyChess, GPLv3).
@@ -33,6 +33,7 @@ function sample(k: 'Move' | 'Capture' | 'Check', vol = 1): boolean {
 }
 /** À appeler sur un geste de l'utilisateur : les navigateurs bloquent le son avant. */
 export function unlockAudio(): AudioContext | null {
+  if (!enabled) return null;
   if (!ac) { try { ac = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)(); } catch { return null; } }
   if (ac.state === 'suspended') void ac.resume();
   if (!bufs.size) preload();

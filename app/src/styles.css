@@ -619,6 +619,8 @@ body.focus.withtabs main{padding-bottom:calc(var(--tabs) + 28px + env(safe-area-
 @media(max-width:899px) and (orientation:portrait){body.fit .bwrap>.board{flex:none}}
 .evbar{flex:none;width:8px;display:flex;flex-direction:column;justify-content:flex-end;background:#2A3550}
 .evbar b{display:block;height:50%;background:#F3F5F8;transition:height .25s ease-out}
+/* la partie remplie est la tienne, en bas comme tes pièces : sombre quand tu as les Noirs */
+.evbar.b{background:#F3F5F8}.evbar.b b{background:#2A3550}
 .coachb{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:18px;background:var(--surface)}
 .rvside{display:flex;flex-direction:column;gap:14px}
 .rvbar{z-index:6;display:grid;grid-template-columns:56px minmax(0,1fr) 56px;gap:8px;background:var(--ground)}

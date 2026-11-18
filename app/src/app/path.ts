@@ -81,13 +81,18 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
     <p class="pbh"><b>Case ${i + 1} sur ${n}</b><span class="pst ${L.state}">${STATE[L.state]}</span></p>${L.name ? `<p class="pbn">${esc(L.name)}</p>` : ''}
     <p class="pbw">${why}</p><ul class="plines">${lines}</ul>${act}</div>`;
 }
+/** Nom court d'un chapitre pour le chemin : ce qui précède la virgule, les deux-points ou la parenthèse (le nom complet est dans la bulle). */
+const shortChap = (n: string) => { const s = n.split(/,| : | \(/)[0].trim(); return s.length >= 3 ? s : n; };
+/** Ce que contient une case, en trois mots : combien de pièges à punir, combien de variantes de théorie. */
+const trapsOf = (L: Lesson) => { const t = L.ids.filter(id => BR[id].br.role === 'erreur').length, th = L.ids.filter(id => BR[id].br.role === 'theorie').length;
+  return t || th ? [t ? plural(t, 'piège') : '', th ? `${th} théorie` : ''].filter(Boolean).join(' · ') : plural(L.ids.length, 'ligne'); };
 /** Une case du chemin : réussie (or), à revoir (point rouge), le pion (case en cours), pas encore ouverte, et la dame au bout. Toutes se touchent : la bulle dit ce qu'elles contiennent. */
 function step(u: Unit, L: Lesson, i: number, sel: number) {
   const kept = u.promoted && u.lessons.some(l => l.state === 'cur' || l.state === 'lock'), last = i === u.lessons.length - 1 && !kept, x = X[i % X.length], cur = L.state === 'cur', on = i === sel;
   const inner = cur ? `<img src="${pieceSrc('p')}" alt="">` : last ? `<img class="${u.promoted ? '' : 'qghost'}" src="${pieceSrc('q')}" alt="">` : L.state === 'lock' ? `<span class="pn">${i + 1}</span>` : icon('check');
   return `<div class="prow${on ? ' issel' : ''}${cur ? ' iscur' : ''}${last ? ' isgoal' : ''}">
     <button class="psq ${L.state}${last ? ' goal' : ''}${last && u.promoted ? ' won' : ''}${on ? ' sel' : ''}" style="left:${x}%" data-i="${i}" aria-expanded="${on}" aria-label="Case ${i + 1} sur ${u.lessons.length}, ${STATE[L.state]}">${inner}${L.state === 'crack' ? '<i class="dot"></i>' : ''}</button>
-    ${L.name && !on ? `<span class="plab ${x <= 50 ? 'r' : 'l'}" style="${x <= 50 ? `left:calc(${x}% + 46px);max-width:calc(${100 - x}% - 50px)` : `right:calc(${100 - x}% + 46px);max-width:calc(${x}% - 50px)`}"><b>${esc(L.name)}</b><small>${L.ids.filter(id => passed(store.state.br[id])).length} sur ${L.ids.length}</small></span>` : ''}
+    ${L.name && !on ? `<span class="plab ${x <= 50 ? 'r' : 'l'}" style="${x <= 50 ? `left:calc(${x}% + 46px);max-width:calc(${100 - x}% - 50px)` : `right:calc(${100 - x}% + 46px);max-width:calc(${x}% - 50px)`}"><b>${esc(shortChap(L.name))}</b><small>${trapsOf(L)}</small></span>` : ''}
     ${on ? bubble(u, L, i, x) : ''}</div>`;
 }
 const legend = `<p class="plegend"><span><i class="lg done"></i>réussie</span><span><i class="lg crack"></i>à revoir</span><span><i class="lg cur"></i>le pion : en cours</span><span><i class="lg lock"></i>à venir</span></p>`;
