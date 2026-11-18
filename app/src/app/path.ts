@@ -11,7 +11,7 @@ import { punishLines, punishRow } from './exits';
 import { scanExits } from '../core/scan';
 import { myWp } from '../core/stats';
 import type { Game } from '../core/types';
-import { lineName, lineTitle, plainName, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
+import { lineName, lineTitle, nomTitle, plainName, popBars, roleLabel, shortNom, typeLabel, variantTitle } from '../core/names';
 import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
 import { isDue } from '../core/schedule';
@@ -71,21 +71,21 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
   const n = u.lessons.length, st = store.state.br;
   const mark = (id: string) => { const s = st[id]; return s?.clean && s.clean >= 1 ? (isDue(s) ? 'rev' : 'ok') : 'new'; };
   const pips = `<span class="ppips" role="img" aria-label="${L.ids.filter(id => mark(id) === 'ok').length} sur ${L.ids.length}">${L.ids.map(id => `<i class="${mark(id)}"></i>`).join('')}</span>`;
-  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary><ul class="plines simple">${L.ids.map(id => `<li class="${mark(id)}">${mark(id) === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${esc(plainName(BR[id].br.titre).title)}</span></li>`).join('')}</ul></details>`;
+  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary><ul class="plines simple">${L.ids.map(id => `<li class="${mark(id)}">${mark(id) === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${esc(variantTitle(BR[id].br).sub || variantTitle(BR[id].br).title)}</span></li>`).join('')}</ul></details>`;
   const share = L.name ? u.sys.shares?.[L.name] : undefined, rest = lessonIds(L).length;
   const note = L.state === 'lock' ? `Finis d'abord la case ${i}.` : '';
   const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">${rest < L.ids.length ? 'Continuer' : 'Commencer'}</button>`
     : L.state === 'crack' ? `<button class="btn pri" data-go="${i}">Réviser</button>`
     : L.state === 'done' ? `<button class="btn" data-go="${i}">Rejouer</button>` : '';
   return `<div class="pbubble ${L.state}" style="--x:${x}%" role="region" aria-label="Case ${i + 1} sur ${n}, ${STATE[L.state]}">
-    ${L.name ? `<p class="pbn">${esc(shortChap(L.name))}</p>` : `<p class="pbn">Case ${i + 1}</p>`}
+    ${L.name ? `<p class="pbn">${esc(chapLabel(L))}</p>${chapLabel(L) !== shortChap(L.name) ? `<p class="pbo">${esc(shortChap(L.name))}</p>` : ''}` : `<p class="pbn">Case ${i + 1}</p>`}
     ${share ? `<p class="pbf">Environ 1 partie sur ${Math.max(2, Math.round(1 / share))}</p>` : ''}${note ? `<p class="pbw">${note}</p>` : ''}${pips}${act}${lines}</div>`;
 }
 /** Nom court d'un chapitre pour le chemin : ce qui précède la virgule, les deux-points ou la parenthèse (le nom complet est dans la bulle). */
 /** Sur le chemin : un chapitre nommé par ses coups (« 7.Bc4 Nb6… ») prend le nom officiel que partagent ses variantes, quand il y en a un. */
-const chapLabel = (L: Lesson) => { const n = L.name!; if (!/^\d|^…/.test(n)) return shortChap(n);
+const chapLabel = (L: Lesson) => { const n = L.name!;
   const c = new Map<string, number>(); for (const id of L.ids) { const x = BR[id].br.nom; if (x) c.set(x, (c.get(x) ?? 0) + 1); }
-  const best = [...c].sort((a, b) => b[1] - a[1])[0]; return best && best[1] * 2 >= L.ids.length ? shortNom(best[0]) : shortChap(n); };
+  const best = [...c].sort((a, b) => b[1] - a[1])[0]; return best && best[1] * 2 >= L.ids.length ? nomTitle(best[0]) : shortChap(n); };
 const shortChap = (n: string) => { const s = n.split(/,| : | \(/)[0].trim(); return s.length >= 3 ? s : n; };
 /** Ce que contient une case, en trois mots : combien de pièges à punir, combien de variantes de théorie. */
 const trapsOf = (L: Lesson) => { const t = L.ids.filter(id => BR[id].br.role === 'erreur').length, th = L.ids.filter(id => BR[id].br.role === 'theorie').length;

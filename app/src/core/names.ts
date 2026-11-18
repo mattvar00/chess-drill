@@ -50,3 +50,15 @@ export const popBars = (pop?: number) => { const l = popLevel(pop); return l ? `
 
 /** Le nom d'une variante sans celui de sa famille (on est déjà dans le cours) : « Slave, variante d'échange » → « Variante d'échange ». */
 export const shortNom = (nom: string) => { const p = nom.split(', '), t = (p.length > 1 ? p.slice(1).slice(-2) : p).join(', '); return t.charAt(0).toUpperCase() + t.slice(1); };
+
+const GENERIC = /^(ligne principale|ligne moderne|variante (moderne|classique|normale|calme|positionnelle|d'échange|du fianchetto|de retrait)|ouverte|fermée|ancienne|traditionnelle|système classique|défense (classique|moderne)|formation classique|ordre accéléré|échange moderne|par transposition|avec g3)$/;
+/** Le nom officiel en titre : sa dernière partie (« Défense McDonnell »), précédée de la précédente quand elle ne dit rien seule (« Slave, variante d'échange »). */
+export function nomTitle(nom: string): string {
+  const p = nom.split(', '), last = p[p.length - 1], t = p.length > 1 && GENERIC.test(last) ? `${p[p.length - 2]}, ${last}` : last;
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+/** Titre et sous-titre d'une variante : son nom officiel d'abord, ce que fait l'adversaire en mots dessous. Sans nom officiel, l'idée seule. */
+export function variantTitle(br: { titre: string; nom?: string }): { title: string; sub: string } {
+  const idea = plainName(br.titre).title;
+  return br.nom ? { title: nomTitle(br.nom), sub: idea } : { title: idea, sub: '' };
+}

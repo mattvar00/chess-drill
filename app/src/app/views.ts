@@ -7,7 +7,7 @@ import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
 import { bindPath, courseBoard, devRow, familyColor, nextUp, openCourse, otherUps, pathBlock, runUp, shortName, unitFor } from './path';
 import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
-import { lineName, lineTitle, plainName, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
+import { lineName, lineTitle, nomTitle, plainName, popBars, roleLabel, shortNom, typeLabel, variantTitle } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
@@ -88,7 +88,7 @@ export function viewHome(root: HTMLElement) {
     let board = courseBoard(up.u);
     if (up.line && BR[up.line]) { const { br, bloc } = BR[up.line], g = new Chess(), stop = br.marks ? Math.max(...Object.keys(br.marks).map(Number)) + 1 : Math.min(br.moves.length, 10);
       for (const m of br.moves.slice(0, stop)) if (!tryMove(g, uciToObj(m.uci))) break; board = miniBoard(g, bloc.side); }
-    cards.push({ kick: shortName(up.u.sys.titre), fam: familyColor(up.u.bloc.id), title: up.line ? lineTitle(BR[up.line].br.titre) : shortName(up.u.sys.titre), why: up.why, board, cta: up.label, go: () => runUp(up) });
+    cards.push({ kick: shortName(up.u.sys.titre), fam: familyColor(up.u.bloc.id), title: up.line ? variantTitle(BR[up.line].br).title : shortName(up.u.sys.titre), why: up.line && variantTitle(BR[up.line].br).sub ? `${esc(variantTitle(BR[up.line].br).sub)}. ${up.why}` : up.why, board, cta: up.label, go: () => runUp(up) });
   }
   for (const s of todo) cards.push({ kick: 'Ta séance', title: s.title, why: s.sub, board: s.thumb, cta: `Commencer · ${s.min} min`, go: s.go });
   for (const a of up ? otherUps(up.u.sys.id) : []) cards.push({ kick: shortName(a.u.sys.titre), fam: familyColor(a.u.bloc.id), title: shortName(a.u.sys.titre), why: a.why, board: courseBoard(a.u), cta: 'Ouvrir le cours', go: () => openCourse(a.u) });
@@ -141,8 +141,10 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   const chapters = chaptersOf(own.filter(b => !b.type)), rest = own.filter(b => b.type);
   const groups: { name: string; lines: Branch[] }[] = chapters ? [...chapters, ...(rest.length ? [{ name: 'Tirées de tes parties', lines: rest }] : [])] : [{ name: '', lines: own }];
   // une ligne par variante : son nom en mots, et une coche quand elle est sue. Le reste (coups, fréquence, type) se voit en l'ouvrant.
-  const row = (br: Branch) => { const st = store.state.br[br.id], known = !!st?.clean && st.clean >= 1, due = known && isDue(st!);
-    return `<a class="rowi vrow" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(plainName(br.titre).title)}</b>${due ? '<small class="due">à revoir</small>' : ''}</span>${known && !due ? `<span class="vok">${icon('check')}</span>` : ''}${chev}</a>`; };
+  // un groupe porte le nom officiel que partagent ses variantes ; chaque ligne dit alors seulement ce que fait l'adversaire
+  const commonNom = (ls: Branch[]) => { const c = new Map<string, number>(); for (const b of ls) if (b.nom) c.set(b.nom, (c.get(b.nom) ?? 0) + 1); const best = [...c].sort((x, y) => y[1] - x[1])[0]; return best && best[1] * 2 >= ls.length ? best[0] : ''; };
+  const row = (br: Branch, common = '') => { const st = store.state.br[br.id], known = !!st?.clean && st.clean >= 1, due = known && isDue(st!), v = variantTitle(br), same = !!common && br.nom === common;
+    return `<a class="rowi vrow" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(same ? v.sub || v.title : v.title)}</b>${!same && v.sub ? `<small>${esc(v.sub)}</small>` : ''}${due ? '<small class="due">à revoir</small>' : ''}</span>${known && !due ? `<span class="vok">${icon('check')}</span>` : ''}${chev}</a>`; };
   const plusIds = own.filter(b => b.plus).map(b => b.id), plusLeft = plusIds.filter(id => !store.state.br[id]?.clean);
   root.innerHTML = `
     ${pathBlock(u)}
@@ -152,7 +154,7 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
     ${plans.length ? `<a class="surf card lk1" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Les plans de cette ouverture</b><span class="dim">${plans.length}</span>${chev}</a>` : ''}
     ${(sys.modeles ?? []).map(m => `<a class="surf card lk1" href="${lineUrl(m.id, 'explore')}"><b>Partie modèle</b><span class="dim">${esc(m.titre)}</span>${chev}</a>`).join('')}
     ${nFaults ? `<a class="surf card lk1" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Tes fautes dans cette ouverture</b><span class="dim">${nFaults}</span>${chev}</a>` : ''}
-    <h3 class="chap">Toutes les variantes</h3>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name.split(' : ')[0])}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
+    <h3 class="chap">Toutes les variantes</h3>${groups.map(g => { const cn = commonNom(g.lines); return `${g.name ? `<h3 class="chap">${esc(cn ? nomTitle(cn) : g.name.split(' : ')[0])}</h3>` : ''}<div class="surf card list">${g.lines.map(b => row(b, cn)).join('')}</div>`; }).join('')}
       <button class="quiet" id="bDrill">Rejouer les ${own.length} variantes à la suite</button>
     ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2>${inYourGames(sys)}<div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}</details>`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, own.map(b => b.id), back));

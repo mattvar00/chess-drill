@@ -11,7 +11,7 @@ import { syncSoon } from './api';
 import { persistSession, lineUrl, nextUrl, remaining, session } from './session';
 import { explorerSlot } from './explorer';
 import { passed, trunkOf } from '../core/path';
-import { lineTitle, tell } from '../core/names';
+import { variantTitle, lineTitle, tell } from '../core/names';
 import { coachSay, type Mood } from '../ui/coach';
 import { confetti } from '../ui/fx';
 
@@ -121,7 +121,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
       if (learn && ply >= trunk) talk('talk', '', bare(br.notes[ply]), doLine(ply));   // un coup nouveau : le coach l'explique, sans rien arrêter
       // de mémoire : après un bon coup, le coach dit en une phrase ce que ce coup faisait, pendant que tu cherches le suivant
       else if (ply >= 2 && steps[ply - 2] === 'ok' && br.notes[ply - 2]) talk('happy', `<p class="lead ok">${BRAVO[(ply + id.length) % BRAVO.length]}, ${esc(moves[ply - 2].san)} !</p>`, bare(br.notes[ply - 2]));
-      else say('you', `<i class="stm ${side}"></i>À toi`, learn ? '<p class="why">Tu connais ce coup.</p>' : ply <= 1 ? `<p class="why">${esc(nb(lineTitle(br.titre)))}</p>${br.nom ? `<p class="why">${esc(br.nom)}</p>` : ''}` : '');
+      else say('you', `<i class="stm ${side}"></i>À toi`, learn ? '<p class="why">Tu connais ce coup.</p>' : ply <= 1 ? `<p class="why"><b>${esc(nb(variantTitle(br).title))}</b></p>${variantTitle(br).sub ? `<p class="why">${esc(nb(variantTitle(br).sub))}</p>` : ''}` : '');
       return drillActions();
     }
     const key = br.notes[ply] ? ` <span class="tag">${br.type === 'punir' ? 'la punition' : br.type === 'bon' ? 'le bon coup' : 'coup clé'}</span>` : '', turn = `<i class="stm ${side}"></i>À toi de jouer`;
