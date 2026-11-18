@@ -15,6 +15,8 @@ import { refBranch } from '../core/drill';
 import { themeLabel } from '../core/wood';
 import { punishRate } from './exits';
 import { lineTitle } from '../core/names';
+import { passed } from '../core/path';
+import { isDue } from '../core/schedule';
 import { explorerSlot } from './explorer';
 
 const chev = icon('chev', 'chev');
@@ -25,6 +27,18 @@ const num = (i: number) => `${Math.floor(i / 2) + 1}${i % 2 ? '…' : '.'}`;
 export const gameUrl = (id: string, ply?: number, back?: string) => `#/partie/${encodeURIComponent(id)}${ply != null || back ? '?' + new URLSearchParams({ ...(ply != null ? { i: String(ply) } : {}), ...(back ? { r: back } : {}) }) : ''}`;
 
 /** Progrès : la part des erreurs adverses punies dans l'ouverture, sur 4 semaines, et vers les sorties d'ouverture. */
+/** Ce que tu sais : les variantes apprises dans tes cours, celles à revoir, ce que tu as travaillé cette semaine, tes dames. */
+export function knowBlock(): string {
+  const ids = Object.keys(BR).filter(id => BR[id].sys.statut !== 'plan'), st = store.state.br, now = Date.now();
+  const known = ids.filter(id => passed(st[id])), due = ids.filter(id => st[id]?.runs && isDue(st[id], now)), week = ids.filter(id => (st[id]?.last ?? 0) > now - 7 * 864e5);
+  const by = (side: 'w' | 'b') => { const all = ids.filter(id => BR[id].bloc.side === side); return `${all.filter(id => passed(st[id])).length} sur ${all.length}`; };
+  const courses = [...new Set(ids.filter(id => BR[id].sys.statut !== 'alternatif').map(id => BR[id].sys.id))], q = courses.filter(s => store.state.queens?.[s]).length;
+  return `<section class="grp know"><h2>Ce que tu sais</h2><div class="surf card padded">
+      <p class="kbig"><b>${known.length}</b> ${known.length > 1 ? 'variantes sues' : 'variante sue'} sur ${ids.length}</p>
+      <span class="prog" role="img" aria-label="${known.length} sur ${ids.length}"><b style="width:${ids.length ? Math.max(known.length ? 2 : 0, Math.round(100 * known.length / ids.length)) : 0}%"></b></span>
+      <p class="ksub">Avec les Blancs : ${by('w')} · avec les Noirs : ${by('b')}</p></div>
+    <div class="etiles"><div><b${due.length ? ' class="combo"' : ''}>${due.length}</b><span>à revoir</span></div><div><b>${week.length}</b><span>jouées cette semaine</span></div><div><b>${q}</b><span>${q > 1 ? 'dames' : 'dame'} sur ${courses.length} cours</span></div></div></section>`;
+}
 function punishTile() {
   const R = punishRate(); if (!R.now.e && !R.before.e) return '';
   const pc = (x: { e: number; p: number }) => (x.e ? Math.round((100 * x.p) / x.e) : null), a = pc(R.now), b = pc(R.before);
@@ -68,7 +82,7 @@ const article = (k: AxisKey) => (k === 'ouverture' || k === 'horloge' ? "l'" : k
 
 export function viewGames(root: HTMLElement) {
   if (!store.games.length) {
-    root.innerHTML = `<header class="pagehead"><h1>Progrès</h1></header><section class="empty"><p>Tes parties apparaissent ici après la première analyse de nuit.</p></section>`; return;
+    root.innerHTML = `<header class="pagehead"><h1>Progrès</h1></header>${knowBlock()}<section class="empty"><p>Tes parties apparaissent ici après la première analyse de nuit.</p></section>`; return;
   }
   const tcs = [...new Set(store.games.map(g => g.tc))].filter(t => TC[t]);
   // On ne propose une période que si elle laisse de côté des parties : sinon elle afficherait la même chose que « Tout ».
@@ -110,7 +124,7 @@ export function viewGames(root: HTMLElement) {
     th.length ? `<section class="surf card tile flist"><h2>Tes fautes les plus fréquentes</h2><div class="list">${th.map(([k, v]) => `<a class="rowi" href="#/wood?t=${encodeURIComponent(k)}&r=${encodeURIComponent('#/progres')}"><span class="body"><b>${esc(themeLabel(k))}</b><span class="prog"><b style="width:${Math.round((100 * v) / thMax)}%"></b></span></span><span class="dim">${v}</span><span class="go">Rejouer</span></a>`).join('')}</div></section>` : '',
   ];
   root.innerHTML = `
-    <header class="pagehead"><h1>Progrès</h1><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
+    <header class="pagehead"><h1>Progrès</h1></header>${knowBlock()}<header class="pagehead"><h2>Tes parties</h2><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
     ${periods.length > 1 ? seg('period', periods, period) : ''}
     ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
     ${list.length ? `

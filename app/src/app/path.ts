@@ -199,7 +199,8 @@ export function viewPath(root: HTMLElement) {
   const side = (getLS(SIDE_KEY) || up?.u.bloc.side || 'b') as 'w' | 'b';
   const mine = units.filter(u => u.bloc.side === side), playedU = mine.filter(played), others = mine.filter(u => !played(u));
   const row = (u: Unit) => { const n = ownLines(u.sys).length, k = knownN(u), due = dueIds(u).length;
-    return `<a class="rowi crow" href="${openingUrl(u)}"><span class="body"><span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${due ? `<span class="due">${due} à revoir</span>` : ''}${k} sur ${n}</small></span>
+    const reco = up?.u.sys.id === u.sys.id;
+    return `<a class="rowi crow${reco ? ' reco' : ''}" href="${openingUrl(u)}"><span class="body">${reco ? '<span class="rtag">Recommandé maintenant</span>' : ''}<span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${due ? `<span class="due">${due} à revoir</span>` : ''}${k} sur ${n}</small></span>
       <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}${icon('chev', 'chev')}</a>`; };
   const blocs = REP.blocs.filter(b => b.side === side);
   root.innerHTML = `<header class="pagehead"><h1>Ouvertures</h1></header>
