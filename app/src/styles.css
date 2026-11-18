@@ -911,6 +911,8 @@ button.quiet{border:0;background:none;width:100%}
 .cbub .lead{font-size:19px}
 .cbub .done .big{font:700 19px/1.2 var(--f-title)}
 .cbub .do{font-weight:700}
+.cnext{border:0;background:none;color:var(--accent-text);font:600 12px var(--f-text);padding:0 0 0 4px;white-space:nowrap}
+.cbub:has(.cnext){cursor:pointer}
 /* cours : pas de liste de coups pendant l'entraînement ; sur téléphone le coach est au-dessus de l'échiquier, dans une hauteur fixe pour que l'échiquier ne bouge pas */
 .trainer.cours .moves{display:none}
 .trainer.cours .tside{padding-top:6px}

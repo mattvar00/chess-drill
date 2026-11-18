@@ -100,13 +100,22 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   const nb = (t: string) => t.replace(/ ([:?!;])/g, '\u00a0$1');
   const bare = (note?: string) => { const t = (note ?? '').replace(/^[^:]*:\s*/, ''); return nb(t.charAt(0).toUpperCase() + t.slice(1)); };
   /** Ce que dit le coach avant un nouveau coup : pourquoi, puis quoi jouer, en mots. */
-  const lesson = (i: number) => `${br.notes[i] ? `<p>${esc(bare(br.notes[i]))}</p>` : ''}<p class="do">${esc(tell(moves[i]))}</p>`;
+  /** Coupe un texte en bulles d'environ 80 caractères, à la fin d'une phrase. */
+  const pages = (t: string, max = 80) => { const out: string[] = []; for (const s of t.split(/(?<=[.!?…])\s+/)) { if (out.length && (out[out.length - 1] + ' ' + s).length <= max) out[out.length - 1] += ' ' + s; else out.push(s); } return out; };
+  /** Le coach parle. Un texte long passe en plusieurs bulles : on touche la bulle pour la suite ; `tail` (la consigne) reste affiché. */
+  function talk(mood: Mood, head: string, text: string, tail = '', max = 80) {
+    const pg = text ? pages(text, max) : ['']; let k = 0;
+    const paint = () => { coach.innerHTML = coachSay(mood, `${k ? '' : head}${pg[k] ? `<p>${esc(pg[k])}${pg.length > 1 ? ` <button class="cnext" aria-label="Suite">${k + 1}/${pg.length}${k < pg.length - 1 ? ' ›' : ''}</button>` : ''}</p>` : ''}${tail}`);
+      if (pg.length > 1) $('.cbub', coach).onclick = () => { k = (k + 1) % pg.length; paint(); }; };
+    paint();
+  }
+  const doLine = (i: number) => `<p class="do">${esc(tell(moves[i]))}</p>`;
   function prompt() {
     if (ply >= moves.length) return end();
     if (course) {
       // une faute de l'adversaire porte sa marque sur sa case : « ? », « ?? », « ?! »
       const mk = br.marks?.[ply - 1]; if (mk && last) board.mark({ sq: last.to, text: mk, cls: mk === '??' ? 'blunder' : mk === '?!' ? 'inacc' : 'mistake', label: 'Erreur de ton adversaire' });
-      if (learn && ply >= trunk) coach.innerHTML = coachSay('talk', lesson(ply));   // un coup nouveau : le coach l'explique, sans rien arrêter
+      if (learn && ply >= trunk) talk('talk', '', bare(br.notes[ply]), doLine(ply));   // un coup nouveau : le coach l'explique, sans rien arrêter
       else say('you', `<i class="stm ${side}"></i>À toi`, learn ? '<p class="why">Tu connais ce coup.</p>' : ply <= 1 ? `<p class="why">${esc(nb(lineTitle(br.titre)))}</p>` : '');
       return drillActions();
     }
@@ -131,8 +140,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
       if (!learn) { miss(); if (S) S.combo = 0; } wrongHere++; show(); board.flash(m.to, 'bad');
       // une faute que tout le monde fait ici : le coach dit pourquoi elle est fausse ; sinon il rappelle l'idée du bon coup
       const why = br.wrong?.[ply]?.[uciOf(m)];
-      coach.innerHTML = why ? coachSay('oops', `<p class="lead bad">Erreur classique.</p><p>${esc(nb(why))}</p>${learn ? `<p class="do">${esc(tell(want))}</p>` : ''}`)
-        : coachSay('oops', `<p class="lead bad">Pas celui-là.</p>${learn ? lesson(ply) : br.notes[ply] ? `<p>${esc(bare(br.notes[ply]))}</p>` : ''}`);
+      talk('oops', `<p class="lead bad">${why ? 'Erreur classique.' : 'Pas celui-là.'}</p>`, why ? nb(why) : bare(br.notes[ply]), learn ? doLine(ply) : '');
     } else {
       miss(); wrongHere++; show(); board.flash(m.to, 'bad'); if (S) S.combo = 0;
       const plan = br.notes[ply]?.replace(/^[^:]*:\s*/, '');
@@ -158,7 +166,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   /** Fin des coups. Après la découverte, on rejoue la variante de mémoire, depuis le premier coup : c'est ce passage qui compte. */
   function end() {
     if (!learn) return finish(); locked = true; SFX.done();
-    coach.innerHTML = coachSay('happy', '<p class="lead">Variante vue.</p><p>Maintenant sans aide.</p>');
+    talk('happy', '<p class="lead">Variante vue.</p>', `${br.bilan ?? ''} Maintenant, rejoue-la sans aide.`.trim(), '', 120);
     actions.innerHTML = '<button class="btn pri" id="bGo">À toi, de mémoire</button>';
     $('#bGo', actions).onclick = () => {
       clearTimeout(timer); learn = false; game = new Chess(); last = null; ply = 0; steps.length = 0; errs = 0; wrongHere = 0; hintLevel = 0; lastNote = null; locked = false;
@@ -182,7 +190,8 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     const verdict = errs === 0 ? (isValid(s) ? `Ligne validée. Prochaine révision ${when}.` : 'Encore un passage sans faute et elle est validée.')
       : errs === 1 ? `Presque. Elle revient ${s.ivl ? when : 'tout de suite'}.` : "Le compteur repart à zéro : il faut deux passages sans faute d'affilée.";
     if (course) {
-      coach.innerHTML = coachSay(errs === 0 ? 'party' : 'idle', `<p class="lead">${errs === 0 ? 'Variante réussie' : plural(errs, 'erreur')}</p><p class="why">${errs ? 'Elle reviendra. ' : ''}${S ? (left ? `Encore ${left} dans ce chapitre.` : 'Chapitre terminé.') : ''}</p>`);
+      talk(errs === 0 ? 'party' : 'idle', `<p class="lead ${errs ? 'bad' : 'ok'}">${errs === 0 ? 'Variante validée' : `Pas encore validée : ${plural(errs, 'erreur')}`}</p>`,
+        `${br.bilan ?? ''}${errs ? ' Elle reviendra.' : ''}`.trim(), S ? `<p class="why">${left ? `Encore ${left} dans ce chapitre.` : 'Chapitre terminé.'}</p>` : '', 120);
       actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a>${S ? '' : `<a class="btn" href="${listUrl}">Liste</a>`}`;
     } else {
     coach.innerHTML = coachSay(errs === 0 ? 'party' : 'idle', `<div class="done"><p class="big">${errs === 0 ? 'Ligne sans faute' : plural(errs, 'erreur')}</p><p>${verdict}</p>${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`);
