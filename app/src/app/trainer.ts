@@ -121,7 +121,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
       if (learn && ply >= trunk) talk('talk', '', bare(br.notes[ply]), doLine(ply));   // un coup nouveau : le coach l'explique, sans rien arrêter
       // de mémoire : après un bon coup, le coach dit en une phrase ce que ce coup faisait, pendant que tu cherches le suivant
       else if (ply >= 2 && steps[ply - 2] === 'ok' && br.notes[ply - 2]) talk('happy', `<p class="lead ok">${BRAVO[(ply + id.length) % BRAVO.length]}, ${esc(moves[ply - 2].san)} !</p>`, bare(br.notes[ply - 2]));
-      else say('you', `<i class="stm ${side}"></i>À toi`, learn ? '<p class="why">Tu connais ce coup.</p>' : ply <= 1 ? `<p class="why">${esc(nb(lineTitle(br.titre)))}</p>` : '');
+      else say('you', `<i class="stm ${side}"></i>À toi`, learn ? '<p class="why">Tu connais ce coup.</p>' : ply <= 1 ? `<p class="why">${esc(nb(lineTitle(br.titre)))}</p>${br.nom ? `<p class="why">${esc(br.nom)}</p>` : ''}` : '');
       return drillActions();
     }
     const key = br.notes[ply] ? ` <span class="tag">${br.type === 'punir' ? 'la punition' : br.type === 'bon' ? 'le bon coup' : 'coup clé'}</span>` : '', turn = `<i class="stm ${side}"></i>À toi de jouer`;
@@ -201,7 +201,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
       talk(errs === 0 ? 'party' : 'idle', `<p class="lead ${errs ? 'bad' : 'ok'}">${errs === 0 ? 'Variante validée' : `Pas encore validée : ${plural(errs, 'erreur')}`}</p>`,
         `${br.bilan ?? ''}${errs ? ' Elle reviendra.' : ''}`.trim(), `${br.suite ? `<p class="suite"><b>Et après :</b> ${esc(br.suite)}</p>` : ''}${S ? `<p class="why">${left ? `Encore ${left} dans ce chapitre.` : allOk ? 'Chapitre terminé.' : ''}</p>` : ''}`, 120);
       // toujours le même écran entre deux variantes : où tu en es dans le chapitre, ce qui vient, et le plan s'il y en a un
-      const chap = br.ch ? sys.branches.filter(b => b.ch === br.ch) : sys.branches.filter(b => !b.ch && b.type), nid = S?.ordered ? remaining()[0] : null, stop = S?.exit ?? listUrl;
+      const chap = br.ch ? sys.branches.filter(b => b.ch === br.ch && !b.plus === !br.plus) : sys.branches.filter(b => !b.ch && b.type), nid = S?.ordered ? remaining()[0] : null, stop = S?.exit ?? listUrl;
       const info = `<p class="cinfo"><span class="cdots" aria-hidden="true">${chap.map(b => `<i class="${passed(store.state.br[b.id]) ? 'ok' : ''}${b.id === id ? ' now' : ''}"></i>`).join('')}</span><span>${esc(chName)} : ${chap.filter(b => passed(store.state.br[b.id])).length} sur ${chap.length}</span>${nid ? `<span class="nx">Ensuite : ${esc(lineTitle(BR[nid].br.titre))}</span>` : ''}</p>`;
       const planBtn = !errs && br.role === 'theorie' && plansFor(sys.id).length ? `<a class="btn" href="#/plans?o=${sys.id}&r=${encodeURIComponent(next ?? stop)}">Voir le plan</a>` : '';
       actions.innerHTML = `${info}${next ? `<a class="btn pri" href="${next}">Suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? (allOk ? 'Chapitre terminé' : 'Voir où j\'en suis') : 'Terminer'}</a>` : `<a class="btn pri" href="${stop}">Retour au cours</a>`}${errs ? `<a class="btn" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a>` : planBtn}${next ? `<a class="btn" href="${stop}">Arrêter là</a>` : ''}`;

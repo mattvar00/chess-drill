@@ -49,7 +49,7 @@ export function unitOf(bloc: Bloc, sys: System, st: Record<string, BranchState |
   // Les lignes du répertoire de base sont coupées en 6 cases au plus. Les « Bon coup » tirés de tes parties forment leurs propres
   // cases de 3, ajoutées à la fin : en ajouter un ne déplace jamais une case déjà jouée. Les punitions n'entrent pas dans le chemin.
   // Un cours (lignes rangées par chapitre) : une case par chapitre, dans l'ordre du cours. Ajouter une variante à un chapitre ne déplace rien.
-  const ids = sys.branches.map(b => b.id), baseBr = sys.branches.filter(b => !b.type), extra = sys.branches.filter(b => b.type).map(b => b.id);
+  const ids = sys.branches.map(b => b.id), baseBr = sys.branches.filter(b => !b.type && !b.plus), extra = sys.branches.filter(b => b.type).map(b => b.id);
   const chapters = chaptersOf(baseBr);
   const parts: { ids: string[]; name?: string }[] = [
     ...(chapters ? chapters.map(c => ({ ids: c.lines.map(b => b.id), name: c.name })) : chunk(baseBr.map(b => b.id), Math.min(6, baseBr.length)).map(p => ({ ids: p }))),

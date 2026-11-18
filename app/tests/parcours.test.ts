@@ -152,8 +152,11 @@ describe('cours : chapitres et méthode', () => {
   const course = c5.branches.filter(b => b.ch), mv = (id: string) => c5.branches.find(b => b.id === id)!.moves;
   it('une case par chapitre, dans l\'ordre du cours, puis les lignes tirées des parties', () => {
     const u = unitOf(bloc, c5, {});
-    expect(u.lessons.map(l => l.name)).toEqual([...chaptersOf(course)!.map(c => c.name), 'Tirées de tes parties']);
-    expect(u.lessons[2].ids).toEqual(['C5b5', 'C5b6', 'C5b4', 'C5b1', 'C5b3', 'C5b7', 'C5b2']);
+    // le chemin ne garde que l'essentiel : les réponses les plus jouées à ton niveau, de la plus fréquente à la plus rare
+    expect(u.lessons.map(l => l.name)).toEqual([...chaptersOf(course.filter(b => !b.plus))!.map(c => c.name), 'Tirées de tes parties']);
+    const sh = u.lessons.slice(0, -1).map(l => c5.shares![l.name!]); expect(sh).toEqual([...sh].sort((x, y) => y - x));
+    expect(u.lessons.length).toBeLessThanOrEqual(6); expect(course.filter(b => !b.plus).length).toBeLessThanOrEqual(16);
+    expect(u.lessons[2].ids).toEqual(['C5b6', 'C5b10', 'C5b3', 'C5b2']);
   });
   it('chaque variante du cours a un rôle, une explication, des coups légaux, finit sur un coup à soi, et explique chacun de tes coups', () => {
     expect(course.length).toBeGreaterThanOrEqual(19);
@@ -165,9 +168,8 @@ describe('cours : chapitres et méthode', () => {
       for (const k of Object.keys(b.notes)) expect(+k % 2, `${b.id} note ${k}`).toBe(0);
     }
   });
-  it('dans chaque chapitre, on va de la variante la plus courte à la plus longue, et le cours s\'ouvre sur un piège', () => {
+  it('dans chaque chapitre, on va de la variante la plus courte à la plus longue, ', () => {
     for (const c of chaptersOf(course)!) expect(c.lines.map(b => b.moves.length), c.name).toEqual(c.lines.map(b => b.moves.length).sort((x, y) => x - y));
-    expect(course[0].role).toBe('erreur');
   });
   it('tes fautes classiques : sur un coup à toi, un coup légal qui n\'est pas celui du cours, expliqué en court', () => {
     let n = 0;

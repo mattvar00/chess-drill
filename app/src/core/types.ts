@@ -44,8 +44,14 @@ export interface Branch { id: string; titre: string; moves: RepMove[]; notes: Re
   /** `suite` : le plan une fois la variante jouée (« Et après »). `model` : une partie de maître à regarder, pas une variante à apprendre. */
   suite?: string; model?: boolean;
   /** `pop` : nombre de parties Lichess de joueurs entre 1600 et 2000 qui passent par la variante, pour dire lesquelles comptent le plus. */
-  pop?: number }
-export interface System { id: string; titre: string; statut: string; resume: string; branches: Branch[]; modeles?: Branch[] }
+  pop?: number;
+  /** `plus` : variante rare, hors du chemin : elle se travaille après la dame (« Pour aller plus loin »). */
+  plus?: boolean;
+  /** `nom` : le nom officiel de la variante, en français (d'après lichess-org/chess-openings, CC0). */
+  nom?: string }
+export interface System { id: string; titre: string; statut: string; resume: string; branches: Branch[]; modeles?: Branch[];
+  /** Part des parties (à ton niveau) où l'adversaire choisit chaque réponse : nom du chapitre → fraction. */
+  shares?: Record<string, number> }
 export interface Bloc { id: string; titre: string; sous: string; side: Color; systemes: System[] }
 export interface Repertoire { version: number; blocs: Bloc[]; faults: unknown[] }
 

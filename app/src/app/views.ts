@@ -7,7 +7,7 @@ import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
 import { bindPath, devRow, featured, nextUp, pathBlock, runUp, shortName, unitFor } from './path';
 import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
-import { lineName, popBars, popLabel, roleLabel, typeLabel } from '../core/names';
+import { lineName, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
@@ -133,23 +133,21 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   const chapters = chaptersOf(own.filter(b => !b.type)), rest = own.filter(b => b.type);
   const groups: { name: string; lines: Branch[] }[] = chapters ? [...chapters, ...(rest.length ? [{ name: 'Tirées de tes parties', lines: rest }] : [])] : [{ name: '', lines: own }];
   const row = (br: Branch) => { const d = store.devs[br.id], nm = lineName(br.titre);
-    return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${popBars(br.pop)}${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : br.role ? `<span class="ltype ${br.role}">${roleLabel(br.role)}</span>` : ''}${esc(nm.title)}</b><small>${nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; };
-  // les variantes qui comptent le plus : celles que les maîtres jouent le plus, et celles que tu rencontres toi-même
-  const meet = meetCounts(store.games), imp = (b: Branch) => Math.log10((b.pop ?? 0) + 1) + 1.5 * Math.min(meet[b.id] || 0, 3);
-  const top = own.filter(b => (b.pop ?? 0) >= 5000 || meet[b.id]).sort((a, b) => imp(b) - imp(a)).slice(0, 5);
-  const topRow = (b: Branch) => `<a class="rowi" href="${lineUrl(b.id, 'explore')}"><span class="body"><b>${popBars(b.pop)}${esc(lineName(b.titre).title)}</b><small>${[popLabel(b.pop), meet[b.id] ? `${meet[b.id]} fois dans tes parties` : '', lineStatus(b)].filter(Boolean).join(' · ')}</small></span>${chev}</a>`;
+    return `<a class="rowi" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${popBars(br.pop)}${br.type ? `<span class="ltype ${br.type}">${typeLabel(br.type)}</span>` : br.role ? `<span class="ltype ${br.role}">${roleLabel(br.role)}</span>` : ''}${esc(nm.title)}</b><small>${br.nom ? `${esc(shortNom(br.nom))} · ` : nm.detail ? `${esc(nm.detail)} · ` : ''}${lineStatus(br)}${d ? `, <em class="warn">${plural(d, 'sortie')} en partie</em>` : ''}</small></span>${isValid(st(br.id)) ? icon('check', 'tick') : ''}${chev}</a>`; };
+  const plusIds = own.filter(b => b.plus).map(b => b.id), plusLeft = plusIds.filter(id => !store.state.br[id]?.clean);
   root.innerHTML = `
     ${pathBlock(u)}
-    ${top.length >= 2 ? `<section class="grp"><h2>Les plus importantes</h2><div class="surf card list">${top.map(topRow).join('')}</div><button class="btn block" id="bTop">Travailler ces ${top.length} variantes</button></section>` : ''}
-    ${plans.length ? `<a class="surf card lk1" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Les plans de cette ouverture</b><span class="dim">${plans.length}</span>${chev}</a>` : ''}
     ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
+    ${plusIds.length ? (u.promoted ? `<button class="surf card lk1" id="bPlus"><b>Pour aller plus loin</b><span class="dim">${plusLeft.length ? plural(plusLeft.length, 'variante rare', 'variantes rares') : 'tout est su'}</span>${chev}</button>` : `<p class="pnote plusnote">Pour aller plus loin : ${plural(plusIds.length, 'variante rare', 'variantes rares')}, après la dame.</p>`) : ''}
+    <details class="others allv morec"><summary>Plus : plans, variantes, tes parties</summary>
+    ${plans.length ? `<a class="surf card lk1" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Les plans de cette ouverture</b><span class="dim">${plans.length}</span>${chev}</a>` : ''}
     ${(sys.modeles ?? []).map(m => `<a class="surf card lk1" href="${lineUrl(m.id, 'explore')}"><b>Partie modèle</b><span class="dim">${esc(m.titre)}</span>${chev}</a>`).join('')}
-    <details class="others allv"><summary>Toutes les variantes (${own.length})</summary><p class="pnote">${esc(sys.resume)}</p>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name)}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
-      <button class="quiet" id="bDrill">Rejouer les ${own.length} variantes à la suite</button></details>
     ${nFaults ? `<a class="surf card lk1" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Tes fautes dans cette ouverture</b><span class="dim">${nFaults}</span>${chev}</a>` : ''}
-    ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2>${inYourGames(sys)}<div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}`;
+    <h3 class="chap">Toutes les variantes (${own.length})</h3><p class="pnote">${esc(sys.resume)}</p>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name)}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
+      <button class="quiet" id="bDrill">Rejouer les ${own.length} variantes à la suite</button>
+    ${played.length ? `<section class="grp"><h2>Tes dernières parties dans cette ouverture</h2>${inYourGames(sys)}<div class="surf card list">${played.slice(0, 5).map(g => gameRow(g, back)).join('')}</div></section>` : ''}</details>`;
   $('#bDrill', root).addEventListener('click', () => go(sys.titre, own.map(b => b.id), back));
-  root.querySelector('#bTop')?.addEventListener('click', () => go(`${shortName(sys.titre)} : les plus importantes`, top.map(b => b.id), back));
+  root.querySelector('#bPlus')?.addEventListener('click', () => go(`${shortName(sys.titre)} : pour aller plus loin`, plusLeft.length ? plusLeft : plusIds, back));
   bindPath(root, u);
 
 }

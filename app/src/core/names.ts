@@ -40,3 +40,6 @@ export const popLevel = (pop?: number): 0 | 1 | 2 | 3 => pop == null ? 0 : pop >
 export const popLabel = (pop?: number) => ['', 'rare à ton niveau', 'jouée à ton niveau', 'très jouée à ton niveau'][popLevel(pop)];
 /** Trois petites barres, comme un signal : plus il y en a de pleines, plus la variante est jouée. */
 export const popBars = (pop?: number) => { const l = popLevel(pop); return l ? `<span class="pop p${l}" role="img" aria-label="${popLabel(pop)}" title="${popLabel(pop)}"><i></i><i></i><i></i></span>` : ''; };
+
+/** Le nom d'une variante sans celui de sa famille (on est déjà dans le cours) : « Slave, variante d'échange » → « Variante d'échange ». */
+export const shortNom = (nom: string) => { const p = nom.split(', '), t = (p.length > 1 ? p.slice(1).slice(-2) : p).join(', '); return t.charAt(0).toUpperCase() + t.slice(1); };

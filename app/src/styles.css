@@ -1061,3 +1061,15 @@ body.fit .trainer.cours .tboard .board{width:min(100%,calc(100dvh - var(--top) -
 .pop i{width:3px;border-radius:1px;background:var(--c-pend)}
 .pop i:nth-child(1){height:5px}.pop i:nth-child(2){height:8px}.pop i:nth-child(3){height:12px}
 .pop.p1 i:nth-child(1),.pop.p2 i:nth-child(-n+2),.pop.p3 i{background:var(--c-ok)}
+
+/* Ouvertures : le cours en cours en haut (un bouton pour en changer), puis son chemin */
+.cpick{display:flex;align-items:center;gap:12px;padding:10px 14px 10px 10px;border-radius:18px;text-decoration:none;color:var(--ink);margin-bottom:6px}
+.cpick .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.cpick b{font:700 19px/1.2 var(--f-title)}.cpick small{font-size:13px;color:var(--mute)}
+.mini.cthumb{width:52px;height:52px;border-radius:8px}
+button.rowi.crow{width:100%;border:0;background:none;text-align:left;font:inherit;color:inherit;gap:12px}
+.pickhead{display:flex;align-items:center;justify-content:space-between;gap:12px}.pickhead .btn{flex:none;padding:8px 14px}
+.pbf{margin:0;font-size:13px;font-weight:600;color:var(--accent-text)}
+.plusnote{margin:10px 2px 0}.morec>summary{font-weight:600}
+
+.pagehead.pickhead{flex-direction:row;align-items:center;justify-content:space-between;text-align:left}
+.pbo{margin:-2px 0 0;font-size:13px;color:var(--mute)}

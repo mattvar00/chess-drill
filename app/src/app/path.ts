@@ -11,7 +11,7 @@ import { punishLines, punishRow } from './exits';
 import { scanExits } from '../core/scan';
 import { myWp } from '../core/stats';
 import type { Game } from '../core/types';
-import { lineName, lineTitle, popBars, roleLabel, typeLabel } from '../core/names';
+import { lineName, lineTitle, popBars, roleLabel, shortNom, typeLabel } from '../core/names';
 import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
 import { isDue } from '../core/schedule';
@@ -69,7 +69,10 @@ const STATE: Record<Lesson['state'], string> = { done: 'réussie', crack: 'à re
 function bubble(u: Unit, L: Lesson, i: number, x: number) {
   const n = u.lessons.length, last = i === n - 1, st = store.state.br;
   const lineMark = (id: string) => { const s = st[id]; return !s?.runs ? ['new', 'nouvelle'] : s.clean >= 1 && isDue(s) ? ['rev', 'à revoir'] : s.clean >= 1 ? ['ok', 'sue'] : ['new', 'à finir']; };
-  const lines = L.ids.slice(0, L.name ? 8 : 4).map(id => { const [c, t] = lineMark(id); const nm = lineName(BR[id].br.titre); const ty = BR[id].br.type, ro = BR[id].br.role; return `<li><span class="lm ${c}">${t}</span><span>${popBars(BR[id].br.pop)}${ty ? `<span class="ltype ${ty}">${typeLabel(ty)}</span>` : ro ? `<span class="ltype ${ro}">${roleLabel(ro)}</span>` : ''}${esc(nm.title)}${nm.detail ? `<small>${esc(nm.detail)}</small>` : ''}</span></li>`; }).join('') + (L.ids.length > (L.name ? 8 : 4) ? `<li class="more">et ${plural(L.ids.length - (L.name ? 8 : 4), 'autre ligne', 'autres lignes')}</li>` : '');
+  // le nom officiel que partagent les variantes de la case se dit une fois, sous son titre ; une variante ne redit le sien que s'il diffère
+  const noms = new Set(L.ids.map(id => BR[id].br.nom ?? '')), common = noms.size === 1 ? [...noms][0] : '';
+  const lines = L.ids.slice(0, L.name ? 8 : 4).map(id => { const [c, t] = lineMark(id); const nm = lineName(BR[id].br.titre); const ty = BR[id].br.type, ro = BR[id].br.role; return `<li><span class="lm ${c}">${t}</span><span>${popBars(BR[id].br.pop)}${ty ? `<span class="ltype ${ty}">${typeLabel(ty)}</span>` : ro ? `<span class="ltype ${ro}">${roleLabel(ro)}</span>` : ''}${esc(nm.title)}${BR[id].br.nom && BR[id].br.nom !== common ? `<small>${esc(shortNom(BR[id].br.nom!))}</small>` : nm.detail ? `<small>${esc(nm.detail)}</small>` : ''}</span></li>`; }).join('') + (L.ids.length > (L.name ? 8 : 4) ? `<li class="more">et ${plural(L.ids.length - (L.name ? 8 : 4), 'autre ligne', 'autres lignes')}</li>` : '');
+  const share = L.name ? u.sys.shares?.[L.name] : undefined;
   const rest = lessonIds(L).length, partial = L.state === 'cur' && rest < L.ids.length;
   const why = L.state === 'cur' ? (L.name ? `${plural(L.ids.length, 'variante')}, de la plus courte à la plus longue : le coach t'explique chaque coup, puis tu la rejoues de mémoire.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`
       : `Joue ces ${plural(L.ids.length, 'ligne')} une fois chacune sans faute pour avancer le pion.${partial ? ' Celles déjà sues ne sont pas à refaire.' : ''}`)
@@ -80,10 +83,14 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
     : L.state === 'crack' ? `<button class="btn pri" data-go="${i}">Revoir maintenant</button>`
     : L.state === 'done' ? `<button class="btn" data-go="${i}">Rejouer ces lignes</button>` : '';
   return `<div class="pbubble ${L.state}" style="--x:${x}%" role="region" aria-label="Case ${i + 1} sur ${n}">
-    <p class="pbh"><b>Case ${i + 1} sur ${n}</b><span class="pst ${L.state}">${STATE[L.state]}</span></p>${L.name ? `<p class="pbn">${esc(L.name)}</p>` : ''}
-    <p class="pbw">${why}</p><ul class="plines">${lines}</ul>${act}</div>`;
+    <p class="pbh"><b>Case ${i + 1} sur ${n}</b><span class="pst ${L.state}">${STATE[L.state]}</span></p>${L.name ? `<p class="pbn">${esc(L.name)}</p>` : ''}${common ? `<p class="pbo">${esc(common)}</p>` : ''}
+    ${share ? `<p class="pbf">Tu la verras environ 1 partie sur ${Math.max(2, Math.round(1 / share))}. ${trapsOf(L)}.</p>` : ''}<p class="pbw">${why}</p><ul class="plines">${lines}</ul>${act}</div>`;
 }
 /** Nom court d'un chapitre pour le chemin : ce qui précède la virgule, les deux-points ou la parenthèse (le nom complet est dans la bulle). */
+/** Sur le chemin : un chapitre nommé par ses coups (« 7.Bc4 Nb6… ») prend le nom officiel que partagent ses variantes, quand il y en a un. */
+const chapLabel = (L: Lesson) => { const n = L.name!; if (!/^\d|^…/.test(n)) return shortChap(n);
+  const c = new Map<string, number>(); for (const id of L.ids) { const x = BR[id].br.nom; if (x) c.set(x, (c.get(x) ?? 0) + 1); }
+  const best = [...c].sort((a, b) => b[1] - a[1])[0]; return best && best[1] * 2 >= L.ids.length ? shortNom(best[0]) : shortChap(n); };
 const shortChap = (n: string) => { const s = n.split(/,| : | \(/)[0].trim(); return s.length >= 3 ? s : n; };
 /** Ce que contient une case, en trois mots : combien de pièges à punir, combien de variantes de théorie. */
 const trapsOf = (L: Lesson) => { const t = L.ids.filter(id => BR[id].br.role === 'erreur').length, th = L.ids.filter(id => BR[id].br.role === 'theorie').length;
@@ -94,7 +101,7 @@ function step(u: Unit, L: Lesson, i: number, sel: number) {
   const inner = cur ? `<img src="${pieceSrc('p')}" alt="">` : last ? `<img class="${u.promoted ? '' : 'qghost'}" src="${pieceSrc('q')}" alt="">` : L.state === 'lock' ? `<span class="pn">${i + 1}</span>` : icon('check');
   return `<div class="prow${on ? ' issel' : ''}${cur ? ' iscur' : ''}${last ? ' isgoal' : ''}">
     <button class="psq ${L.state}${last ? ' goal' : ''}${last && u.promoted ? ' won' : ''}${on ? ' sel' : ''}" style="left:${x}%" data-i="${i}" aria-expanded="${on}" aria-label="Case ${i + 1} sur ${u.lessons.length}, ${STATE[L.state]}">${inner}${L.state === 'crack' ? '<i class="dot"></i>' : ''}</button>
-    ${L.name && !on ? `<span class="plab ${x <= 50 ? 'r' : 'l'}" style="${x <= 50 ? `left:calc(${x}% + 46px);max-width:calc(${100 - x}% - 50px)` : `right:calc(${100 - x}% + 46px);max-width:calc(${x}% - 50px)`}"><b>${esc(shortChap(L.name))}</b><small>${trapsOf(L)}</small></span>` : ''}
+    ${L.name && !on ? `<span class="plab ${x <= 50 ? 'r' : 'l'}" style="${x <= 50 ? `left:calc(${x}% + 46px);max-width:calc(${100 - x}% - 50px)` : `right:calc(${100 - x}% + 46px);max-width:calc(${x}% - 50px)`}"><b>${esc(chapLabel(L))}</b></span>` : ''}
     ${on ? bubble(u, L, i, x) : ''}</div>`;
 }
 const legend = `<p class="plegend"><span><i class="lg done"></i>réussie</span><span><i class="lg crack"></i>à revoir</span><span><i class="lg cur"></i>le pion : en cours</span><span><i class="lg lock"></i>à venir</span></p>`;
@@ -113,17 +120,19 @@ const where = (u: Unit) => { const c = caseOf(u), fresh = u.lessons.some(l => l.
 
 /** Les variantes à revoir d'un cours (déjà jouées, et dues). */
 const dueIds = (u: Unit) => ownLines(u.sys).map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
-const knownN = (u: Unit) => ownLines(u.sys).filter(b => passed(store.state.br[b.id])).length;
+/** Les variantes du chemin (l'essentiel) : celles rangées dans « Pour aller plus loin » n'entrent pas dans le compte. */
+const pathLines = (u: Unit) => ownLines(u.sys).filter(b => !b.plus);
+const knownN = (u: Unit) => pathLines(u).filter(b => passed(store.state.br[b.id])).length;
 /**
  * La page d'un cours : où tu en es, « Apprendre » (la suite du chapitre en cours) et « Réviser » (ce qui est à revoir),
  * puis le chemin, une case par chapitre avec son nom ; toucher une case ouvre sa bulle. `bindPath` branche les gestes.
  */
 export function pathBlock(u: Unit): string {
-  const cur = u.lessons.findIndex(l => l.state === 'cur'), n = ownLines(u.sys).length, k = knownN(u), due = dueIds(u).length;
+  const cur = u.lessons.findIndex(l => l.state === 'cur'), n = pathLines(u).length, k = knownN(u), due = dueIds(u).length;
   return `<section class="chead${u.promoted ? ' won' : ''}" style="--fam:${familyColor(u.bloc.id)}">
       <span class="prog cbar" role="img" aria-label="${k} sur ${n}"><b style="width:${n ? Math.max(k ? 3 : 0, Math.round(100 * k / n)) : 0}%"></b></span>
       <p class="cprog"><b>${k} ${k > 1 ? 'variantes sues' : 'variante sue'} sur ${n}</b>${due ? `<span class="due">${due} à revoir</span>` : ''}${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</p>
-      <div class="cbtns">${cur >= 0 ? `<button class="btn pri" data-go="${cur}">Apprendre</button>` : ''}${due || k || cur < 0 ? `<button class="btn${cur >= 0 ? '' : ' pri'}" id="bRev">${due ? `Réviser (${due})` : 'Tout rejouer'}</button>` : ''}</div></section>
+      <div class="cbtns">${cur >= 0 ? `<button class="btn pri" data-go="${cur}">Continuer</button>` : ''}${due || k || cur < 0 ? `<button class="btn${cur >= 0 ? '' : ' pri'}" id="bRev">${due ? `Réviser (${due})` : 'Tout rejouer'}</button>` : ''}</div></section>
     <div class="pboard"><section class="psec"><div class="ppath" data-sys="${u.sys.id}">${pathCells(u)}</div></section></div>`;
 }
 export function bindPath(root: HTMLElement, u: Unit) {
@@ -214,37 +223,45 @@ function otherUps(skip: string): { u: Unit; why: string }[] {
   return recommend(factsOf(allUnits()), 6).todo.filter(r => r.f.u.sys.id !== skip).slice(0, 2).map(r => ({ u: r.f.u, why: WHY[r.kind](r.f) }));
 }
 /** Ouvertures : la liste des cours, rangés par couleur puis par premier coup adverse, avec l'avancement de chacun. Rien d'autre. */
-export function viewPath(root: HTMLElement) {
-  const units = allUnits(), up = nextUp(), alts = up ? otherUps(up.u.sys.id) : [];
-  const side = (getLS(SIDE_KEY) || up?.u.bloc.side || 'b') as 'w' | 'b';
-  const mine = units.filter(u => u.bloc.side === side), playedU = mine.filter(played), others = mine.filter(u => !played(u));
-  const row = (u: Unit) => { const n = ownLines(u.sys).length, k = knownN(u), due = dueIds(u).length;
-    const reco = up?.u.sys.id === u.sys.id;
-    return `<a class="rowi crow${reco ? ' reco' : ''}" style="--fam:${familyColor(u.bloc.id)}" href="${openingUrl(u)}"><span class="body">${reco ? '<span class="rtag">Recommandé maintenant</span>' : ''}<span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${due ? `<span class="due">${due} à revoir</span>` : ''}${k} sur ${n}</small></span>
-      <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}${icon('chev', 'chev')}</a>`; };
-  const blocs = REP.blocs.filter(b => b.side === side);
-  root.innerHTML = `<header class="pagehead"><h1>Ouvertures</h1></header>
-    ${up ? featured(up) : ''}
-    ${alts.length ? `<section class="grp"><h2>Ou bien</h2><div class="surf card list">${alts.map(a => `<a class="rowi arow" style="--fam:${familyColor(a.u.bloc.id)}" href="${openingUrl(a.u)}"><i class="famdot" aria-hidden="true"></i><span class="body"><b>${esc(shortName(a.u.sys.titre))}</b><small>${a.why}</small></span>${icon('chev', 'chev')}</a>`).join('')}</div></section>` : ''}
-    <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture ou une variante</label><input id="qRep" type="search" placeholder="Chercher : Londres, Alapin, Slave…" autocomplete="off"></div>
-    <div id="qRes"></div>
-    <div id="olist"><div class="seg" role="group" aria-label="Couleur"><button type="button" data-side="b" aria-pressed="${side === 'b'}">Avec les Noirs</button><button type="button" data-side="w" aria-pressed="${side === 'w'}">Avec les Blancs</button></div>
-    ${blocs.map(b => { const us = playedU.filter(u => u.bloc.id === b.id); return us.length ? `<section class="grp fam" style="--fam:${familyColor(b.id)}"><h2><i class="famdot" aria-hidden="true"></i>${esc(b.titre)}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; }).join('')}
-    ${others.length ? `<details class="others"><summary>Ouvertures de rechange (${others.length})</summary><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
-    <a class="quiet" href="#/explorer?r=${encodeURIComponent('#/rep')}">Explorer une position</a></div>`;
-  root.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.onclick = () => { setLS(SIDE_KEY, b.dataset.side!); const y = window.scrollY; viewPath(root); window.scrollTo(0, y); });
-  if (up) root.querySelector('#bUp')?.addEventListener('click', () => runUp(up));
-  const q = $<HTMLInputElement>('#qRep', root), res = $('#qRes', root), list = $('#olist', root);
-  const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  q.addEventListener('input', () => {
-    const t = norm(q.value.trim()); list.hidden = !!t; if (!t) { res.innerHTML = ''; return; }
-    const us = units.filter(u => norm(u.sys.titre + ' ' + u.bloc.titre).includes(t));
-    const ls = Object.values(BR).filter(r => r.sys.statut !== 'plan' && norm(r.br.titre + ' ' + (r.br.ch ?? '')).includes(t)).slice(0, 12);
-    res.innerHTML = us.length || ls.length ? `${us.length ? `<section class="grp"><h2>Cours</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''}
-      ${ls.length ? `<section class="grp"><h2>Variantes</h2><div class="surf card list">${ls.map(r => { const nm = lineName(r.br.titre); return `<a class="rowi" href="${lineUrl(r.br.id, 'explore')}"><span class="body"><b>${esc(nm.title)}</b><small>${esc(shortName(r.sys.titre))}${nm.detail ? ` · ${esc(nm.detail)}` : ''}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}`
-      : '<p class="pnote">Rien trouvé. Essaie un autre nom.</p>';
-  });
+/** La vignette d'un cours : la position où ses variantes se séparent, vue de ton côté. */
+function courseBoard(u: Unit): string {
+  const ls = ownLines(u.sys).map(b => b.moves); let k = ls.length ? ls[0].length : 0;
+  for (const m of ls) { let j = 0; while (j < k && j < m.length && m[j].uci === ls[0][j].uci) j++; k = j; }
+  const g = new Chess(); for (let i = 0; i < k; i++) if (!tryMove(g, uciToObj(ls[0][i].uci))) break;
+  return miniBoard(g, u.bloc.side).replace('class="mini"', 'class="mini cthumb"');
 }
+/**
+ * L'onglet Ouvertures tombe tout de suite sur le chemin du cours en cours : rien à chercher. Le nom du cours, en haut,
+ * est un bouton : il ouvre « Tes cours » (#/rep/choisir) pour en changer.
+ */
+export function viewPath(root: HTMLElement) {
+  const units = allUnits(), cur = units.find(u => u.sys.id === getLS(LAST_KEY)) ?? nextUp()?.u ?? currentUnit(units);
+  if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur);
+  root.innerHTML = `<a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'} · changer de cours</small></span>${icon('chev', 'chev')}</a>
+    ${pathBlock(cur)}
+    <a class="quiet" href="${openingUrl(cur)}">Plus sur ce cours</a>`;
+  bindPath(root, cur);
+}
+/** « Tes cours » : ceux que tu rencontres ou que tu as commencés, Blancs puis Noirs ; les autres sont repliés. */
+function pickCourse(root: HTMLElement, units: Unit[], cur: Unit) {
+  const seen = (u: Unit) => u.sys.id === cur.sys.id || (played(u) && (u.meet > 0 || knownN(u) > 0));
+  const mine = units.filter(seen).length >= 4 ? seen : (u: Unit) => seen(u) || played(u);   // pas encore de parties : on montre tout ton répertoire
+  const row = (u: Unit) => { const n = pathLines(u).length, k = knownN(u), on = u.sys.id === cur.sys.id;
+    return `<button type="button" class="rowi crow" data-pick="${u.sys.id}" data-name="${esc(norm(u.sys.titre))}" style="--fam:${familyColor(u.bloc.id)}">${courseBoard(u)}<span class="body"><span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${on ? 'en cours' : `${k} sur ${n}`}</small></span>
+      <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</button>`; };
+  const sec = (side: 'w' | 'b', title: string) => { const us = units.filter(u => u.bloc.side === side && mine(u)); return us.length ? `<section class="grp"><h2>${title}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; };
+  const others = units.filter(u => !mine(u));
+  root.innerHTML = `<header class="pagehead pickhead"><h1>Tes cours</h1><a class="btn" href="#/rep">Fermer</a></header>
+    <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture</label><input id="qRep" type="search" placeholder="Chercher : Londres, Alapin, Slave…" autocomplete="off"></div>
+    ${sec('w', 'Avec les Blancs')}${sec('b', 'Avec les Noirs')}
+    ${others.length ? `<details class="others"><summary>Autres ouvertures (${others.length})</summary><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
+    <a class="quiet" href="#/explorer?r=${encodeURIComponent('#/rep')}">Explorer une position</a>`;
+  root.addEventListener('click', e => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-pick]'); if (!b) return; setLS(LAST_KEY, b.dataset.pick!); location.hash = '#/rep'; });
+  const q = $<HTMLInputElement>('#qRep', root);
+  q.addEventListener('input', () => { const t = norm(q.value.trim()); const det = root.querySelector<HTMLDetailsElement>('details.others'); if (det && t) det.open = true;
+    root.querySelectorAll<HTMLElement>('[data-pick]').forEach(r => { r.hidden = !!t && !r.dataset.name!.includes(t); }); });
+}
+const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 /** Une ligne quittée en partie : contre qui, ce que tu as joué, ce que dit ta ligne. Mène au drill de cette ligne. */
 export function devRow(g: import('../core/types').Game) {
