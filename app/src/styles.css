@@ -73,7 +73,7 @@
   --c-soft:var(--chip-bg); --c-soft-ink:var(--chip-ink);
 }
 /* contexte « carte » */
-.surf{
+.surf,.cbub,.pbubble,.etiles div{
   --c-ink:var(--ink); --c-mute:var(--mute); --c-ok:var(--ok); --c-bad:var(--bad); --c-link:var(--accent-text);
   --c-pri:var(--accent); --c-on-pri:var(--on-accent); --c-pend:var(--line);
   --c-btn:var(--s-btn); --c-btn-ink:var(--ink); --c-btn-line:var(--s-btn-line);
