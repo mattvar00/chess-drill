@@ -32,7 +32,7 @@ export function createExplorer(board: Board, el: HTMLElement, o: { fen: string; 
 
   el.innerHTML = `<div class="explorer">
     <div class="xhead"><b>Explorateur</b><span class="ev" id="xEval"></span><button class="iconbtn xclose" id="xClose" aria-label="Fermer l'explorateur">${icon('close')}</button></div>
-    <div class="xbar" role="img" aria-label="Tes chances de gain"><b id="xBar" style="width:50%"></b></div>
+    <div class="xbar${o.orient === 'b' ? ' b' : ''}" role="img" aria-label="Tes chances de gain"><b id="xBar" style="width:50%"></b></div>
     <p class="xeng" id="xEngine"></p>
     <p class="hint">Reviens en arrière avec les flèches, joue tes propres coups sur l'échiquier, ou touche un coup d'une variante.</p>
     <div class="explnav">${[['first', 'Position de départ', 'first'], ['prev', 'Coup précédent', 'back'], ['next', 'Coup suivant', 'chev'], ['last', 'Dernier coup', 'last']].map(([to, l, ic]) => `<button class="btn" data-x="${to}" aria-label="${l}">${icon(ic)}</button>`).join('')}</div>
