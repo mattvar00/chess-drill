@@ -15,7 +15,8 @@ describe('import chess.com', () => {
     const g = toGame(fixture[1], 'MATT_chess00', buildBook(R), indexBranches(R))!;
     expect(g).toMatchObject({ id: '100000002', color: 'b', opp: 'opp1', res: 'D', myElo: 1755, eco: 'Sicilian-Defense-Sveshnikov', nply: 36 });
     expect(g.clocks[0]).toBe('0:09:59');
-    expect(g.a.status).toBe('ok');   // Sveshnikov : dans le répertoire
+    expect(['ok', 'gap']).toContain(g.a.status);   // Sveshnikov : dans le répertoire (ou l'adversaire en sort, depuis que la théorie va plus loin)
+    expect(g.a.depth).toBeGreaterThanOrEqual(20);
   });
   it('ignore les parties des autres et les variantes', () => {
     expect(toGame(fixture[0], 'quelquun')).toBeNull();
