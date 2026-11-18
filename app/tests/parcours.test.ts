@@ -153,7 +153,7 @@ describe('cours : chapitres et méthode', () => {
   it('une case par chapitre, dans l\'ordre du cours, puis les lignes tirées des parties', () => {
     const u = unitOf(bloc, c5, {});
     expect(u.lessons.map(l => l.name)).toEqual([...chaptersOf(course)!.map(c => c.name), 'Tirées de tes parties']);
-    expect(u.lessons[1].ids).toEqual(['C5b5', 'C5b6', 'C5b4', 'C5b2', 'C5b1', 'C5b3', 'C5b7']);
+    expect(u.lessons[2].ids).toEqual(['C5b5', 'C5b6', 'C5b4', 'C5b2', 'C5b1', 'C5b3', 'C5b7']);
   });
   it('chaque variante du cours a un rôle, une explication, des coups légaux, finit sur un coup à soi, et explique chacun de tes coups', () => {
     expect(course.length).toBeGreaterThanOrEqual(19);

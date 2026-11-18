@@ -16,7 +16,8 @@ import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
 import { isDue } from '../core/schedule';
 import { meetCounts } from '../core/rank';
-import { pieceSrc } from '../ui/board';
+import { miniBoard, pieceSrc } from '../ui/board';
+import { Chess, tryMove, uciToObj } from '../core/chess';
 import { $, esc, icon, plural } from '../ui/dom';
 import { BR, REP, lastLesson, plansFor, save, store } from './store';
 import { startSession } from './session';
@@ -183,15 +184,25 @@ function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {
 const sideWord = (u: Unit) => `${u.bloc.titre}, ${u.bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`;
 
 /** Quoi faire maintenant : le cours que les recommandations mettent en tête, sa raison et son action. Le seul endroit qui en décide. */
-export function nextUp(): { u: Unit; why: string; side: string; label: string; href?: string; run?: () => void } | null {
+export function nextUp(): { u: Unit; why: string; side: string; label: string; line?: string; href?: string; run?: () => void } | null {
   const top = recommend(factsOf(allUnits())).todo[0]; if (!top) return null;
   // une partie récente est passée par une variante précise : c'est elle qu'on lance, pas le chapitre en cours
   if (top.kind === 'oubli') { const g = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50).find(x => BR[refBranch(x, BR)!]?.sys.id === top.f.u.sys.id), id = g ? refBranch(g, BR)! : null;
     if (g && id) { const br = BR[id].br, known = passed(store.state.br[id]), name = lineTitle(br.titre);
-      return { u: top.f.u, side: sideWord(top.f.u), href: lineUrl(id, 'drill', g.id), label: known ? 'Rejouer cette variante' : 'Apprendre cette variante',
+      return { u: top.f.u, side: sideWord(top.f.u), line: id, href: lineUrl(id, 'drill', g.id), label: known ? 'Rejouer cette variante' : 'Apprendre cette variante',
         why: `${known ? 'Tu la connaissais et tu l\'as quittée' : br.role === 'erreur' ? 'Ton adversaire a joué ce piège et tu n\'as pas trouvé la punition' : 'Tu l\'as rencontrée et tu ne la connais pas encore'} contre ${esc(g.opp)} : ${esc(name)}.` }; } }
-  return { u: top.f.u, why: WHY[top.kind](top.f), side: sideWord(top.f.u), ...actionOf(top) };
+  const L = top.f.u.lessons.find(l => l.state === 'cur' || l.state === 'crack');
+  return { u: top.f.u, why: WHY[top.kind](top.f), side: sideWord(top.f.u), line: L ? lessonIds(L)[0] ?? L.ids[0] : undefined, ...actionOf(top) };
 }
+/** La carte du cours recommandé : la position qui t'attend, pourquoi maintenant, où en est le pion, et un bouton. La même sur l'accueil et sur Ouvertures. */
+export function featured(up: NonNullable<ReturnType<typeof nextUp>>, id = 'bUp'): string {
+  let board = ''; if (up.line && BR[up.line]) { const { br, bloc } = BR[up.line], g = new Chess(); for (const m of br.moves) if (!tryMove(g, uciToObj(m.uci))) break; board = miniBoard(g, bloc.side); }
+  return `<section class="surf today feat2"><p class="label">Recommandé maintenant</p>
+    <div class="today-top"><div class="today-text"><h2>${esc(shortName(up.u.sys.titre))}</h2><p class="rside">${esc(up.side)}</p><p>${up.why}</p></div>${board}</div>
+    ${strip(up.u)}
+    <button class="btn pri block" id="${id}">${up.label}</button><a class="quiet" href="${openingUrl(up.u)}">Voir le cours</a></section>`;
+}
+export const runUp = (up: NonNullable<ReturnType<typeof nextUp>>) => { if (up.run) up.run(); else location.hash = up.href!; };
 
 /** Ouvertures : la liste des cours, rangés par couleur puis par premier coup adverse, avec l'avancement de chacun. Rien d'autre. */
 export function viewPath(root: HTMLElement) {
@@ -204,6 +215,7 @@ export function viewPath(root: HTMLElement) {
       <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}${icon('chev', 'chev')}</a>`; };
   const blocs = REP.blocs.filter(b => b.side === side);
   root.innerHTML = `<header class="pagehead"><h1>Ouvertures</h1></header>
+    ${up ? featured(up) : ''}
     <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture ou une variante</label><input id="qRep" type="search" placeholder="Chercher : Londres, Alapin, Slave…" autocomplete="off"></div>
     <div id="qRes"></div>
     <div id="olist"><div class="seg" role="group" aria-label="Couleur"><button type="button" data-side="b" aria-pressed="${side === 'b'}">Avec les Noirs</button><button type="button" data-side="w" aria-pressed="${side === 'w'}">Avec les Blancs</button></div>
@@ -211,6 +223,7 @@ export function viewPath(root: HTMLElement) {
     ${others.length ? `<details class="others"><summary>Ouvertures de rechange (${others.length})</summary><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
     <a class="quiet" href="#/explorer?r=${encodeURIComponent('#/rep')}">Explorer une position</a></div>`;
   root.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.onclick = () => { setLS(SIDE_KEY, b.dataset.side!); const y = window.scrollY; viewPath(root); window.scrollTo(0, y); });
+  if (up) root.querySelector('#bUp')?.addEventListener('click', () => runUp(up));
   const q = $<HTMLInputElement>('#qRep', root), res = $('#qRes', root), list = $('#olist', root);
   const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   q.addEventListener('input', () => {

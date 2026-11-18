@@ -5,7 +5,7 @@ import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
-import { bindPath, devRow, nextUp, pathBlock, shortName, unitFor } from './path';
+import { bindPath, devRow, featured, nextUp, pathBlock, runUp, shortName, unitFor } from './path';
 import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
 import { lineName, roleLabel, typeLabel } from '../core/names';
 import { structureStats } from '../core/stats';
@@ -80,9 +80,7 @@ export function viewHome(root: HTMLElement) {
   const up = nextUp(), steps = dailyPlan(), todo = steps.filter(s => !s.done), next = up ? undefined : todo[0], later = up ? todo : todo.slice(1), did = steps.filter(s => s.done);
   const days = trainingDays(), n = streak(days), cold = coldStart(store.games);
   const games = store.games.filter(g => !store.state.ignored[g.id]), last = lastSession(games), res = (r: string) => last ? last.games.filter(g => g.res === r).length : 0;
-  const hero = up ? `<section class="surf today now">
-      <div class="today-top"><div class="today-text"><h2>${esc(shortName(up.u.sys.titre))}</h2><p class="rside">${esc(up.side)}</p><p>${up.why}</p></div></div>
-      <button class="btn pri block" id="bGo">Continuer : ${up.label.toLowerCase()}</button><a class="quiet" href="#/rep/${up.u.bloc.id}/${up.u.sys.id}">Voir le cours</a></section>`
+  const hero = up ? featured(up, 'bGo')
     : next ? `<section class="surf today now">
       <div class="today-top"><div class="today-text"><h2>${esc(next.title)}</h2><p>${esc(next.sub)}</p></div>${next.thumb}</div>
       <button class="btn pri block" id="bGo">${did.length ? 'Continuer' : 'Commencer'}, ${next.min} min</button></section>`
@@ -103,7 +101,7 @@ export function viewHome(root: HTMLElement) {
       ${[...last.games].reverse().slice(0, 2).map(g => gameRow(g, '#/')).join('')}</div></section>` : ''}
     `;
   root.querySelectorAll<HTMLButtonElement>('[data-step]').forEach(b => b.addEventListener('click', () => steps[+b.dataset.step!].go()));
-  $('#bGo', root)?.addEventListener('click', () => { if (up) { if (up.run) up.run(); else location.hash = up.href!; } else next!.go(); });
+  $('#bGo', root)?.addEventListener('click', () => { if (up) runUp(up); else next!.go(); });
 }
 
 function lineStatus(br: Branch): string {
