@@ -1047,3 +1047,9 @@ details.allv{margin-top:12px}
 .trainer.fin .coach.ctop{height:auto;min-height:118px}
 body.fit .trainer.cours.fin .tboard .board{width:min(100%,calc(100dvh - var(--top) - 430px))}
 .iconbtn{appearance:none;border:0;background:none;padding:0}
+
+/* titre de la barre du haut : deux lignes plutôt que des points de suspension */
+.htitle b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.coach.ctop{height:132px}
+body.fit .trainer.cours .tboard .board{width:min(100%,calc(100dvh - var(--top) - 324px))}
+.trainer.fin .coach.ctop{height:auto;min-height:132px}

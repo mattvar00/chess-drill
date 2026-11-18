@@ -107,7 +107,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   const pages = (t: string, max = 80) => { const out: string[] = []; for (const s of t.split(/(?<=[.!?…])\s+/)) { if (out.length && (out[out.length - 1] + ' ' + s).length <= max) out[out.length - 1] += ' ' + s; else out.push(s); } return out; };
   /** Le coach parle. Un texte long passe en plusieurs bulles : on touche la bulle pour la suite ; `tail` (la consigne) reste affiché. */
   function talk(mood: Mood, head: string, text: string, tail = '', max = 80) {
-    const pg = text ? pages(text, max) : ['']; let k = 0;
+    const pg = [text]; let k = 0; void max; void pages;   // une seule bulle : un texte en deux pages n'est jamais lu jusqu'au bout
     const paint = () => { coach.innerHTML = coachSay(mood, `${k ? '' : head}${pg[k] ? `<p>${esc(pg[k])}${pg.length > 1 ? ` <button class="cnext" aria-label="Suite">${k + 1}/${pg.length}${k < pg.length - 1 ? ' ›' : ''}</button>` : ''}</p>` : ''}${tail}`);
       if (pg.length > 1) $('.cbub', coach).onclick = () => { k = (k + 1) % pg.length; paint(); }; };
     paint();
