@@ -89,7 +89,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     ply = target; show(forward); paintMoves();
     if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(br.intro ?? sys.resume)}</p><p class="why">Avance avec les flèches, à l'écran ou au clavier. Les coups soulignés portent un commentaire.</p>`);
     else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)}${esc(moves[ply - 1].san)}`, note ? `<p>${esc(note)}</p>` : '<p class="why">Coup de la ligne.</p>'); }
-    actions.innerHTML = ply >= moves.length ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">La jouer de mémoire</a>` : '';
+    actions.innerHTML = ply >= moves.length && !br.model ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">La jouer de mémoire</a>` : '';
   }
   const onKey = (e: KeyboardEvent) => { if (mode !== 'explore' || xa()) return; if (e.key === 'ArrowRight') explTo(ply + 1); if (e.key === 'ArrowLeft') explTo(ply - 1); };
 
@@ -199,7 +199,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     if (course) {
       const allOk = !!S && S.pool.every(i => passed(store.state.br[i])), chName = br.ch ?? 'Tirées de tes parties';
       talk(errs === 0 ? 'party' : 'idle', `<p class="lead ${errs ? 'bad' : 'ok'}">${errs === 0 ? 'Variante validée' : `Pas encore validée : ${plural(errs, 'erreur')}`}</p>`,
-        `${br.bilan ?? ''}${errs ? ' Elle reviendra.' : ''}`.trim(), S ? `<p class="why">${left ? `Encore ${left} dans ce chapitre.` : allOk ? 'Chapitre terminé.' : ''}</p>` : '', 120);
+        `${br.bilan ?? ''}${errs ? ' Elle reviendra.' : ''}`.trim(), `${br.suite ? `<p class="suite"><b>Et après :</b> ${esc(br.suite)}</p>` : ''}${S ? `<p class="why">${left ? `Encore ${left} dans ce chapitre.` : allOk ? 'Chapitre terminé.' : ''}</p>` : ''}`, 120);
       // toujours le même écran entre deux variantes : où tu en es dans le chapitre, ce qui vient, et le plan s'il y en a un
       const chap = br.ch ? sys.branches.filter(b => b.ch === br.ch) : sys.branches.filter(b => !b.ch && b.type), nid = S?.ordered ? remaining()[0] : null, stop = S?.exit ?? listUrl;
       const info = `<p class="cinfo"><span class="cdots" aria-hidden="true">${chap.map(b => `<i class="${passed(store.state.br[b.id]) ? 'ok' : ''}${b.id === id ? ' now' : ''}"></i>`).join('')}</span><span>${esc(chName)} : ${chap.filter(b => passed(store.state.br[b.id])).length} sur ${chap.length}</span>${nid ? `<span class="nx">Ensuite : ${esc(lineTitle(BR[nid].br.titre))}</span>` : ''}</p>`;

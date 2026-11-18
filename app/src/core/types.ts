@@ -40,8 +40,10 @@ export interface RepMove { san: string; uci: string }
  * qu'elles traitent), un rôle (`role` : la théorie, ou une erreur classique de l'adversaire), une explication (`intro`) et les fautes de l'adversaire
  * (`marks` : demi-coup → « ? », « ?? » ou « ?! », affiché sur sa case), et tes fautes classiques à toi (`wrong` : demi-coup → mauvais coup → pourquoi il est mauvais).
  */
-export interface Branch { id: string; titre: string; moves: RepMove[]; notes: Record<string, string>; type?: 'punir' | 'bon'; ch?: string; role?: 'theorie' | 'erreur'; intro?: string; marks?: Record<string, string>; wrong?: Record<string, Record<string, string>>; bilan?: string }
-export interface System { id: string; titre: string; statut: string; resume: string; branches: Branch[] }
+export interface Branch { id: string; titre: string; moves: RepMove[]; notes: Record<string, string>; type?: 'punir' | 'bon'; ch?: string; role?: 'theorie' | 'erreur'; intro?: string; marks?: Record<string, string>; wrong?: Record<string, Record<string, string>>; bilan?: string;
+  /** `suite` : le plan une fois la variante jouée (« Et après »). `model` : une partie de maître à regarder, pas une variante à apprendre. */
+  suite?: string; model?: boolean }
+export interface System { id: string; titre: string; statut: string; resume: string; branches: Branch[]; modeles?: Branch[] }
 export interface Bloc { id: string; titre: string; sous: string; side: Color; systemes: System[] }
 export interface Repertoire { version: number; blocs: Bloc[]; faults: unknown[] }
 

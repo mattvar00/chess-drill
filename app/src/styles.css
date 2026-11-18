@@ -1053,3 +1053,5 @@ body.fit .trainer.cours.fin .tboard .board{width:min(100%,calc(100dvh - var(--to
 .coach.ctop{height:132px}
 body.fit .trainer.cours .tboard .board{width:min(100%,calc(100dvh - var(--top) - 324px))}
 .trainer.fin .coach.ctop{height:auto;min-height:132px}
+
+.cbub .suite{margin-top:2px;font-size:14px;color:var(--mute)}.cbub .suite b{color:var(--ink);font-weight:600}

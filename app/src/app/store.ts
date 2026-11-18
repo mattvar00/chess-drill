@@ -26,6 +26,8 @@ for (const P of PLANS) {
   const br = { id: planBranch(P.id), titre: P.title, moves, notes: {} };
   BR[br.id] = { br, sys: { id: 'plan', titre: P.title, statut: 'plan', resume: P.sub, branches: [br] }, bloc: { id: 'plans', titre: P.cat, sous: '', side: P.side, systemes: [] } };
 }
+// parties modèles d'un cours : elles se regardent comme une ligne commentée, hors du chemin et des révisions
+for (const bloc of REP.blocs) for (const sys of bloc.systemes) for (const m of sys.modeles ?? []) BR[m.id] = { br: m, sys: { ...sys, statut: 'plan', branches: [m] }, bloc };
 export const plansFor = (sysId: string) => PLANS.filter(p => p.sys.includes(sysId));
 
 /** Cycle Woodpecker en cours (repris après une fermeture de l'app) et cycles terminés. */

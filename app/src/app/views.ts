@@ -138,6 +138,7 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
     ${pathBlock(u)}
     ${plans.length ? `<a class="surf card lk1" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Les plans de cette ouverture</b><span class="dim">${plans.length}</span>${chev}</a>` : ''}
     ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
+    ${(sys.modeles ?? []).map(m => `<a class="surf card lk1" href="${lineUrl(m.id, 'explore')}"><b>Partie modèle</b><span class="dim">${esc(m.titre)}</span>${chev}</a>`).join('')}
     <details class="others allv"><summary>Toutes les variantes (${own.length})</summary><p class="pnote">${esc(sys.resume)}</p>${groups.map(g => `${g.name ? `<h3 class="chap">${esc(g.name)}</h3>` : ''}<div class="surf card list">${g.lines.map(row).join('')}</div>`).join('')}
       <button class="quiet" id="bDrill">Rejouer les ${own.length} variantes à la suite</button></details>
     ${nFaults ? `<a class="surf card lk1" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Tes fautes dans cette ouverture</b><span class="dim">${nFaults}</span>${chev}</a>` : ''}
