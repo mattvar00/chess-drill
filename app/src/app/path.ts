@@ -17,6 +17,7 @@ import { lineUrl } from './session';
 import { isDue } from '../core/schedule';
 import { meetCounts } from '../core/rank';
 import { miniBoard, pieceSrc } from '../ui/board';
+import { confetti } from '../ui/fx';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { $, esc, icon, plural } from '../ui/dom';
 import { BR, REP, lastLesson, plansFor, save, store } from './store';
@@ -119,7 +120,8 @@ const knownN = (u: Unit) => ownLines(u.sys).filter(b => passed(store.state.br[b.
  */
 export function pathBlock(u: Unit): string {
   const cur = u.lessons.findIndex(l => l.state === 'cur'), n = ownLines(u.sys).length, k = knownN(u), due = dueIds(u).length;
-  return `<section class="chead${u.promoted ? ' won' : ''}">
+  return `<section class="chead${u.promoted ? ' won' : ''}" style="--fam:${familyColor(u.bloc.id)}">
+      <span class="prog cbar" role="img" aria-label="${k} sur ${n}"><b style="width:${n ? Math.max(k ? 3 : 0, Math.round(100 * k / n)) : 0}%"></b></span>
       <p class="cprog"><b>${k} ${k > 1 ? 'variantes sues' : 'variante sue'} sur ${n}</b>${due ? `<span class="due">${due} à revoir</span>` : ''}${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</p>
       <div class="cbtns">${cur >= 0 ? `<button class="btn pri" data-go="${cur}">Apprendre</button>` : ''}<button class="btn${cur >= 0 ? '' : ' pri'}" id="bRev">${due ? `Réviser (${due})` : k ? 'Tout rejouer' : 'Jouer librement'}</button></div></section>
     <div class="pboard"><section class="psec"><div class="ppath" data-sys="${u.sys.id}">${pathCells(u)}</div></section></div>`;
@@ -204,22 +206,30 @@ export function featured(up: NonNullable<ReturnType<typeof nextUp>>, id = 'bUp')
 }
 export const runUp = (up: NonNullable<ReturnType<typeof nextUp>>) => { if (up.run) up.run(); else location.hash = up.href!; };
 
+/** Une couleur par famille d'ouvertures (le premier coup de l'adversaire) : on repère d'un coup d'œil où l'on est. */
+const FAMILY: Record<string, string> = { A: '#7FB0FF', B: '#F58CA8', F: '#4FD1C5', C: '#5FC58A', D: '#F0A35E', E: '#B79CFF' };
+export const familyColor = (blocId: string) => FAMILY[blocId] ?? 'var(--accent-text)';
+/** Les recommandations suivantes, après celle de la carte : pour avoir le choix sans chercher. */
+function otherUps(skip: string): { u: Unit; why: string }[] {
+  return recommend(factsOf(allUnits()), 6).todo.filter(r => r.f.u.sys.id !== skip).slice(0, 2).map(r => ({ u: r.f.u, why: WHY[r.kind](r.f) }));
+}
 /** Ouvertures : la liste des cours, rangés par couleur puis par premier coup adverse, avec l'avancement de chacun. Rien d'autre. */
 export function viewPath(root: HTMLElement) {
-  const units = allUnits(), up = nextUp();
+  const units = allUnits(), up = nextUp(), alts = up ? otherUps(up.u.sys.id) : [];
   const side = (getLS(SIDE_KEY) || up?.u.bloc.side || 'b') as 'w' | 'b';
   const mine = units.filter(u => u.bloc.side === side), playedU = mine.filter(played), others = mine.filter(u => !played(u));
   const row = (u: Unit) => { const n = ownLines(u.sys).length, k = knownN(u), due = dueIds(u).length;
     const reco = up?.u.sys.id === u.sys.id;
-    return `<a class="rowi crow${reco ? ' reco' : ''}" href="${openingUrl(u)}"><span class="body">${reco ? '<span class="rtag">Recommandé maintenant</span>' : ''}<span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${due ? `<span class="due">${due} à revoir</span>` : ''}${k} sur ${n}</small></span>
+    return `<a class="rowi crow${reco ? ' reco' : ''}" style="--fam:${familyColor(u.bloc.id)}" href="${openingUrl(u)}"><span class="body">${reco ? '<span class="rtag">Recommandé maintenant</span>' : ''}<span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${due ? `<span class="due">${due} à revoir</span>` : ''}${k} sur ${n}</small></span>
       <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}${icon('chev', 'chev')}</a>`; };
   const blocs = REP.blocs.filter(b => b.side === side);
   root.innerHTML = `<header class="pagehead"><h1>Ouvertures</h1></header>
     ${up ? featured(up) : ''}
+    ${alts.length ? `<section class="grp"><h2>Ou bien</h2><div class="surf card list">${alts.map(a => `<a class="rowi arow" style="--fam:${familyColor(a.u.bloc.id)}" href="${openingUrl(a.u)}"><i class="famdot" aria-hidden="true"></i><span class="body"><b>${esc(shortName(a.u.sys.titre))}</b><small>${a.why}</small></span>${icon('chev', 'chev')}</a>`).join('')}</div></section>` : ''}
     <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture ou une variante</label><input id="qRep" type="search" placeholder="Chercher : Londres, Alapin, Slave…" autocomplete="off"></div>
     <div id="qRes"></div>
     <div id="olist"><div class="seg" role="group" aria-label="Couleur"><button type="button" data-side="b" aria-pressed="${side === 'b'}">Avec les Noirs</button><button type="button" data-side="w" aria-pressed="${side === 'w'}">Avec les Blancs</button></div>
-    ${blocs.map(b => { const us = playedU.filter(u => u.bloc.id === b.id); return us.length ? `<section class="grp"><h2>${esc(b.titre)}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; }).join('')}
+    ${blocs.map(b => { const us = playedU.filter(u => u.bloc.id === b.id); return us.length ? `<section class="grp fam" style="--fam:${familyColor(b.id)}"><h2><i class="famdot" aria-hidden="true"></i>${esc(b.titre)}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; }).join('')}
     ${others.length ? `<details class="others"><summary>Ouvertures de rechange (${others.length})</summary><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
     <a class="quiet" href="#/explorer?r=${encodeURIComponent('#/rep')}">Explorer une position</a></div>`;
   root.querySelectorAll<HTMLButtonElement>('[data-side]').forEach(b => b.onclick = () => { setLS(SIDE_KEY, b.dataset.side!); const y = window.scrollY; viewPath(root); window.scrollTo(0, y); });
@@ -257,10 +267,11 @@ export function viewLessonEnd(root: HTMLElement) {
   const back = openingUrl(u), moved = u.done > L.doneBefore, name = shortName(u.sys.titre), mins = Math.floor(L.ms / 60000), secs = Math.round((L.ms % 60000) / 1000);
   const time = `${mins}:${String(secs).padStart(2, '0')}`;
   if (u.promoted && moved) {
+    confetti(90);
     root.innerHTML = `<div class="lend unitdone"><p class="kick">Promotion</p><img class="bigq" src="${pieceSrc('q')}" alt="">
-      <h1>${esc(name)} terminée</h1><p class="sub">Les ${plural(ownLines(u.sys).length, 'ligne')} sont acquises. Elles reviendront de temps en temps pour ne pas s'effacer.</p>
-      <div class="etiles"><div><b>${ownLines(u.sys).length}</b><span>lignes</span></div>${u.meet ? `<div><b>${u.meet}</b><span>de tes parties couvertes</span></div>` : ''}<div><b>${time}</b><span>pour la dernière case</span></div></div>
-      </div><div class="lend-act"><a class="btn pri block" href="${back}">Voir l'ouverture</a></div>`;
+      <h1>${esc(name)} terminée</h1><p class="sub">Les ${plural(ownLines(u.sys).length, 'variante')} sont acquises. Elles reviendront de temps en temps pour ne pas s'effacer.</p>
+      <div class="etiles"><div><b>${ownLines(u.sys).length}</b><span>variantes</span></div>${u.meet ? `<div><b>${u.meet}</b><span>de tes parties couvertes</span></div>` : ''}<div><b>${time}</b><span>pour la dernière case</span></div></div>
+      </div><div class="lend-act"><a class="btn pri block" href="${back}">Voir le cours</a></div>`;
     return;
   }
   const strip = u.lessons.map((l, i) => { const isPawn = l.state === 'cur', last = i === u.lessons.length - 1;
@@ -269,9 +280,10 @@ export function viewLessonEnd(root: HTMLElement) {
   // la case suivante est prête : on y va d'ici, sans repasser par la page de l'ouverture
   const ni = moved ? u.lessons.findIndex(l => l.state === 'cur') : -1, nx = ni >= 0 ? u.lessons[ni] : null;
   root.innerHTML = `<div class="lend"><h1>${moved ? 'Le pion avance' : 'Presque'}</h1>
-    <div class="estrip">${strip}</div>
+    <div class="estrip${moved ? ' moved' : ''}">${strip}</div>
     <p class="sub">${moved ? `${esc(name)} : ${left === 1 ? 'plus qu\'une case avant la dame' : `plus que ${left} cases avant la dame`}` : 'Rejoue sans faute les lignes ratées pour passer à la case suivante.'}</p>
-    <div class="etiles"><div><b class="ok">${L.clean}/${L.lines}</b><span>lignes sans faute</span></div><div><b class="combo">×${L.best}</b><span>meilleur combo</span></div><div><b>${time}</b><span>temps</span></div></div></div>
-    <div class="lend-act">${nx ? `<button class="btn pri block" id="bNext">${nx.name ? `Chapitre suivant : ${esc(nx.name)}` : `Jouer la case ${ni + 1}`}</button><a class="btn block" href="${back}">Voir l'ouverture</a>` : `<a class="btn pri block" href="${back}">Continuer</a>`}</div>`;
+    <div class="etiles"><div><b class="ok">${L.clean}/${L.lines}</b><span>variantes sans faute</span></div><div><b class="combo">×${L.best}</b><span>meilleur combo</span></div><div><b>${time}</b><span>temps</span></div></div></div>
+    <div class="lend-act">${nx ? `<button class="btn pri block" id="bNext">${nx.name ? `Chapitre suivant : ${esc(nx.name)}` : `Jouer la case ${ni + 1}`}</button><a class="btn block" href="${back}">Voir le cours</a>` : `<a class="btn pri block" href="${back}">Continuer</a>`}</div>`;
+  if (moved) confetti(36);
   root.querySelector('#bNext')?.addEventListener('click', () => startLesson(u, ni));
 }

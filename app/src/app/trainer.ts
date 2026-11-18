@@ -13,6 +13,7 @@ import { explorerSlot } from './explorer';
 import { passed, trunkOf } from '../core/path';
 import { lineTitle, tell } from '../core/names';
 import { coachSay, type Mood } from '../ui/coach';
+import { confetti } from '../ui/fx';
 
 /**
  * Méthode du cours (lignes rangées en chapitres), pour une variante pas encore réussie. Un seul passage continu depuis le premier coup :
@@ -179,7 +180,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   }
 
   function finish() {
-    if (finished) return; finished = true; locked = true; SFX.done();
+    if (finished) return; finished = true; locked = true; SFX.done(); if (course && errs === 0) confetti(24);
     const s = store.state.br[id] = scheduleBranch(store.state.br[id], errs);
     if (S && errs === 0) S.clean++;
     if (fromGame && errs === 0) { store.state.fixed[fromGame.id] = true; refreshDevs(); }

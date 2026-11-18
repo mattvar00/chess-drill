@@ -1020,3 +1020,25 @@ details.allv{margin-top:12px}
   .feat2 .today-top .mini{animation:featin .5s ease-out both}
 }
 @keyframes featin{from{opacity:0;transform:rotate(8deg) translateY(10px)}to{opacity:1;transform:rotate(3deg)}}
+
+/* fête : confettis, pion qui avance, dame qui arrive */
+.confetti{position:fixed;inset:0;z-index:60;pointer-events:none;overflow:hidden}
+.confetti i{position:absolute;top:-14px;height:12px;border-radius:2px;animation:confall 1.4s cubic-bezier(.3,.6,.6,1) forwards}
+@keyframes confall{to{transform:translate(var(--dx),105vh) rotate(var(--r));opacity:.85}}
+@media (prefers-reduced-motion:no-preference){
+  .lend .estrip.moved .ecell.pawn img{animation:pawnstep .8s .25s cubic-bezier(.3,1.4,.5,1) both}
+  .lend .estrip.moved .ecell.done:last-of-type,.lend .estrip.moved .ecell.pawn{animation:cellpop .5s .2s ease-out both}
+  .lend .bigq{animation:queenin 1s cubic-bezier(.2,1.5,.4,1) both,queenglow 2.4s 1s ease-in-out infinite}
+  .cdots i.ok.now{animation:cellpop .5s ease-out both}
+}
+@keyframes pawnstep{0%{transform:translateX(-48px)}55%{transform:translateX(-18px) translateY(-14px)}100%{transform:none}}
+@keyframes cellpop{0%{transform:scale(.7)}60%{transform:scale(1.12)}100%{transform:none}}
+@keyframes queenin{0%{transform:scale(.2) rotate(-25deg);opacity:0}100%{transform:none;opacity:1}}
+@keyframes queenglow{0%,100%{filter:drop-shadow(0 10px 22px rgba(247,225,26,.35))}50%{filter:drop-shadow(0 10px 34px rgba(247,225,26,.8))}}
+/* une couleur par famille d'ouvertures */
+.famdot{flex:none;display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;background:var(--fam)}
+.grp.fam h2{display:flex;align-items:center}
+.crow .prog b{background:var(--fam,var(--accent-text))}
+.arow .famdot{margin-right:0}
+.cbar{display:block;height:6px;border-radius:3px;background:var(--line);overflow:hidden}.cbar b{display:block;height:100%;border-radius:3px;background:var(--fam,var(--accent-text));transition:width .6s ease-out}
+.lend-act{display:flex;flex-direction:column;gap:10px}
