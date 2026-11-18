@@ -231,30 +231,39 @@ export function courseBoard(u: Unit): string {
  */
 export function viewPath(root: HTMLElement) {
   const units = allUnits(), up = nextUp(), cur = units.find(u => u.sys.id === getLS(LAST_KEY)) ?? up?.u ?? currentUnit(units);
-  if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur, up?.u.sys.id);
+  if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur);
   // la recommandation reste visible : une ligne en haut quand elle porte sur un autre cours, un mot sous le nom quand c'est celui-ci
   root.innerHTML = `<a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}</small></span>${icon('chev', 'chev')}</a>
     ${pathBlock(cur)}
     <a class="quiet" href="${openingUrl(cur)}">Plus sur ce cours</a>`;
   bindPath(root, cur);
 }
-/** « Tes cours » : ceux que tu rencontres ou que tu as commencés, Blancs puis Noirs ; les autres sont repliés. */
-function pickCourse(root: HTMLElement, units: Unit[], cur: Unit, reco?: string) {
-  const seen = (u: Unit) => u.sys.id === cur.sys.id || (played(u) && (u.meet > 0 || knownN(u) > 0));
-  const mine = units.filter(seen).length >= 4 ? seen : (u: Unit) => seen(u) || played(u);   // pas encore de parties : on montre tout ton répertoire
-  const row = (u: Unit) => { const n = pathLines(u).length, k = knownN(u), on = u.sys.id === cur.sys.id;
-    return `<button type="button" class="rowi crow" data-pick="${u.sys.id}" data-name="${esc(norm(u.sys.titre))}" style="--fam:${familyColor(u.bloc.id)}">${courseBoard(u)}<span class="body"><span class="ctop2"><b>${esc(shortName(u.sys.titre))}</b><small>${on ? 'en cours' : `${k} sur ${n}`}</small></span>
+/**
+ * « Tes cours », classés par besoin : d'abord ceux qu'il est le plus utile de travailler (souvent joués et mal réussis, ou oubliés),
+ * puis ceux que tu joues bien, puis ceux que tu n'as pas encore rencontrés. Un seul ordre, décidé par les recommandations.
+ * Chaque ligne dit pourquoi elle est là : combien de parties, combien de points, et où tu en es dans le cours.
+ */
+function pickCourse(root: HTMLElement, units: Unit[], cur: Unit) {
+  const facts = factsOf(units), fBy = new Map(facts.map(f => [f.u.sys.id, f])), rec = recommend(facts, 99);
+  const rank = new Map(rec.todo.map((r, i) => [r.f.u.sys.id, i]));
+  const needs = (f: Facts) => rank.has(f.u.sys.id) && (f.games > 0 || f.due > 0 || f.devs > 0 || f.punir > 0);
+  const work = facts.filter(needs).sort((a, b) => rank.get(a.u.sys.id)! - rank.get(b.u.sys.id)!);
+  const form = facts.filter(f => f.games > 0 && !needs(f)).sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || b.games - a.games);
+  const rest = facts.filter(f => f.games === 0 && !needs(f)).sort((a, b) => knownN(b.u) - knownN(a.u) || +played(b.u) - +played(a.u));
+  const row = (f: Facts) => { const u = f.u, n = pathLines(u).length, k = knownN(u), on = u.sys.id === cur.sys.id;
+    const meta = f.games ? `${plural(f.games, 'partie')}${f.score != null ? ` · ${Math.round(f.score)} %` : ''}` : on ? 'en cours' : '';
+    return `<button type="button" class="rowi crow" data-pick="${u.sys.id}" data-name="${esc(norm(u.sys.titre))}" style="--fam:${familyColor(u.bloc.id)}">${courseBoard(u)}<span class="body"><span class="ctop2"><b><i class="cdisc ${u.bloc.side}" title="${u.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></i>${esc(shortName(u.sys.titre))}</b>${meta ? `<small>${meta}</small>` : ''}</span>
       <span class="prog" role="img" aria-label="${k} variantes sues sur ${n}"><b style="width:${n ? Math.round(100 * k / n) : 0}%"></b></span></span>${u.promoted ? `<img class="qwon" src="${pieceSrc('q')}" alt="Dame gagnée">` : ''}</button>`; };
-  const sec = (side: 'w' | 'b', title: string) => { const us = units.filter(u => u.bloc.side === side && mine(u)).sort((a, b) => +(b.sys.id === reco) - +(a.sys.id === reco)); return us.length ? `<section class="grp"><h2>${title}</h2><div class="surf card list">${us.map(row).join('')}</div></section>` : ''; };
-  const others = units.filter(u => !mine(u));
+  const sec = (title: string, fs: Facts[], fold = 0) => !fs.length ? '' : `<section class="grp"><h2>${title}</h2><div class="surf card list">${(fold ? fs.slice(0, fold) : fs).map(row).join('')}</div>
+    ${fold && fs.length > fold ? `<details class="others"><summary>Voir les ${fs.length - fold} autres</summary><div class="surf card list">${fs.slice(fold).map(row).join('')}</div></details>` : ''}</section>`;
+  void fBy;
   root.innerHTML = `<header class="pagehead pickhead"><h1>Tes cours</h1><a class="btn" href="#/rep">Fermer</a></header>
     <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture</label><input id="qRep" type="search" placeholder="Chercher : Londres, Alapin, Slave…" autocomplete="off"></div>
-    ${sec('w', 'Avec les Blancs')}${sec('b', 'Avec les Noirs')}
-    ${others.length ? `<details class="others"><summary>Autres ouvertures (${others.length})</summary><div class="surf card list">${others.map(row).join('')}</div></details>` : ''}
+    ${sec('À travailler', work)}${sec('En forme', form)}${sec(work.length || form.length ? 'Pas encore rencontrées' : 'Tous les cours', rest, work.length || form.length ? 5 : 0)}
     <a class="quiet" href="#/explorer?r=${encodeURIComponent('#/rep')}">Explorer une position</a>`;
   root.addEventListener('click', e => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-pick]'); if (!b) return; setLS(LAST_KEY, b.dataset.pick!); location.hash = '#/rep'; });
   const q = $<HTMLInputElement>('#qRep', root);
-  q.addEventListener('input', () => { const t = norm(q.value.trim()); const det = root.querySelector<HTMLDetailsElement>('details.others'); if (det && t) det.open = true;
+  q.addEventListener('input', () => { const t = norm(q.value.trim()); if (t) root.querySelectorAll<HTMLDetailsElement>('details.others').forEach(d => { d.open = true; });
     root.querySelectorAll<HTMLElement>('[data-pick]').forEach(r => { r.hidden = !!t && !r.dataset.name!.includes(t); }); });
 }
 const norm = (s: string) => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
