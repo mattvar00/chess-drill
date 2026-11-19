@@ -1129,3 +1129,7 @@ h1,h2,.pbn,.ftext h2,.cpick b{letter-spacing:-.015em}
 .egturn{align-items:center;gap:10px}.egturn .btn{flex:none;padding:8px 14px}.egturn:not(.mine) .body b{color:var(--mute);font-weight:500}
 
 .egnext{display:flex;align-items:center;gap:14px;margin-bottom:14px}.egnext>div{flex:1;display:flex;flex-direction:column;gap:8px}.egnext b{font:700 18px/1 var(--f-title)}.egnext .btn{flex:none;padding:12px 20px}
+
+/* la carte joueur à huit notes */
+.pcard-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 8px}.pcard-grid b{font-size:26px}.pcard-grid span{font-size:12px}
+.rd-l{font-size:11.500px}

@@ -10,7 +10,7 @@ import { mountTrainer } from './app/trainer';
 import { viewSettings } from './app/settings';
 import { mountExercise, viewWood } from './app/wood';
 import { endSession, lineUrl, session } from './app/session';
-import { sync } from './app/api';
+import { pullChessCom, sync } from './app/api';
 import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile } from './app/games';
 import { LESSONS, lessonDrill, mountDrill, turnDrill, viewEndgame, viewEndgames } from './app/endgame';
@@ -122,6 +122,13 @@ async function boot() {
   // Nouvelles parties et progression des autres appareils : on rafraîchit l'écran d'accueil si quelque chose est arrivé.
   // (seulement sur les écrans de liste : une revue ou un exercice en cours n'est pas interrompu)
   sync().then(r => { if ((r.games || r.lines) && /^(#\/?)?(rep|wood|parties|progres|entrainer|structures|plans)?$/.test(location.hash)) route(); }).catch(() => { /* hors ligne : l'app reste utilisable */ });
+  // Tes dernières parties Chess.com, sans attendre la nuit : une seule requête légère, au plus toutes les 30 minutes, en arrière-plan.
+  // Aucun calcul de moteur ici (il reste pour la nuit) : on lit les coups et on les compare au répertoire.
+  const PULLED = 'cd_pulled';
+  if (navigator.onLine !== false && Date.now() - +(localStorage.getItem(PULLED) || 0) > 30 * 60 * 1000) {
+    localStorage.setItem(PULLED, String(Date.now()));
+    pullChessCom().then(n => { if (n > 0 && /^(#\/?)?(progres|parties|finales)?$/.test(location.hash)) route(); }).catch(() => { /* hors ligne */ });
+  }
   if (import.meta.env.PROD && 'serviceWorker' in navigator) void navigator.serviceWorker.register('./sw.js');
 }
 boot().catch(e => { view.innerHTML = `<p class="status err">L'app n'a pas pu démarrer : ${esc((e as Error).message)}</p>`; });

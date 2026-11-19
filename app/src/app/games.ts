@@ -70,6 +70,8 @@ function axisFacts(pr: Profile): Record<AxisKey, string> {
   const o = pr.opening, t = pr.tactics, c = pr.clock, ti = pr.tilt, fr = (n: number) => String(n).replace('.', ',');
   return {
     ouverture: o.coverage == null ? '' : `${o.coverage} % de tes parties restent dans ton répertoire`,
+    milieu: pr.phases?.m != null ? `${pr.phases.m} % de précision du 11e au 30e coup` : '',
+    finale: pr.phases?.f != null ? `${pr.phases.f} % de précision après le 30e coup, sur ${plural(pr.phases.nF, 'partie')}` : '',
     tactique: t ? `${t.acc} % de précision, ${fr(t.blunders)} gaffe${t.blunders >= 2 ? 's' : ''} par partie` : '',
     conversion: pr.conversion?.rate != null ? `${pr.conversion.rate} % de positions gagnantes converties` : '',
     resilience: pr.resilience?.rate != null ? `${pr.resilience.rate} % de positions perdantes sauvées` : '',
@@ -78,7 +80,7 @@ function axisFacts(pr: Profile): Record<AxisKey, string> {
   };
 }
 const axisName = (k: AxisKey) => AXES.find(a => a[0] === k)![1];
-const article = (k: AxisKey) => (k === 'ouverture' || k === 'horloge' ? "l'" : k === 'rythme' ? 'le ' : 'la ') + axisName(k).toLowerCase();
+const article = (k: AxisKey) => (k === 'ouverture' || k === 'horloge' ? "l'" : k === 'rythme' || k === 'milieu' ? 'le ' : 'la ') + axisName(k).toLowerCase();
 
 /** L'en-tête de Progrès : le titre, et le bouton qui va chercher tout de suite tes dernières parties sur Chess.com. */
 const progHead = () => `<header class="pagehead proghead"><h1>Progrès</h1><button type="button" class="btn pri upd" id="bPull">${icon('refresh')}<span>Mettre à jour</span></button></header><p class="pullst" id="pullSt" role="status" hidden></p>`;
@@ -164,12 +166,13 @@ const cap = (s: string) => s.replace(/^./, c => c.toUpperCase());
 export function viewProfile(root: HTMLElement) {
   const list = inScope(), pr = scopeProfile(list), card = playerCard(pr), facts = axisFacts(pr), t = pr.tactics, o = pr.opening, c = pr.clock, ti = pr.tilt;
   if (card.overall == null) { root.innerHTML = '<section class="empty"><p>Pas encore assez de parties sur cette période pour établir ton profil.</p></section>'; return; }
-  const cx = 170, cy = 150, R = 104, pt = (i: number, r: number) => { const a = -Math.PI / 2 + (i * Math.PI) / 3; return [cx + r * Math.cos(a), cy + r * Math.sin(a)].map(v => v.toFixed(1)).join(','); };
+  const cx = 170, cy = 150, R = 104, pt = (i: number, r: number) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / AXES.length; return [cx + r * Math.cos(a), cy + r * Math.sin(a)].map(v => v.toFixed(1)).join(','); };
   const ring = (f: number) => `<polygon class="rd-grid" points="${AXES.map((_, i) => pt(i, R * f)).join(' ')}"/>`;
-  const lab = [[170, 18], [286, 80], [286, 212], [170, 274], [52, 212], [52, 80]];
+  // les étiquettes se placent autour du radar, quel que soit le nombre d'axes
+  const lab = AXES.map((_, i) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / AXES.length; return [Math.round(cx + (R + 34) * Math.cos(a)), Math.round(cy + (R + 22) * Math.sin(a) - 4)]; });
   root.innerHTML = `
     <section class="surf card padded"><div class="elohead"><span class="label">${esc(card.type)}</span></div>
-      <svg class="radar" viewBox="0 0 340 300" role="img" aria-label="Profil sur six axes : ${AXES.map(([k, l]) => `${l.toLowerCase()} ${card.scores[k] ?? 'inconnu'}`).join(', ')}">
+      <svg class="radar" viewBox="-36 -8 412 320" role="img" aria-label="Profil sur ${AXES.length} axes : ${AXES.map(([k, l]) => `${l.toLowerCase()} ${card.scores[k] ?? 'inconnu'}`).join(', ')}">
         ${[1, 0.75, 0.5, 0.25].map(ring).join('')}${AXES.map((_, i) => `<line class="rd-grid" x1="${cx}" y1="${cy}" x2="${pt(i, R).split(',')[0]}" y2="${pt(i, R).split(',')[1]}"/>`).join('')}
         <polygon class="rd-area" points="${AXES.map(([k], i) => pt(i, R * (card.scores[k] ?? 0) / 100)).join(' ')}"/>
         ${AXES.map(([k], i) => { const [x, y] = pt(i, R * (card.scores[k] ?? 0) / 100).split(','); return `<circle class="rd-dot" cx="${x}" cy="${y}" r="4"/>`; }).join('')}

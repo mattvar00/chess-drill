@@ -27,6 +27,8 @@ export interface Profile {
   clock: { timeouts: number; avgMove: number | null; fastShare: number | null; blunders: number; fastBlunders: number | null; slowBlunders: number | null; n: number };
   tilt: { perDay: number; maxDay: number; afterTwoL: number; wrAfterTwoL: number | null; longSessions: number; wrLongTail: number | null; avgSess: number } | null;
   elo: Record<string, { t: number; e: number }[]>;
+  /** Précision après l'ouverture : milieu de jeu (du 11e au 30e coup) et finale (ensuite), avec le nombre de parties qui y arrivent. */
+  phases?: { m: number | null; f: number | null; nM: number; nF: number };
 }
 /** Parties coupées en sessions (une pause de plus de 20 minutes en commence une nouvelle). */
 function sessions(list: Game[]): Game[][] {
@@ -47,6 +49,7 @@ export function profile(list: Game[], themes: (ids: Set<string>) => [string, num
   if (an.length) {
     pr.tactics = { acc: Math.round(mean(an.map(g => g.st!.acc ?? 0))!), blunders: +(an.reduce((a, g) => a + g.st!.blunder, 0) / an.length).toFixed(1), mistakes: +(an.reduce((a, g) => a + g.st!.mistake, 0) / an.length).toFixed(1), themes: themes(new Set(an.map(g => g.id))) };
     const won = an.filter(g => Math.max(...myWp(g)!) >= 80), lost = an.filter(g => Math.min(...myWp(g)!) <= 20);
+    const ph = phaseAccuracy(an); pr.phases = { m: ph.m, f: ph.f, nM: an.filter(g => g.nply > 20).length, nF: an.filter(g => g.nply > 60).length };
     pr.conversion = { n: won.length, rate: pct(won.filter(g => g.res === 'W').length, won.length) };
     pr.resilience = { n: lost.length, rate: pct(lost.filter(g => g.res !== 'L').length, lost.length) };
   }
@@ -84,10 +87,10 @@ export function structureStats(list: Game[]): Record<string, StructStat> {
 }
 
 /* ---------- carte joueur : six notes sur 100 (échelles fixes, pas des percentiles) ---------- */
-export type AxisKey = 'ouverture' | 'tactique' | 'conversion' | 'resilience' | 'horloge' | 'rythme';
-export const AXES: [AxisKey, string][] = [['ouverture', 'Ouverture'], ['tactique', 'Tactique'], ['conversion', 'Conversion'], ['resilience', 'Résilience'], ['horloge', 'Horloge'], ['rythme', 'Rythme']];
-const STRONG: Record<AxisKey, string> = { ouverture: 'Théoricien', tactique: 'Tacticien', conversion: 'Finisseur', resilience: 'Accrocheur', horloge: 'Métronome', rythme: 'Régulier' };
-const WEAK: Record<AxisKey, string> = { ouverture: 'hors piste', tactique: 'distrait', conversion: 'généreux', resilience: 'fragile', horloge: 'pressé', rythme: 'insatiable' };
+export type AxisKey = 'ouverture' | 'milieu' | 'finale' | 'tactique' | 'conversion' | 'resilience' | 'horloge' | 'rythme';
+export const AXES: [AxisKey, string][] = [['ouverture', 'Ouverture'], ['milieu', 'Milieu de jeu'], ['finale', 'Finale'], ['tactique', 'Tactique'], ['conversion', 'Conversion'], ['resilience', 'Résilience'], ['horloge', 'Horloge'], ['rythme', 'Rythme']];
+const STRONG: Record<AxisKey, string> = { milieu: 'Stratège', finale: 'Technicien', ouverture: 'Théoricien', tactique: 'Tacticien', conversion: 'Finisseur', resilience: 'Accrocheur', horloge: 'Métronome', rythme: 'Régulier' };
+const WEAK: Record<AxisKey, string> = { milieu: 'dispersé', finale: 'imprécis en finale', ouverture: 'hors piste', tactique: 'distrait', conversion: 'généreux', resilience: 'fragile', horloge: 'pressé', rythme: 'insatiable' };
 export interface Card { scores: Record<AxisKey, number | null>; overall: number | null; best: AxisKey | null; worst: AxisKey | null; type: string }
 const clamp = (v: number) => Math.round(Math.max(0, Math.min(100, v)));
 /**
@@ -103,6 +106,9 @@ export function playerCard(pr: Profile): Card {
   const enough = pr.n >= MIN_GAMES, enoughAn = pr.nAn >= MIN_GAMES;
   const scores: Card['scores'] = {
     ouverture: enough ? pr.opening.coverage : null,
+    // même échelle que la tactique : la précision, ramenée de 50-100 à 0-100, sur les coups de la phase
+    milieu: pr.phases && pr.phases.nM >= MIN_GAMES && pr.phases.m != null ? clamp((pr.phases.m - 50) * 2) : null,
+    finale: pr.phases && pr.phases.nF >= MIN_CASES && pr.phases.f != null ? clamp((pr.phases.f - 50) * 2) : null,
     tactique: enoughAn && pr.tactics ? clamp((pr.tactics.acc - 50) * 2) : null,
     conversion: (pr.conversion?.n ?? 0) >= MIN_CASES ? pr.conversion!.rate ?? null : null,
     resilience: (pr.resilience?.n ?? 0) >= MIN_CASES && pr.resilience!.rate != null ? clamp(pr.resilience!.rate * 2.5) : null,
