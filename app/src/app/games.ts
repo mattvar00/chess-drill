@@ -166,6 +166,10 @@ const cap = (s: string) => s.replace(/^./, c => c.toUpperCase());
 /** Détail de la carte joueur : le radar des six notes, puis chaque axe avec ce qui l'explique. */
 export function viewProfile(root: HTMLElement) {
   const list = inScope(), pr = scopeProfile(list), card = playerCard(pr), facts = axisFacts(pr), t = pr.tactics, o = pr.opening, c = pr.clock, ti = pr.tilt;
+  const egRec = endRecord().text;
+  // les fautes relevées par le moteur en milieu de partie, sur les parties de la période
+  const ids = new Set(list.map(g => g.id)), mid = store.faults.filter(f => ids.has(f.game) && f.phase === 'milieu de partie'), th: Record<string, number> = {}; for (const f of mid) th[f.theme] = (th[f.theme] || 0) + 1;
+  const topT = Object.entries(th).sort((a, b) => b[1] - a[1])[0], phF = { m: mid.length, top: topT ? themeLabel(topT[0]) : '' };
   if (card.overall == null) { root.innerHTML = '<section class="empty"><p>Pas encore assez de parties sur cette période pour établir ton profil.</p></section>'; return; }
   const cx = 170, cy = 150, R = 104, pt = (i: number, r: number) => { const a = -Math.PI / 2 + (i * 2 * Math.PI) / AXES.length; return [cx + r * Math.cos(a), cy + r * Math.sin(a)].map(v => v.toFixed(1)).join(','); };
   const ring = (f: number) => `<polygon class="rd-grid" points="${AXES.map((_, i) => pt(i, R * f)).join(' ')}"/>`;
@@ -181,6 +185,8 @@ export function viewProfile(root: HTMLElement) {
       </svg></section>
     <section class="grp"><h2>Axe par axe</h2><div class="surf card list axes">
       ${axis('Ouverture', String(card.scores.ouverture ?? '–'), facts.ouverture, card.scores.ouverture, `${plural(o.devs, 'sortie')}, ${plural(o.gaps, 'trou')}${o.wp10 != null ? `. Au coup 10, tu as en moyenne ${o.wp10} % de chances.` : '.'}`)}
+      ${card.scores.milieu != null ? axis('Milieu de jeu', String(card.scores.milieu), facts.milieu, card.scores.milieu, `Sur ${plural(pr.phases!.nM, 'partie')} qui dépassent le 10e coup.${phF.m ? ` ${plural(phF.m, 'faute relevée', 'fautes relevées')} dans cette phase${phF.top ? `, surtout : ${esc(phF.top.toLowerCase())}` : ''}. <a href="#/wood">Les rejouer</a>` : ''}`) : ''}
+      ${card.scores.finale != null ? axis('Finale', String(card.scores.finale), facts.finale, card.scores.finale, `${egRec ? `D'après la table de finales : ${esc(egRec)}. ` : ''}<a href="#/finales">Voir tes finales</a>`) : ''}
       ${t && card.scores.tactique != null ? axis('Tactique', String(card.scores.tactique), facts.tactique, card.scores.tactique, `${String(t.mistakes).replace('.', ',')} erreur${t.mistakes >= 2 ? 's' : ''} par partie.${t.themes.length ? ` Fautes les plus fréquentes : ${t.themes.map(([k, v]) => `${k.toLowerCase()} (${v})`).join(', ')}.` : ''}`) : ''}
       ${card.scores.conversion != null ? axis('Conversion', String(card.scores.conversion), facts.conversion, card.scores.conversion, `Sur ${plural(pr.conversion!.n, 'partie')} où tu as eu au moins 80 % de chances à un moment.`) : ''}
       ${card.scores.resilience != null ? axis('Résilience', String(card.scores.resilience), facts.resilience, card.scores.resilience, `Sur ${plural(pr.resilience!.n, 'partie')} où tu es tombé à 20 % de chances ou moins. Entre 20 et 30 % sauvées, c'est habituel à ce niveau.`) : ''}
