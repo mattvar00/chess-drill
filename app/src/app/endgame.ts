@@ -77,14 +77,19 @@ export function endgameStart(g: Pick<Game, 'sans'>): number {
   for (let i = 0; i < g.sans.length; i++) { if (!tryMove(c, g.sans[i])) return -1; if (k < 0 && pieces(c.fen()) <= 7) k = i + 1; }
   return k > 0 && g.sans.length - k >= 4 ? k : -1;
 }
+/** La position qui résume la finale : quelques coups après l'entrée dans la table, une fois les derniers échanges faits. */
+export function endFen(g: Pick<Game, 'sans'>): string {
+  const k = endgameStart(g), c = new Chess(); for (let i = 0; i < Math.min(g.sans.length, k + 6); i++) tryMove(c, g.sans[i]);
+  return c.fen();
+}
 /** Le rapport d'une finale : résultat de chaque position de ton point de vue, et les coups qui l'ont changé. Gardé sur l'appareil une fois calculé. */
 export async function endReport(g: Game, onStep?: (done: number, total: number) => void): Promise<EndReport | null> {
   try { const raw = localStorage.getItem(REP + g.id); if (raw) return JSON.parse(raw) as EndReport; } catch { /* on recalcule */ }
   const start = endgameStart(g); if (start < 0) return null;
   const c = new Chess(), fens: string[] = [];
   for (let i = 0; i < g.sans.length; i++) { tryMove(c, g.sans[i]); if (i + 1 >= start) fens.push(c.fen()); }
-  const tbs: (Tb | null)[] = [];
-  for (let i = 0; i < fens.length; i++) { const hit = cache.has(fens[i].split(' ').slice(0, 4).join(' ')); tbs.push(await probe(fens[i])); onStep?.(i + 1, fens.length); if (!hit) await wait(140); }
+  const tbs: (Tb | null)[] = new Array(fens.length).fill(null); let next = 0, done = 0;
+  await Promise.all([0, 1, 2].map(async () => { while (next < fens.length) { const i = next++; tbs[i] = await probe(fens[i]); onStep?.(++done, fens.length); } }));
   if (tbs.some(t => !t)) return null;
   const mineAt = (fen: string) => fen.split(' ')[1] === g.color;                       // le trait est à toi
   const outs = fens.map((f, i) => mineAt(f) ? tbs[i]!.out : flip(tbs[i]!.out));         // de ton point de vue
@@ -98,7 +103,7 @@ export async function endReport(g: Game, onStep?: (done: number, total: number) 
   try { localStorage.setItem(REP + g.id, JSON.stringify(rep)); } catch { /* stockage plein : tant pis */ }
   return rep;
 }
-const WORD: Record<Out, string> = { w: 'gagnant', d: 'nul', l: 'perdant' };
+const WORD: Record<Out, string> = { w: 'gagnante', d: 'nulle', l: 'perdante' };
 /** Ce qu'un coup a changé, en une phrase. */
 function turnText(t: Turn): string {
   const only = t.keep.length ? `${t.keep.length === 1 ? 'Seul' : 'Il fallait'} ${orList(t.keep.slice(0, 3).map(frSan))}${t.keep.length === 1 ? (t.from === 'w' ? ' gagnait' : ' tenait') : ''}.` : '';
@@ -131,8 +136,8 @@ const RES: Record<string, string> = { W: 'Gagnée', D: 'Nulle', L: 'Perdue' };
 export function viewEndgames(root: HTMLElement) {
   const gs = endgameGames(), done = (id: string) => !!(store.state.settings as Record<string, unknown>)[`eg_${id}`];
   root.innerHTML = `
-    ${gs.length ? `<section class="grp"><h2>Tes finales</h2><div class="surf card list">${gs.map(g => { const k = endgameStart(g), c = new Chess(); for (let i = 0; i < k; i++) tryMove(c, g.sans[i]);
-      return `<a class="rowi egrow" href="#/finale/${encodeURIComponent(g.id)}">${miniFen(c.fen(), g.color).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(material(c.fen(), g.color))}</b><small>${RES[g.res] ?? ''} contre ${esc(g.opp)} · ${dayOf(g.t)}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}
+    ${gs.length ? `<section class="grp"><h2>Tes finales</h2><div class="surf card list">${gs.map(g => { const f = endFen(g);
+      return `<a class="rowi egrow" href="#/finale/${encodeURIComponent(g.id)}">${miniFen(f, g.color).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(material(f, g.color))}</b><small>${RES[g.res] ?? ''} contre ${esc(g.opp)} · ${dayOf(g.t)}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}
     <section class="grp"><h2>Les classiques</h2><div class="surf card list">${LESSONS.map(l => `<a class="rowi egrow" href="#/finales/${l.id}">${miniFen(l.fen, l.side).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(l.titre)}</b><small>${esc(l.sub)}</small></span>${done(l.id) ? `<span class="vok">${icon('check')}</span>` : ''}${icon('chev', 'chev')}</a>`).join('')}</div></section>`;
 }
 
@@ -144,10 +149,10 @@ export function viewEndgame(root: HTMLElement, g: Game) {
     if (dead) return;
     if (!rep) { root.innerHTML = `<section class="empty"><p>Cette finale n'a pas pu être lue. Vérifie ta connexion, ou la partie garde plus de 7 pièces jusqu'au bout.</p></section>`; return; }
     const mine = rep.turns.filter(t => t.mine), his = rep.turns.filter(t => !t.mine);
-    const verdict = rep.outs[0] === 'd' && !rep.turns.length ? 'Nulle du début à la fin, jouée sans faute.' : `Au départ, la position est ${WORD[rep.outs[0]]}e pour toi. Le résultat change ${plural(rep.turns.length, 'fois', 'fois')} : ${mine.length} de ton fait, ${his.length} du sien.`;
+    const verdict = rep.outs[0] === 'd' && !rep.turns.length ? 'Nulle du début à la fin, jouée sans faute.' : `Au départ, la position est ${WORD[rep.outs[0]]} pour toi. Le résultat change ${plural(rep.turns.length, 'fois', 'fois')} : ${mine.length} de ton fait, ${his.length} du sien.`;
     root.innerHTML = `
-      <section class="surf card padded eghead">${miniFen(rep.fen, g.color).replace('class="mini"', 'class="mini egboard"')}
-        <div><h2>${esc(material(rep.fen, g.color))}</h2><p>${verdict}</p></div></section>
+      <section class="surf card padded eghead">${miniFen(endFen(g), g.color).replace('class="mini"', 'class="mini egboard"')}
+        <div><h2>${esc(material(endFen(g), g.color))}</h2><p>${verdict}</p></div></section>
       <div class="egstrip" role="img" aria-label="Résultat théorique coup par coup, de ton point de vue">${rep.outs.map(o => `<i class="${o}"></i>`).join('')}</div>
       <p class="egkey"><span><i class="w"></i>gagnant</span><span><i class="d"></i>nul</span><span><i class="l"></i>perdant</span></p>
       ${rep.turns.length ? `<div class="surf card list">${rep.turns.map(t => `<div class="rowi egturn ${t.mine ? 'mine' : ''}"><span class="body"><b>${num(t.ply)}${esc(frSan(t.san))} ?</b><small>${esc(turnText(t))}</small></span>
