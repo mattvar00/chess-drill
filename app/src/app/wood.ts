@@ -17,6 +17,7 @@ import { markActive, markPlan, save, store, woodCur, woodHistory, type WoodCur }
 import { syncSoon } from './api';
 import { explorerSlot, sanTokens } from './explorer';
 import { gameUrl } from './games';
+import { dueMoments } from './endgame';
 
 export const GO = '#/wood/go';
 /** Début d'une variante, pour l'affichage (les lignes du moteur sont longues). */
@@ -53,7 +54,7 @@ export function viewWood(root: HTMLElement, q = new URLSearchParams()) {
   if (!all.length) {
     root.innerHTML = `<section class="empty"><p>Tes fautes apparaissent ici dès que tes parties sont analysées, chaque nuit.</p></section>`; return;
   }
-  const here = location.hash, F = filtered(q);
+  const here = location.hash, F = filtered(q), egs = dueMoments();
   const month = costliestFaults(all, 30, 30), n = Math.min(10, all.length), prio = priorityFaults(all, store.state.fault, n);
   const of = sysOfFault(), bySys: Record<string, number> = {}; for (const f of all) { const s = of(f); if (s) bySys[s] = (bySys[s] || 0) + 1; }
   const themes = themeCounts(all).slice(0, 6), opens = Object.entries(bySys).sort((a, b) => b[1] - a[1]).slice(0, 6);
@@ -77,6 +78,7 @@ export function viewWood(root: HTMLElement, q = new URLSearchParams()) {
       ${cur || F ? row('bPrio', 'target', plural(n, 'position prioritaire', 'positions prioritaires'), 'Celles à revoir, puis les plus coûteuses et les plus récentes') : ''}
       ${month.length ? row('bMonth', 'calendar', 'Fautes du mois', `Les ${month.length > 1 ? month.length + ' plus coûteuses' : 'plus coûteuse'} des 30 derniers jours`) : ''}
       ${row('bAll', 'stack', 'Tout le stock', plural(all.length, 'position'))}
+      ${egs.length ? `<a class="rowi" href="${egs[0].href}"><span class="ico">${icon('rook')}</span><span class="body"><b>Fautes de finale</b><small>${plural(egs.length, 'position')} à rejouer, jugées par la table de finales</small></span>${icon('chev', 'chev')}</a>` : ''}
     </div></section>
     ${hist.length ? `<section class="grp"><h2>Cycles terminés</h2><div class="surf card"><table class="cycles"><thead><tr><th>Date</th><th>Cycle</th><th>1er coup</th><th>Temps</th></tr></thead><tbody>${[...hist].reverse().slice(0, 12).map(c =>
       `<tr><td>${new Date(c.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}</td><td>${esc(c.label)}</td><td>${c.solved}/${c.n}</td><td>${fmtTime(c.time)}</td></tr>`).join('')}</tbody></table></div></section>` : ''}

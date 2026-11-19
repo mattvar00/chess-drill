@@ -17,8 +17,10 @@ import { markActive, save, store } from './store';
 /* ---------- la table ---------- */
 /** Résultat pour le camp au trait : gagné, nul, perdu (les gains qui butent sur la règle des 50 coups comptent comme nuls). */
 export type Out = 'w' | 'd' | 'l';
-interface TbMove { uci: string; san: string; category: string }
-interface Tb { out: Out; moves: { uci: string; san: string; out: Out }[]; over: boolean }
+interface TbMove { uci: string; san: string; category: string; dtz?: number | null; precise_dtz?: number | null }
+/** `dtz` : nombre de demi-coups avant la prochaine prise ou poussée de pion, en jouant au mieux (sert à voir si un gain avance). */
+interface TbReply { uci: string; san: string; out: Out; dtz: number }
+interface Tb { out: Out; dtz: number; moves: TbReply[]; over: boolean }
 const OUT: Record<string, Out> = { win: 'w', 'syzygy-win': 'w', 'maybe-win': 'w', loss: 'l', 'syzygy-loss': 'l', 'maybe-loss': 'l', draw: 'd', 'cursed-win': 'd', 'blessed-loss': 'd', unknown: 'd' };
 const flip = (o: Out): Out => o === 'w' ? 'l' : o === 'l' ? 'w' : 'd';
 const cache = new Map<string, Promise<Tb | null>>();
@@ -36,9 +38,10 @@ export function probe(fen: string): Promise<Tb | null> {
           const r = await fetch('https://tablebase.lichess.ovh/standard?fen=' + encodeURIComponent(key + ' 0 1'));
           if (r.status === 429) { await wait(3000 * (t + 1)); continue; }
           if (!r.ok) return null;
-          const j = await r.json() as { category: string; checkmate?: boolean; stalemate?: boolean; insufficient_material?: boolean; moves?: TbMove[] };
+          const j = await r.json() as { category: string; dtz?: number | null; precise_dtz?: number | null; checkmate?: boolean; stalemate?: boolean; insufficient_material?: boolean; moves?: TbMove[] };
           // la catégorie d'un coup est donnée pour l'adversaire, après le coup : on la retourne
-          return { out: OUT[j.category] ?? 'd', over: !!(j.checkmate || j.stalemate || j.insufficient_material), moves: (j.moves ?? []).map(m => ({ uci: m.uci, san: m.san, out: flip(OUT[m.category] ?? 'd') })) };
+          const dz = (x: { dtz?: number | null; precise_dtz?: number | null }) => Math.abs(x.precise_dtz ?? x.dtz ?? 0);
+          return { out: OUT[j.category] ?? 'd', dtz: dz(j), over: !!(j.checkmate || j.stalemate || j.insufficient_material), moves: (j.moves ?? []).map(m => ({ uci: m.uci, san: m.san, out: flip(OUT[m.category] ?? 'd'), dtz: dz(m) })) };
         } catch { await wait(800); }
       }
       return null;
@@ -84,7 +87,7 @@ export function endFen(g: Pick<Game, 'sans'>): string {
 }
 /** Le rapport d'une finale : résultat de chaque position de ton point de vue, et les coups qui l'ont changé. Gardé sur l'appareil une fois calculé. */
 export async function endReport(g: Game, onStep?: (done: number, total: number) => void): Promise<EndReport | null> {
-  try { const raw = localStorage.getItem(REP + g.id); if (raw) return JSON.parse(raw) as EndReport; } catch { /* on recalcule */ }
+  const old = cachedReport(g.id); if (old) { keepMoments(g, old); return old; }
   const start = endgameStart(g); if (start < 0) return null;
   const c = new Chess(), fens: string[] = [];
   for (let i = 0; i < g.sans.length; i++) { tryMove(c, g.sans[i]); if (i + 1 >= start) fens.push(c.fen()); }
@@ -101,8 +104,68 @@ export async function endReport(g: Game, onStep?: (done: number, total: number) 
   }
   const rep: EndReport = { start, fen: fens[0], outs, turns, last: outs[outs.length - 1] };
   try { localStorage.setItem(REP + g.id, JSON.stringify(rep)); } catch { /* stockage plein : tant pis */ }
+  keepMoments(g, rep);
   return rep;
 }
+/** Le rapport déjà lu d'une partie, sans rien demander à la table. */
+export function cachedReport(id: string): EndReport | null {
+  try { const raw = localStorage.getItem(REP + id); return raw ? JSON.parse(raw) as EndReport : null; } catch { return null; }
+}
+
+/* ---------- le retour des exercices ---------- */
+/**
+ * Un exercice réussi revient plus tard : une leçon après 7, 30 puis 90 jours ; une de tes fautes de finale après 3, 10, 30 puis 90 jours.
+ * Réussi avec des erreurs, il revient au même rythme sans monter d'un cran. Une faute jamais rejouée est à faire tout de suite.
+ */
+interface Rev { n: number; t: number }
+const DAY = 86400, GAPS = { l: [7, 30, 90], m: [3, 10, 30, 90] };
+const S = () => store.state.settings as Record<string, unknown>;
+const now = () => Math.floor(Date.now() / 1000);
+function revs(): Record<string, Rev> {
+  const s = S();
+  if (!s.eg) { const eg: Record<string, Rev> = {}; for (const l of LESSONS) if (s[`eg_${l.id}`]) eg[l.id] = { n: 1, t: now() }; s.eg = eg; if (Object.keys(eg).length) save(); }   // leçons réussies avant que les retours existent
+  return s.eg as Record<string, Rev>;
+}
+const isMoment = (key: string) => key.includes(':');
+export const isDone = (key: string) => !!revs()[key];
+export function isDue(key: string): boolean {
+  const r = revs()[key]; if (!r) return isMoment(key);
+  const g = isMoment(key) ? GAPS.m : GAPS.l; return now() >= r.t + g[Math.min(Math.max(r.n, 1), g.length) - 1] * DAY;
+}
+function passed(key: string, clean: boolean) { const r = revs()[key] ?? { n: 0, t: 0 }; revs()[key] = { n: clean ? r.n + 1 : Math.max(1, r.n), t: now() }; save(); }
+
+/** Tes fautes de finale : la position juste avant, gardée pour être rejouée. */
+export interface Moment { g: string; ply: number; opp: string; t: number }
+const moments = () => (S().egm ??= {}) as Record<string, Moment>;
+function keepMoments(g: Game, rep: EndReport) {
+  const M = moments(); let add = false;
+  for (const t of rep.turns) { const k = `${g.id}:${t.ply}`; if (t.mine && t.from !== 'l' && !M[k]) { M[k] = { g: g.id, ply: t.ply, opp: g.opp, t: g.t }; add = true; } }
+  if (!add) return;
+  for (const k of Object.keys(M).sort((a, b) => M[b].t - M[a].t).slice(40)) { delete M[k]; delete revs()[k]; }   // on garde les 40 plus récentes
+  save();
+}
+const momentHref = (m: Moment) => `#/finale/${encodeURIComponent(m.g)}/${m.ply}`;
+/** Les fautes de finale à rejouer maintenant, les plus récentes d'abord (seulement celles dont la partie est encore sur l'appareil). */
+export function dueMoments(): { key: string; m: Moment; href: string }[] {
+  const have = new Set(store.games.map(g => g.id)), M = moments();
+  return Object.keys(M).filter(k => have.has(M[k].g) && isDue(k)).sort((a, b) => M[b].t - M[a].t || M[a].ply - M[b].ply).map(key => ({ key, m: M[key], href: momentHref(M[key]) }));
+}
+/** Ce qui est à revoir en finales : d'abord tes fautes, puis les leçons dont le délai est passé. */
+export function endDue(): { n: number; href: string; title: string; fen: string; side: Color } | null {
+  const dm = dueMoments(), dl = LESSONS.filter(l => isDone(l.id) && isDue(l.id)), n = dm.length + dl.length;
+  if (dm[0]) { const g = store.games.find(x => x.id === dm[0].m.g), t = cachedReport(dm[0].m.g)?.turns.find(x => x.ply === dm[0].m.ply);
+    return { n, href: dm[0].href, title: 'Tes fautes de finale', fen: t?.fen ?? (g ? endFen(g) : new Chess().fen()), side: g?.color ?? 'w' }; }
+  return dl[0] ? { n, href: `#/finales/${dl[0].id}`, title: dl[0].titre, fen: dl[0].fen, side: dl[0].side } : null;
+}
+
+/** Ton bilan sur les finales déjà lues : selon ce que disait la table à l'entrée en finale, ce que tu en as fait. */
+export function endRecord(): { text: string; read: number; todo: Game[] } {
+  const gs = endgameGames(), c = { w: [0, 0], d: [0, 0], l: [0, 0] }, todo: Game[] = []; let read = 0;
+  for (const g of gs) { const r = cachedReport(g.id); if (!r) { todo.push(g); continue; } read++; const k = c[r.outs[0]]; k[1]++; if (r.outs[0] === 'w' ? g.res === 'W' : g.res !== 'L') k[0]++; }
+  const part = (k: number[], a: string, b: string) => k[1] ? `${k[0]} ${a} sur ${k[1]} ${b}` : '';
+  return { read, todo, text: [part(c.w, plural1(c.w[0], 'gagnée', 'gagnées'), plural1(c.w[1], 'gagnante', 'gagnantes')), part(c.d, plural1(c.d[0], 'tenue', 'tenues'), plural1(c.d[1], 'nulle', 'nulles')), part(c.l, plural1(c.l[0], 'sauvée', 'sauvées'), plural1(c.l[1], 'perdante', 'perdantes'))].filter(Boolean).join(' · ') };
+}
+const plural1 = (n: number, one: string, many: string) => n > 1 ? many : one;
 const WORD: Record<Out, string> = { w: 'gagnante', d: 'nulle', l: 'perdante' };
 /** Ce qu'un coup a changé, en une phrase. */
 function turnText(t: Turn): string {
@@ -136,9 +199,9 @@ export const LESSONS: Lesson[] = [
     intro: 'Ton pion file vers la dame. Son roi peut-il le rattraper ?', idea: 'Trace le carré du pion jusqu\'à sa case de promotion : si son roi ne peut pas y entrer, le pion passe. Ici, il faut avancer de deux cases tout de suite.' },
   { id: 'devant', g: 'Pions', titre: 'Le roi devant son pion', sub: 'Roi et pion contre roi : gagner', fen: '4k3/8/8/4K3/4P3/8/8/8 w - - 0 1', side: 'w', goal: 'w', n: 14,
     intro: 'Le pion ne passera pas tout seul.', idea: 'Ton roi avance d\'abord, devant son pion. Arrivé sur la 6e rangée devant lui, le gain est assuré.' },
-  { id: 'oppo', nom: "l'opposition", g: 'Pions', titre: 'Tenir l\'opposition', sub: 'Roi et pion contre roi : annuler', fen: '8/8/4k3/8/4PK2/8/8/8 b - - 0 1', side: 'b', goal: 'd', n: 8,
+  { id: 'oppo', nom: "l'opposition", g: 'Pions', titre: 'Tenir l\'opposition', sub: 'Roi et pion contre roi : annuler', fen: '8/8/4k3/8/4PK2/8/8/8 b - - 0 1', side: 'b', goal: 'd', n: 9,
     intro: 'Un pion de moins. Une seule case de roi tient la nulle.', idea: 'Mets ton roi en face du sien, une case entre les deux : c\'est l\'opposition. Il ne peut plus passer devant son pion.' },
-  { id: 'distance', nom: "l'opposition à distance", g: 'Pions', titre: 'L\'opposition à distance', sub: 'Quand ton roi est loin', fen: '4k3/8/8/8/4PK2/8/8/8 b - - 0 1', side: 'b', goal: 'd', n: 8,
+  { id: 'distance', nom: "l'opposition à distance", g: 'Pions', titre: 'L\'opposition à distance', sub: 'Quand ton roi est loin', fen: '4k3/8/8/8/4PK2/8/8/8 b - - 0 1', side: 'b', goal: 'd', n: 10,
     intro: 'Ton roi est loin. Une seule case tient encore.', idea: 'Même colonne que son roi, un nombre impair de cases entre vous : quand il avancera, c\'est toi qui auras l\'opposition.' },
   { id: 'dame7', g: 'Dame', titre: 'Dame contre pion en 7e', sub: 'Gagner avant qu\'il fasse dame', fen: '7K/4Q3/8/8/8/8/3kp3/8 w - - 0 1', side: 'w', goal: 'w', n: 12,
     intro: 'Son pion va faire dame, et ton roi est loin.', idea: 'Donne des échecs jusqu\'à forcer son roi devant son pion. À chaque fois, ton roi gagne un coup pour s\'approcher.' },
@@ -153,14 +216,19 @@ const dayOf = (t: number) => new Date(t * 1000).toLocaleDateString('fr-FR', { da
 const RES: Record<string, string> = { W: 'Gagnée', D: 'Nulle', L: 'Perdue' };
 const GROUPS: [Lesson['g'], string][] = [['Tours', 'Finales de tours'], ['Pions', 'Finales de pions'], ['Dame', 'Dame contre pion'], ['Fou', 'Fou et pion']];
 /** La page Finales : tes parties qui se sont jouées en finale, puis les classiques. */
-export function viewEndgames(root: HTMLElement) {
-  const gs = endgameGames(), done = (id: string) => !!(store.state.settings as Record<string, unknown>)[`eg_${id}`];
-  const nx = nextLesson(), nDone = LESSONS.filter(l => done(l.id)).length;
+export function viewEndgames(root: HTMLElement): () => void {
+  const gs = endgameGames(), done = isDone;
+  const nx = nextLesson(), nDone = LESSONS.filter(l => done(l.id)).length, dueL = LESSONS.filter(l => done(l.id) && isDue(l.id)), dm = dueMoments(), rec = endRecord();
+  let dead = false;
   root.innerHTML = `
-    <section class="surf card padded egnext"><div><b>${nDone ? `${nDone} sur ${LESSONS.length}` : `${LESSONS.length} leçons`}</b><span class="prog"><b style="width:${Math.round(100 * nDone / LESSONS.length)}%"></b></span></div>${nx ? `<a class="btn pri" href="#/finales/${nx.id}">${nDone ? 'Continuer' : 'Commencer'}</a>` : ''}</section>
-    ${gs.length ? `<section class="grp"><h2>Tes finales</h2><div class="surf card list">${gs.map(g => { const f = endFen(g);
+    <section class="surf card padded egnext"><div><b>${nDone ? `${nDone} sur ${LESSONS.length}` : `${LESSONS.length} leçons`}${dueL.length ? `<small>${dueL.length} à revoir</small>` : ''}</b><span class="prog"><b style="width:${Math.round(100 * nDone / LESSONS.length)}%"></b></span></div>${dueL.length ? `<a class="btn pri" href="#/finales/${dueL[0].id}">Revoir</a>` : nx ? `<a class="btn pri" href="#/finales/${nx.id}">${nDone ? 'Continuer' : 'Commencer'}</a>` : ''}</section>
+    ${gs.length ? `<section class="grp"><h2>Tes finales</h2><p class="egrec" id="egrec"${rec.text ? '' : ' hidden'}>${esc(rec.text)}</p><div class="surf card list"><a class="rowi egrow" id="egm" href="${dm[0]?.href ?? '#'}"${dm.length ? '' : ' hidden'}><span class="ico">${icon('target')}</span><span class="body"><b>Tes fautes à rejouer</b><small>${plural(dm.length, 'position')}, jugées par la table</small></span>${icon('chev', 'chev')}</a>${gs.map(g => { const f = endFen(g);
       return `<a class="rowi egrow" href="#/finale/${encodeURIComponent(g.id)}">${miniFen(f, g.color).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(material(f, g.color))}</b><small>${RES[g.res] ?? ''} contre ${esc(g.opp)} · ${dayOf(g.t)}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}
-    ${GROUPS.map(([g, title]) => `<section class="grp"><h2>${title}</h2><div class="surf card list">${LESSONS.filter(l => l.g === g).map(l => `<a class="rowi egrow" href="#/finales/${l.id}">${miniFen(l.fen, l.side).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(l.titre)}</b><small>${esc(l.sub)}</small></span>${done(l.id) ? `<span class="vok">${icon('check')}</span>` : ''}${icon('chev', 'chev')}</a>`).join('')}</div></section>`).join('')}`;
+    ${GROUPS.map(([g, title]) => `<section class="grp"><h2>${title}</h2><div class="surf card list">${LESSONS.filter(l => l.g === g).map(l => `<a class="rowi egrow" href="#/finales/${l.id}">${miniFen(l.fen, l.side).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(l.titre)}</b><small>${esc(l.sub)}</small></span>${done(l.id) ? (isDue(l.id) ? '<span class="vdue">à revoir</span>' : `<span class="vok">${icon('check')}</span>`) : ''}${icon('chev', 'chev')}</a>`).join('')}</div></section>`).join('')}`;
+  // les finales pas encore lues le sont en fond, une à la fois : le bilan se complète, et tes fautes entrent dans les révisions
+  void (async () => { for (const g of rec.todo.slice(0, 6)) { if (dead || !(await endReport(g))) return; if (dead) return; const el = root.querySelector<HTMLElement>('#egrec'), t = endRecord().text; if (el && t) { el.textContent = t; el.hidden = false; }
+    const row = root.querySelector<HTMLAnchorElement>('#egm'), d2 = dueMoments(); if (row && d2.length) { row.hidden = false; row.href = d2[0].href; row.querySelector('small')!.textContent = `${plural(d2.length, 'position')}, jugées par la table`; } } })();
+  return () => { dead = true; };
 }
 
 /** Une de tes finales : la bande gagné / nul / perdu, et chaque moment où le résultat a changé. */
@@ -184,46 +252,73 @@ export function viewEndgame(root: HTMLElement, g: Game) {
   return () => { dead = true; };
 }
 
-interface Drill { fen: string; side: Color; goal: 'w' | 'd'; n: number; title: string; intro: string; idea: string; back: string; done?: () => void;
+interface Drill { fen: string; side: Color; goal: 'w' | 'd'; n: number; title: string; intro: string; idea: string; back: string; /** `clean` : réussi sans erreur ni indice. */ done?: (clean: boolean) => void;
   /** L'exercice suivant, pour enchaîner sans repasser par la liste. */ next?: string;
   /** Le nom de la position quand elle en a un (« le pont de Lucena ») : dit à la fin, pour le retenir. */ nom?: string }
 /** La position d'une de tes fautes de finale, prête à rejouer. */
 export async function turnDrill(g: Game, ply: number): Promise<Drill | null> {
   const rep = await endReport(g), t = rep?.turns.find(x => x.ply === ply && x.mine); if (!rep || !t || t.from === 'l') return null;
-  const later = rep.turns.find(x => x.mine && x.from !== 'l' && x.ply > ply);
-  return { fen: t.fen, side: g.color, goal: t.from, n: t.from === 'w' ? 10 : 6, title: `${num(ply)}${frSan(t.san)} ?`, back: `#/finale/${encodeURIComponent(g.id)}`, next: later ? `#/finale/${encodeURIComponent(g.id)}/${later.ply}` : undefined,
+  const later = rep.turns.find(x => x.mine && x.from !== 'l' && x.ply > ply), key = `${g.id}:${ply}`;
+  return { fen: t.fen, side: g.color, goal: t.from, n: t.from === 'w' ? 10 : 6, title: `${num(ply)}${frSan(t.san)} ?`, back: `#/finale/${encodeURIComponent(g.id)}`,
+    get next() { return later && isDue(`${g.id}:${later.ply}`) ? `#/finale/${encodeURIComponent(g.id)}/${later.ply}` : dueMoments().find(x => x.key !== key)?.href; },
+    done: clean => passed(key, clean),
     intro: t.from === 'w' ? 'Ici tu avais le gain. Retrouve le coup, puis tiens-le.' : 'Ici la nulle tenait encore. Retrouve le coup, puis tiens-la.', idea: turnText(t) };
 }
-const isDone = (id: string) => !!(store.state.settings as Record<string, unknown>)[`eg_${id}`];
-/** La leçon à faire après celle-ci : la prochaine pas encore réussie, sinon simplement la suivante de la liste. */
+/** La leçon à faire après celle-ci : la prochaine pas encore réussie, sinon une à revoir, sinon simplement la suivante de la liste. */
 export function nextLesson(after?: string): Lesson | undefined {
   const i = after ? LESSONS.findIndex(l => l.id === after) : -1, rest = [...LESSONS.slice(i + 1), ...LESSONS.slice(0, Math.max(0, i))];
-  return rest.find(l => !isDone(l.id)) ?? (after ? LESSONS[i + 1] : LESSONS[0]);
+  return rest.find(l => !isDone(l.id)) ?? rest.find(l => isDue(l.id)) ?? (after ? LESSONS[i + 1] : LESSONS[0]);
 }
 export const lessonDrill = (l: Lesson): Drill => ({ fen: l.fen, side: l.side, goal: l.goal, n: l.n, title: l.titre, intro: l.intro, idea: l.idea, back: '#/finales', nom: l.nom,
   get next() { const n = nextLesson(l.id); return n && n.id !== l.id ? `#/finales/${n.id}` : undefined; },
-  done: () => { (store.state.settings as Record<string, unknown>)[`eg_${l.id}`] = 1; save(); } });
+  done: clean => passed(l.id, clean) });
+
+const sq = (s: string) => [s.charCodeAt(0) - 97, +s[1] - 1];
+const kingOf = (c: Chess, col: Color) => { for (const row of c.board()) for (const p of row) if (p && p.type === 'k' && p.color === col) return p.square as string; return 'a1'; };
+/** Il ne reste à l'adversaire que son roi, et toi une dame ou une tour : le gain est fait. */
+const bare = (fen: string, me: Color) => { const s = fen.split(' ')[0].replace(/[^a-zA-Z]/g, '').split(''), mine = (c: string) => (c === c.toUpperCase()) === (me === 'w');
+  return !s.some(c => !mine(c) && c.toLowerCase() !== 'k') && s.some(c => mine(c) && 'qr'.includes(c.toLowerCase())); };
+/**
+ * La réponse de l'adversaire. S'il est perdant, la défense la plus longue (le premier coup de la table).
+ * Si c'est nul, la table ne classe pas ses coups : on prend celui qui essaie vraiment, sans finir la partie, sans donner de matériel,
+ * le roi qui avance d'abord, puis la poussée de pion. Sinon la leçon s'arrêterait sur un cadeau au lieu de te faire trouver la défense.
+ */
+function pickReply(game: Chess, tb: Tb, me: Color): TbReply | undefined {
+  const c = tb.moves.filter(m => m.out === tb.moves[0].out);
+  if (tb.out !== 'd' || c.length < 2) return c[0];
+  let best = c[0], top = -1e9;
+  for (const m of c) {
+    const x = new Chess(game.fen()), mv = tryMove(x, uciToObj(m.uci)); if (!mv) continue;
+    let s: number;
+    if (x.isGameOver()) s = -100;
+    else if ((x.moves({ verbose: true }) as Move[]).some(u => { if (!u.captured) return false; const y = new Chess(x.fen()); tryMove(y, u); return !(y.moves({ verbose: true }) as Move[]).some(r => r.to === u.to && r.captured); })) s = -50;
+    else { const [a, b] = sq(kingOf(x, me === 'w' ? 'b' : 'w')), [e, f] = sq(kingOf(x, me)); s = -Math.max(Math.abs(a - e), Math.abs(b - f)) + (mv.piece === 'p' ? 0.5 : 0); }
+    if (s > top) { top = s; best = m; }
+  }
+  return best;
+}
 
 /**
  * L'exercice : tu joues, la table juge. Un coup qui laisse filer le but (le gain, ou la nulle) est repris, et compte comme une erreur.
- * L'adversaire répond par la meilleure défense. C'est réussi quand tu mates, quand ton pion va à dame, ou quand tu as tenu `n` coups.
+ * Pour une nulle, c'est réussi quand elle est acquise ou tenue `n` coups. Pour un gain, quand tu mates, fais dame, ne lui laisses que son roi,
+ * ou as avancé de `n` coups : un coup qui garde le gain sans le rapprocher est accepté mais ne compte pas, tourner en rond ne suffit pas.
  */
 export function mountDrill(root: HTMLElement, d: Drill): () => void {
   root.innerHTML = `<div class="trainer cours"><div class="tboard"><div id="board"></div></div>
     <div class="tside"><div class="tmain"><div class="coach ctop" id="coach" aria-live="polite"></div><div class="actions" id="actions"></div></div></div></div>`;
   $('.trainer', root).insertBefore($('#coach', root), $('.tboard', root));
   const coach = $('#coach', root), actions = $('#actions', root);
-  let game = new Chess(d.fen), busy = false, over = false, won = false, errs = 0, ok = 0, miss = 0, dead = false, last: Move | null = null;
+  let game = new Chess(d.fen), busy = false, over = false, won = false, errs = 0, ok = 0, miss = 0, dead = false, last: Move | null = null, near = Infinity, idle = 0;
   const say = (mood: Mood, head: string, text = '') => { coach.innerHTML = coachSay(mood, `<p class="lead${mood === 'oops' ? ' bad' : ''}">${head}</p>${text ? `<p class="why">${text}</p>` : ''}`); };
   const board = new Board($('#board', root), { movable: () => (busy || over ? null : d.side), onMove: m => { void play(m); } });
   const goalWord = d.goal === 'w' ? 'le gain' : 'la nulle';
   const paint = () => board.set(game, d.side, last, true);
   const btns = () => { actions.innerHTML = over ? `<button class="btn" id="bAgain">Rejouer</button>${won && d.next ? `<a class="btn pri" href="${d.next}">Suivante</a><a class="btn" href="${d.back}">Arrêter là</a>` : `<a class="btn pri" href="${d.back}">Continuer</a>`}` : `<button class="btn" id="bHint">Indice</button><a class="btn" href="${d.back}">Arrêter là</a>`;
     actions.querySelector<HTMLElement>('#bAgain')?.addEventListener('click', restart); actions.querySelector<HTMLElement>('#bHint')?.addEventListener('click', () => { void hint(); }); };
-  function restart() { game = new Chess(d.fen); over = false; won = false; busy = false; errs = 0; ok = 0; miss = 0; last = null; $('.trainer', root).classList.remove('fin'); paint(); btns(); say('idle', esc(d.intro), `À toi : ${d.goal === 'w' ? 'gagne' : 'tiens la nulle'}.`); }
+  function restart() { game = new Chess(d.fen); over = false; won = false; busy = false; errs = 0; ok = 0; miss = 0; last = null; near = Infinity; idle = 0; if (d.goal === 'w') void probe(d.fen).then(t => { if (t && near === Infinity && !ok) near = t.dtz; }); $('.trainer', root).classList.remove('fin'); paint(); btns(); say('idle', esc(d.intro), `À toi : ${d.goal === 'w' ? 'gagne' : 'tiens la nulle'}.`); }
   async function hint() { if (busy || over) return; const tb = await probe(game.fen()); if (dead || !tb) return; const m = tb.moves.find(x => x.out === tb.out) ?? tb.moves[0]; if (!m) return;
     miss++; board.hint(miss >= 2 ? [m.uci.slice(0, 2), m.uci.slice(2, 4)] : [m.uci.slice(0, 2)]); say('talk', 'Indice', esc(d.idea)); }
-  function finish(win: boolean, head: string, text: string) { over = true; won = win; if (win && d.nom) text = `${text} <b>Retiens : ${esc(d.nom)}.</b>`; $('.trainer', root).classList.add('fin'); if (win) { SFX.done(); if (!errs) confetti(24); d.done?.(); markActive(); } say(win ? (errs ? 'happy' : 'party') : 'oops', head, text); btns(); }
+  function finish(win: boolean, head: string, text: string) { over = true; won = win; if (win && d.nom) text = `${text} <b>Retiens : ${esc(d.nom)}.</b>`; $('.trainer', root).classList.add('fin'); if (win) { SFX.done(); if (!errs) confetti(24); d.done?.(!errs && !miss); markActive(); } say(win ? (errs ? 'happy' : 'party') : 'oops', head, text); btns(); }
   async function play(m: Move) {
     if (busy || over) return; busy = true;
     const before = game.fen(), promo = m.flags.includes('p'), made = tryMove(game, { from: m.from, to: m.to, promotion: m.promotion });
@@ -239,17 +334,22 @@ export function mountDrill(root: HTMLElement, d: Drill): () => void {
       if (errs >= 3) { const t = await probe(before); const b = t?.moves.find(x => x.out === t.out); if (b && !dead) board.hint([b.uci.slice(0, 2), b.uci.slice(2, 4)]); }
       return;
     }
-    ok++;
+    // un gain doit avancer : la prochaine prise ou poussée de pion se rapproche (ou le coup en est une)
+    const zero = !!made.captured || made.piece === 'p', adv = d.goal === 'd' || zero || tb.dtz < near;
+    near = zero ? tb.dtz : Math.min(near, tb.dtz); if (adv) { ok++; idle = 0; } else idle++;
     if (game.isCheckmate()) return finish(true, 'Mat !', errs ? `Avec ${plural(errs, 'erreur')}. ${esc(d.idea)}` : esc(d.idea));
-    if (tb.over || game.isDraw()) return finish(d.goal === 'd', d.goal === 'd' ? 'Nulle tenue.' : 'C\'est nul.', esc(d.idea));
+    if (tb.over || game.isDraw()) return finish(d.goal === 'd', d.goal === 'd' ? 'Nulle tenue.' : game.isThreefoldRepetition() ? 'Trois fois la même position : c\'est nul.' : 'C\'est nul.', esc(d.idea));
     if (d.goal === 'w' && promo) return finish(true, 'Dame ! Le gain est fait.', errs ? `Avec ${plural(errs, 'erreur')}. ${esc(d.idea)}` : esc(d.idea));
+    if (d.goal === 'w' && bare(game.fen(), d.side)) return finish(true, 'Il ne lui reste que son roi.', errs ? `Avec ${plural(errs, 'erreur')}. ${esc(d.idea)}` : esc(d.idea));
     if (ok >= d.n) return finish(true, d.goal === 'w' ? 'Tu tiens le gain.' : 'Nulle tenue.', errs ? `Avec ${plural(errs, 'erreur')}. ${esc(d.idea)}` : esc(d.idea));
     // la meilleure défense : la table trie les coups du meilleur au moins bon pour le camp au trait
-    const reply = tb.moves[0]; await wait(380); if (dead) return;
+    const reply = pickReply(game, tb, d.side); await wait(380); if (dead) return;
     const rm = reply ? tryMove(game, uciToObj(reply.uci)) : null;
-    if (rm) { last = rm; paint(); SFX.forMove(rm); }
-    if (game.isCheckmate() || game.isDraw()) return finish(d.goal === 'd' && !game.isCheckmate(), game.isCheckmate() ? 'Mat contre toi.' : 'Nulle.', esc(d.idea));
-    busy = false; say('happy', `${frSan(made.san)} tient ${goalWord}.`, rm ? `Il répond ${frSan(rm.san)}. À toi.` : 'À toi.');
+    if (rm) { last = rm; paint(); SFX.forMove(rm); if (rm.captured || rm.piece === 'p') near = reply!.dtz; }
+    if (game.isCheckmate() || game.isDraw()) return finish(d.goal === 'd' && !game.isCheckmate(), game.isCheckmate() ? 'Mat contre toi.' : d.goal === 'd' ? 'Nulle tenue.' : game.isThreefoldRepetition() ? 'Trois fois la même position : c\'est nul.' : 'Nulle.', esc(d.idea));
+    busy = false;
+    if (idle >= 2) say('talk', 'Ça gagne encore, mais tu tournes en rond.', `${esc(d.idea)}${rm ? ` Il répond ${frSan(rm.san)}.` : ''}`);
+    else say('happy', `${frSan(made.san)} tient ${goalWord}.`, rm ? `Il répond ${frSan(rm.san)}. À toi.` : 'À toi.');
   }
   restart();
   return () => { dead = true; board.destroy(); };

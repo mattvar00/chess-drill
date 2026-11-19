@@ -95,7 +95,7 @@ function route() {
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewPath(view); }
     else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!; shell(l.titre, l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle', '#/finales', TRAIN, '', 'session'); cleanup = mountDrill(view, lessonDrill(l)); }
-    else if (p[0] === 'finales') { shell('Finales', '', '#/rep/choisir', TRAIN); viewEndgames(view); }
+    else if (p[0] === 'finales') { shell('Finales', '', '#/rep/choisir', TRAIN); cleanup = viewEndgames(view); }
     else if (p[0] === 'finale' && p[1]) { const g = store.games.find(x => x.id === decodeURIComponent(p[1])), back = `#/finale/${p[1]}`;
       if (!g) { location.replace('#/finales'); return; }
       if (p[2]) { shell('Rejoue ce moment', `contre ${g.opp}`, back, TRAIN, '', 'session'); let off = () => { /* pas encore monté */ }, gone = false; cleanup = () => { gone = true; off(); };
