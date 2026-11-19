@@ -5,6 +5,7 @@ import type { Bloc, Branch, System } from '../core/types';
 import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
+import { endgameGames, endgameStart, material } from './endgame';
 import { bindPath, courseBoard, devRow, familyColor, nextUp, openCourse, otherUps, pathBlock, runUp, shortName, unitFor } from './path';
 import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
 import { lineName, lineTitle, nomTitle, plainName, popBars, roleLabel, shortNom, typeLabel, variantTitle } from '../core/names';
@@ -90,6 +91,10 @@ export function viewHome(root: HTMLElement) {
       for (const m of br.moves.slice(0, stop)) if (!tryMove(g, uciToObj(m.uci))) break; board = miniBoard(g, bloc.side); }
     cards.push({ kick: shortName(up.u.sys.titre), fam: familyColor(up.u.bloc.id), title: up.line ? variantTitle(BR[up.line].br).title : shortName(up.u.sys.titre), why: up.line && variantTitle(BR[up.line].br).sub ? `${esc(variantTitle(BR[up.line].br).sub)}. ${up.why}` : up.why, board, cta: up.label, go: () => runUp(up) });
   }
+  // ta dernière partie s'est jouée en finale et tu n'as pas gagné : la table dit où ça s'est décidé
+  const eg = endgameGames(1)[0];
+  if (eg && eg.res !== 'W' && Date.now() / 1000 - eg.t < 3 * 86400) { const k = endgameStart(eg), c = new Chess(); for (let i = 0; i < k; i++) tryMove(c, eg.sans[i]);
+    cards.splice(Math.min(1, cards.length), 0, { kick: 'Ta finale', title: material(c.fen(), eg.color), why: `${eg.res === 'L' ? 'Perdue' : 'Nulle'} contre ${esc(eg.opp)}. La table dit où ça s'est joué.`, board: miniBoard(c, eg.color), cta: 'Voir ma finale', go: () => { location.hash = `#/finale/${encodeURIComponent(eg.id)}`; } }); }
   for (const s of todo) cards.push({ kick: 'Ta séance', title: s.title, why: s.sub, board: s.thumb, cta: `Commencer · ${s.min} min`, go: s.go });
   for (const a of up ? otherUps(up.u.sys.id) : []) cards.push({ kick: shortName(a.u.sys.titre), fam: familyColor(a.u.bloc.id), title: shortName(a.u.sys.titre), why: a.why, board: courseBoard(a.u), cta: 'Ouvrir le cours', go: () => openCourse(a.u) });
   const head = `<header class="hello fhead"><h1>Pour toi</h1>

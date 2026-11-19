@@ -25,6 +25,8 @@ const ICONS: Record<string, string> = {
   search: '<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5" stroke-width="2"/>',
   pawn: '<circle cx="12" cy="6.5" r="3"/><path d="M9.5 10.5h5l1 6h-7zM6.5 20.5h11l-1.5-4h-8z"/>',
   chart: '<path d="M4 20V4M4 20h16"/><path d="M7.5 15l3.5-4.5 3 2.5 5-6.5" stroke-width="2"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.3-4.2L4 9"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14.3 4.2L20 15"/><path d="M20 20v-5h-5"/>',
+  rook: '<path d="M7 4h2.500v2h1.800V4h1.400v2h1.800V4H17v5H7z"/><path d="M8.500 9h7l.800 8.500H7.700z"/><path d="M6 20.500h12"/>',
   link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
 };
 export const icon = (name: string, cls = '') => `<svg class="ic${cls ? ' ' + cls : ''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] ?? ''}</svg>`;

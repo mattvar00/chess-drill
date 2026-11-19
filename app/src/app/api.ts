@@ -1,6 +1,7 @@
 /** Lien avec le serveur : parties analysées chaque nuit et progression partagée entre appareils. */
 import type { BranchState, Game, PosState } from '../core/types';
 import type { Fault } from '../core/analysis';
+import { toGame, type ChessComGame } from '../core/ingest';
 import { addFaults, addGames, save, store, woodHistory, type WoodCycle } from './store';
 
 const TOKEN = 'cd_token', PUSHED = 'cd_pushed', SYNCED = 'cd_synced', CURSOR = 'cd_games_cursor';
@@ -68,4 +69,26 @@ export async function fullGame(id: string): Promise<Game | null> {
   const full = await call<Game>(`/games/${encodeURIComponent(user)}/${encodeURIComponent(id)}`);
   if (full.ev?.length) { const merged = { ...g, ev: full.ev }; await addGames([merged]); return merged; }
   return g;
+}
+
+/**
+ * Va chercher tout de suite tes dernières parties sur Chess.com, sans attendre l'analyse de la nuit. Elles arrivent sans l'évaluation
+ * du moteur (qui les complétera cette nuit), mais avec la comparaison au répertoire, et les finales se lisent déjà.
+ * Renvoie le nombre de nouvelles parties, ou -1 si Chess.com n'a pas répondu.
+ */
+export async function pullChessCom(): Promise<number> {
+  const user = String(store.state.settings.user || 'matt_chess00').trim().toLowerCase(), now = new Date();
+  const months = [[now.getUTCFullYear(), now.getUTCMonth() + 1]];
+  if (now.getUTCDate() <= 3) { const p = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)); months.unshift([p.getUTCFullYear(), p.getUTCMonth() + 1]); }
+  const have = new Set(store.games.map(g => g.id)), fresh: Game[] = [];
+  try {
+    for (const [y, m] of months) {
+      const r = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(user)}/games/${y}/${String(m).padStart(2, '0')}`);
+      if (!r.ok) { if (r.status === 404) continue; return -1; }
+      const j = await r.json() as { games?: ChessComGame[] };
+      for (const cg of j.games ?? []) { const g = toGame(cg, user); if (g && g.sans.length >= 2 && !have.has(g.id)) { have.add(g.id); fresh.push(g); } }
+    }
+  } catch { return -1; }
+  await addGames(fresh);
+  return fresh.length;
 }

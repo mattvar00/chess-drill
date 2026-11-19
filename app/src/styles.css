@@ -1112,3 +1112,18 @@ h1,h2,.pbn,.ftext h2,.cpick b{letter-spacing:-.015em}
 /* Tes cours : la couleur jouée en pastille, les chiffres en petit */
 .cdisc{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:1px;border:1.5px solid var(--mute)}.cdisc.w{background:#fff;border-color:#fff}.cdisc.b{background:#0B1626}
 .crow .ctop2 small{white-space:nowrap}
+
+/* Finales */
+.proghead{display:flex;flex-direction:row;align-items:center;justify-content:space-between;gap:12px;text-align:left}
+.btn.upd{display:inline-flex;align-items:center;gap:8px;flex:none;padding:10px 16px;border-radius:999px}.btn.upd .ic{width:18px;height:18px}
+.btn.upd.busy .ic{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.pullst{margin:0 2px 12px;font-size:13px;color:var(--c-mute)}
+.egentry{margin-bottom:14px}
+.egrow .mini.cthumb{width:52px;height:52px}
+.egload{display:flex;flex-direction:column;gap:12px}
+.eghead{display:flex;gap:14px;align-items:center}.eghead h2{margin:0;font:700 19px/1.2 var(--f-title)}.eghead p{margin:6px 0 0;font-size:14px;color:var(--mute)}
+.mini.egboard{width:112px;height:112px;flex:none;border-radius:10px}
+.egstrip{display:flex;gap:1px;height:16px;border-radius:8px;overflow:hidden;margin:14px 0 6px}
+.egstrip i,.egkey i{flex:1}.egstrip .w,.egkey .w{background:#5FC58A}.egstrip .d,.egkey .d{background:#8FA0C4}.egstrip .l,.egkey .l{background:#F0706A}
+.egkey{display:flex;gap:14px;margin:0 2px 14px;font-size:12px;color:var(--c-mute)}.egkey span{display:inline-flex;align-items:center;gap:6px}.egkey i{flex:none;width:10px;height:10px;border-radius:3px}
+.egturn{align-items:center;gap:10px}.egturn .btn{flex:none;padding:8px 14px}.egturn:not(.mine) .body b{color:var(--mute);font-weight:500}

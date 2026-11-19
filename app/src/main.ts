@@ -13,6 +13,7 @@ import { endSession, lineUrl, session } from './app/session';
 import { sync } from './app/api';
 import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile } from './app/games';
+import { LESSONS, lessonDrill, mountDrill, turnDrill, viewEndgame, viewEndgames } from './app/endgame';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
@@ -93,6 +94,13 @@ function route() {
     else if ((p[0] === 'rep' && p[1] === 'sorties') || p[0] === 'entrainer') { location.replace('#/rep'); return; }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewPath(view); }
+    else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!; shell(l.titre, l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle', '#/finales', TRAIN, '', 'session'); cleanup = mountDrill(view, lessonDrill(l)); }
+    else if (p[0] === 'finales') { shell('Finales', '', '#/rep/choisir', TRAIN); viewEndgames(view); }
+    else if (p[0] === 'finale' && p[1]) { const g = store.games.find(x => x.id === decodeURIComponent(p[1])), back = `#/finale/${p[1]}`;
+      if (!g) { location.replace('#/finales'); return; }
+      if (p[2]) { shell('Rejoue ce moment', `contre ${g.opp}`, back, TRAIN, '', 'session'); let off = () => { /* pas encore monté */ }, gone = false; cleanup = () => { gone = true; off(); };
+        turnDrill(g, +p[2]).then(d => { if (gone) return; if (!d) { location.replace(back); return; } off = mountDrill(view, d); }); }
+      else { shell('Ta finale', `contre ${g.opp}`, '#/finales', TRAIN); cleanup = viewEndgame(view, g); } }
     else if (p[0] === 'lecon') { shell('Bilan', '', null, null); viewLessonEnd(view); }
     else if (p[0] === 'wood') { shell('Fautes', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', q.get('r') ? backOf(q, WOOD) : null, WOOD); viewWood(view, q); }
     else if (p[0] === 'explorer') { const back = backOf(q, TRAIN); shell('Explorer une position', q.get('fen') ? 'Le moteur montre le meilleur coup' : '', back, TRAIN, '', 'board');

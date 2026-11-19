@@ -9,7 +9,7 @@ import { Board } from '../ui/board';
 import { advantageChart, bindChart, eloChart, setAdvantageCursor } from '../ui/charts';
 import { $, esc, icon, plural } from '../ui/dom';
 import { BR, store } from './store';
-import { fullGame } from './api';
+import { pullChessCom, fullGame } from './api';
 import { lineUrl } from './session';
 import { refBranch } from '../core/drill';
 import { themeLabel } from '../core/wood';
@@ -80,9 +80,19 @@ function axisFacts(pr: Profile): Record<AxisKey, string> {
 const axisName = (k: AxisKey) => AXES.find(a => a[0] === k)![1];
 const article = (k: AxisKey) => (k === 'ouverture' || k === 'horloge' ? "l'" : k === 'rythme' ? 'le ' : 'la ') + axisName(k).toLowerCase();
 
+/** L'en-tête de Progrès : le titre, et le bouton qui va chercher tout de suite tes dernières parties sur Chess.com. */
+const progHead = () => `<header class="pagehead proghead"><h1>Progrès</h1><button type="button" class="btn pri upd" id="bPull">${icon('refresh')}<span>Mettre à jour</span></button></header><p class="pullst" id="pullSt" role="status" hidden></p>`;
+function bindPull(root: HTMLElement) {
+  const b = root.querySelector<HTMLButtonElement>('#bPull'); if (!b) return;
+  b.onclick = async () => { const st = $('#pullSt', root); b.disabled = true; b.classList.add('busy'); st.hidden = false; st.textContent = 'Je regarde sur Chess.com…';
+    const n = await pullChessCom(); b.disabled = false; b.classList.remove('busy');
+    if (n < 0) { st.textContent = 'Chess.com ne répond pas. Réessaie dans un instant.'; return; }
+    if (n > 0) { viewGames(root); const s2 = $('#pullSt', root); s2.hidden = false; s2.textContent = `${plural(n, 'nouvelle partie', 'nouvelles parties')}. Le moteur les analysera cette nuit ; les finales se lisent déjà.`; }
+    else st.textContent = 'Tu es à jour : aucune nouvelle partie.'; };
+}
 export function viewGames(root: HTMLElement) {
   if (!store.games.length) {
-    root.innerHTML = `<header class="pagehead"><h1>Progrès</h1></header>${knowBlock()}<section class="empty"><p>Tes parties apparaissent ici après la première analyse de nuit.</p></section>`; return;
+    root.innerHTML = `${progHead()}<section class="empty"><p>Tes parties apparaissent ici après la première analyse de nuit, ou tout de suite avec « Mettre à jour ».</p></section>`; bindPull(root); return;
   }
   const tcs = [...new Set(store.games.map(g => g.tc))].filter(t => TC[t]);
   // On ne propose une période que si elle laisse de côté des parties : sinon elle afficherait la même chose que « Tout ».
@@ -124,7 +134,7 @@ export function viewGames(root: HTMLElement) {
     th.length ? `<section class="surf card tile flist"><h2>Tes fautes les plus fréquentes</h2><div class="list">${th.map(([k, v]) => `<a class="rowi" href="#/wood?t=${encodeURIComponent(k)}&r=${encodeURIComponent('#/progres')}"><span class="body"><b>${esc(themeLabel(k))}</b><span class="prog"><b style="width:${Math.round((100 * v) / thMax)}%"></b></span></span><span class="dim">${v}</span><span class="go">Rejouer</span></a>`).join('')}</div></section>` : '',
   ];
   root.innerHTML = `
-    <header class="pagehead"><h1>Progrès</h1></header>${knowBlock()}<header class="pagehead"><h2>Tes parties</h2><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
+    ${progHead()}<header class="pagehead"><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
     ${periods.length > 1 ? seg('period', periods, period) : ''}
     ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
     ${list.length ? `
@@ -136,11 +146,13 @@ export function viewGames(root: HTMLElement) {
       <span class="pcard-more">Voir le radar et le détail${icon('chev')}</span></a>` : ''}
     <div class="tiles">${tiles.join('')}</div>
     <div class="surf card list">
+      <a class="rowi" href="#/finales"><span class="ico">${icon('rook')}</span><span class="body"><b>Tes finales</b><small>Gagnant, nul ou perdant : ce que dit la table, coup par coup</small></span>${icon('chev', 'chev')}</a>
       <a class="rowi" href="${weak ? `#/structure/${weak[0]}` : '#/plans'}"><span class="ico">${icon('pawn')}</span><span class="body"><b>${weak ? `À travailler : ${esc(STRUCT[weak[0]].name)}` : 'Tes structures de pions'}</b><small>${weak ? `${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires` : 'Leurs plans, ton score, et tes fautes à y rejouer'}</small></span>${chev}</a>
     </div>
     <section class="grp"><h2>Tes parties</h2><div class="surf card list" id="glist">${list.slice(0, shown).map(g => gameRow(g)).join('')}</div>
       ${list.length > shown ? `<button class="btn block" id="bMore">Afficher ${Math.min(30, list.length - shown)} parties de plus</button>` : ''}</section>`
     : `<p class="empty">Aucune partie sur cette période.</p>`}`;
+  bindPull(root);
   root.querySelectorAll<HTMLButtonElement>('[data-period]').forEach(b => b.onclick = () => { period = +b.dataset.period!; shown = 30; viewGames(root); });
   root.querySelectorAll<HTMLButtonElement>('[data-tc]').forEach(b => b.onclick = () => { cadence = b.dataset.tc!; shown = 30; viewGames(root); });
   root.querySelectorAll<HTMLElement>('.chart.elo').forEach(el => bindChart(el));
