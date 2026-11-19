@@ -259,7 +259,6 @@ function pickCourse(root: HTMLElement, units: Unit[], cur: Unit) {
   void fBy;
   root.innerHTML = `<header class="pagehead pickhead"><h1>Tes cours</h1><a class="btn" href="#/rep">Fermer</a></header>
     <div class="rsearch"><label class="sr" for="qRep">Chercher une ouverture</label><input id="qRep" type="search" placeholder="Chercher : Londres, Alapin, Slave…" autocomplete="off"></div>
-    <a class="surf card lk1 egentry" href="#/finales"><b>Finales</b><span class="dim">tes parties et les classiques</span>${icon('chev', 'chev')}</a>
     ${sec('À travailler', work)}${sec('En forme', form)}${sec(work.length || form.length ? 'Pas encore rencontrées' : 'Tous les cours', rest, work.length || form.length ? 5 : 0)}
     <a class="quiet" href="#/explorer?r=${encodeURIComponent('#/rep')}">Explorer une position</a>`;
   root.addEventListener('click', e => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-pick]'); if (!b) return; setLS(LAST_KEY, b.dataset.pick!); location.hash = '#/rep'; });

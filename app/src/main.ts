@@ -13,7 +13,7 @@ import { endSession, lineUrl, session } from './app/session';
 import { pullChessCom, sync } from './app/api';
 import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile } from './app/games';
-import { LESSONS, lessonDrill, mountDrill, turnDrill, viewEndgame, viewEndgames } from './app/endgame';
+import { LESSONS, endDue, lessonDrill, mountDrill, turnDrill, viewEndgame, viewEndgames } from './app/endgame';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
@@ -21,9 +21,9 @@ import { shortName, viewLessonEnd, viewPath } from './app/path';
 import { popLevel, lineTitle } from './core/names';
 
 restoreLook();
-/** Quatre onglets : ce que je fais maintenant, mes cours d'ouvertures, mes fautes à rejouer, où j'en suis. */
-const TABS = [['#/', 'Pour toi'], ['#/rep', 'Ouvertures'], ['#/wood', 'Fautes'], ['#/progres', 'Progrès']] as const;
-const TRAIN = '#/rep', WOOD = '#/wood', PROG = '#/progres';
+/** Cinq onglets : ce que je fais maintenant, mes cours d'ouvertures, les finales, mes fautes à rejouer, où j'en suis. */
+const TABS = [['#/', 'Pour toi'], ['#/rep', 'Ouvertures'], ['#/finales', 'Finales'], ['#/wood', 'Fautes'], ['#/progres', 'Progrès']] as const;
+const TRAIN = '#/rep', FIN = '#/finales', WOOD = '#/wood', PROG = '#/progres';
 document.getElementById('app')!.innerHTML = `
   <header class="top" id="top" hidden><a class="back" id="back" aria-label="Retour">${icon('back')}</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><span class="hright" id="hright"></span><button class="xtool" id="xtool" type="button" hidden>${icon('search')}<span>Explorer</span></button></header>
   <main id="view" tabindex="-1"></main>
@@ -48,6 +48,8 @@ function shell(title: string, sub: string, backHref: string | null, tab: string 
   const fit = quit || kind === 'review';
   $('#tabs').hidden = !tab || quit; document.body.classList.toggle('focus', kind !== 'page'); document.body.classList.toggle('withtabs', !quit && !!tab); document.body.classList.toggle('fit', fit);
   document.querySelectorAll<HTMLAnchorElement>('#tabs a').forEach(a => { if (a.getAttribute('href') === tab) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+  // un point sur l'onglet Finales quand une faute ou une leçon est à revoir
+  try { document.querySelector('#tabs a[href="#/finales"]')?.classList.toggle('dot', !!endDue()); } catch { /* état pas encore chargé */ }
 }
 /** Retour : la page d'où l'on vient quand elle est passée dans l'adresse (`r`), sinon `dflt`. */
 const backOf = (q: URLSearchParams, dflt: string) => { const r = q.get('r'); return r && r.startsWith('#/') ? r : dflt; };
@@ -94,13 +96,13 @@ function route() {
     else if ((p[0] === 'rep' && p[1] === 'sorties') || p[0] === 'entrainer') { location.replace('#/rep'); return; }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewPath(view); }
-    else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!; shell(l.titre, l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle', '#/finales', TRAIN, '', 'session'); cleanup = mountDrill(view, lessonDrill(l)); }
-    else if (p[0] === 'finales') { shell('Finales', '', '#/rep/choisir', TRAIN); cleanup = viewEndgames(view); }
+    else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!; shell(l.titre, l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle', '#/finales', FIN, '', 'session'); cleanup = mountDrill(view, lessonDrill(l)); }
+    else if (p[0] === 'finales') { shell('Finales', '', null, FIN); cleanup = viewEndgames(view); }
     else if (p[0] === 'finale' && p[1]) { const g = store.games.find(x => x.id === decodeURIComponent(p[1])), back = `#/finale/${p[1]}`;
       if (!g) { location.replace('#/finales'); return; }
-      if (p[2]) { shell('Rejoue ce moment', `contre ${g.opp}`, back, TRAIN, '', 'session'); let off = () => { /* pas encore monté */ }, gone = false; cleanup = () => { gone = true; off(); };
+      if (p[2]) { shell('Rejoue ce moment', `contre ${g.opp}`, back, FIN, '', 'session'); let off = () => { /* pas encore monté */ }, gone = false; cleanup = () => { gone = true; off(); };
         turnDrill(g, +p[2]).then(d => { if (gone) return; if (!d) { location.replace(back); return; } off = mountDrill(view, d); }); }
-      else { shell('Ta finale', `contre ${g.opp}`, '#/finales', TRAIN); cleanup = viewEndgame(view, g); } }
+      else { shell('Ta finale', `contre ${g.opp}`, '#/finales', FIN); cleanup = viewEndgame(view, g); } }
     else if (p[0] === 'lecon') { shell('Bilan', '', null, null); viewLessonEnd(view); }
     else if (p[0] === 'wood') { shell('Fautes', 'Méthode Woodpecker : les mêmes positions, de plus en plus vite', q.get('r') ? backOf(q, WOOD) : null, WOOD); viewWood(view, q); }
     else if (p[0] === 'explorer') { const back = backOf(q, TRAIN); shell('Explorer une position', q.get('fen') ? 'Le moteur montre le meilleur coup' : '', back, TRAIN, '', 'board');

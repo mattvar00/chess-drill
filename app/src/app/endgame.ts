@@ -220,7 +220,7 @@ export function viewEndgames(root: HTMLElement): () => void {
   const gs = endgameGames(), done = isDone;
   const nx = nextLesson(), nDone = LESSONS.filter(l => done(l.id)).length, dueL = LESSONS.filter(l => done(l.id) && isDue(l.id)), dm = dueMoments(), rec = endRecord();
   let dead = false;
-  root.innerHTML = `
+  root.innerHTML = `<header class="pagehead"><h1>Finales</h1></header>
     <section class="surf card padded egnext"><div><b>${nDone ? `${nDone} sur ${LESSONS.length}` : `${LESSONS.length} leçons`}${dueL.length ? `<small>${dueL.length} à revoir</small>` : ''}</b><span class="prog"><b style="width:${Math.round(100 * nDone / LESSONS.length)}%"></b></span></div>${dueL.length ? `<a class="btn pri" href="#/finales/${dueL[0].id}">Revoir</a>` : nx ? `<a class="btn pri" href="#/finales/${nx.id}">${nDone ? 'Continuer' : 'Commencer'}</a>` : ''}</section>
     ${gs.length ? `<section class="grp"><h2>Tes finales</h2><p class="egrec" id="egrec"${rec.text ? '' : ' hidden'}>${esc(rec.text)}</p><div class="surf card list"><a class="rowi egrow" id="egm" href="${dm[0]?.href ?? '#'}"${dm.length ? '' : ' hidden'}><span class="ico">${icon('target')}</span><span class="body"><b>Tes fautes à rejouer</b><small>${plural(dm.length, 'position')}, jugées par la table</small></span>${icon('chev', 'chev')}</a>${gs.map(g => { const f = endFen(g);
       return `<a class="rowi egrow" href="#/finale/${encodeURIComponent(g.id)}">${miniFen(f, g.color).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(material(f, g.color))}</b><small>${RES[g.res] ?? ''} contre ${esc(g.opp)} · ${dayOf(g.t)}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}
