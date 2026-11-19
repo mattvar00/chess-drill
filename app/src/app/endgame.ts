@@ -115,30 +115,50 @@ function turnText(t: Turn): string {
 export const endgameGames = (max = 12) => [...store.games].filter(g => !store.state.ignored[g.id]).sort((a, b) => b.t - a.t).slice(0, 80).filter(g => endgameStart(g) > 0).slice(0, max);
 
 /* ---------- les classiques ---------- */
-export interface Lesson { id: string; titre: string; sub: string; fen: string; side: Color; goal: 'w' | 'd'; n: number; intro: string; idea: string }
+export interface Lesson { id: string; g: 'Tours' | 'Pions' | 'Dame' | 'Fou'; titre: string; sub: string; fen: string; side: Color; goal: 'w' | 'd'; n: number; intro: string; idea: string }
+/** Chaque position a été passée à la table : le résultat annoncé et les coups qui le tiennent sont exacts. */
 export const LESSONS: Lesson[] = [
-  { id: 'derriere', titre: 'La tour derrière le pion passé', sub: 'Tiré de ta partie contre kis73', fen: '8/8/1R1Pk3/8/p7/1pK5/8/3r4 w - - 0 1', side: 'w', goal: 'd', n: 6,
+  { id: 'derriere', g: 'Tours', titre: 'La tour derrière le pion passé', sub: 'Tiré de ta partie contre kis73', fen: '8/8/1R1Pk3/8/p7/1pK5/8/3r4 w - - 0 1', side: 'w', goal: 'd', n: 6,
     intro: 'Tu as deux pions de moins et ton pion d6 va tomber. Un seul coup sauve la nulle.', idea: 'La tour se met derrière le pion passé le plus dangereux : elle l\'attaque et le suit s\'il avance.' },
-  { id: 'colle', titre: 'Le roi collé à son pion', sub: 'Tiré de ta partie contre LivelyBrake', fen: '8/8/8/4K3/5pk1/8/5r2/6R1 b - - 0 1', side: 'b', goal: 'w', n: 10,
+  { id: 'colle', g: 'Tours', titre: 'Le roi collé à son pion', sub: 'Tiré de ta partie contre LivelyBrake', fen: '8/8/8/4K3/5pk1/8/5r2/6R1 b - - 0 1', side: 'b', goal: 'w', n: 10,
     intro: 'Il te donne échec. Une seule case garde le gain.', idea: 'Ton roi reste à côté de son pion : il le protège et s\'abrite derrière lui.' },
-  { id: 'ecart', titre: 'La tour loin, pour les échecs de côté', sub: 'Tiré de ta partie contre LivelyBrake', fen: '5R2/8/8/8/5K2/5p2/5rk1/8 b - - 0 1', side: 'b', goal: 'w', n: 10,
+  { id: 'ecart', g: 'Tours', titre: 'La tour loin, pour les échecs de côté', sub: 'Tiré de ta partie contre LivelyBrake', fen: '5R2/8/8/8/5K2/5p2/5rk1/8 b - - 0 1', side: 'b', goal: 'w', n: 10,
     intro: 'Ton roi veut avancer avec son pion, mais ta tour le gêne.', idea: 'Éloigne ta tour sur la rangée : elle libère la case de ton roi et pourra donner échec de loin.' },
-  { id: 'lucena', titre: 'Le pont de Lucena', sub: 'La finale gagnante à connaître', fen: '1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1', side: 'w', goal: 'w', n: 14,
+  { id: 'lucena', g: 'Tours', titre: 'Le pont de Lucena', sub: 'Le gain à connaître', fen: '1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1', side: 'w', goal: 'w', n: 14,
     intro: 'Ton pion est à une case de la dame, mais ton roi est coincé devant lui.', idea: 'Chasse son roi par un échec, amène ta tour sur la 4e rangée, puis sors ton roi : la tour viendra couper les échecs. C\'est le pont.' },
-  { id: 'philidor', titre: 'La défense de Philidor', sub: 'La nulle à connaître', fen: '4k3/7R/8/3PK3/8/8/8/r7 b - - 0 1', side: 'b', goal: 'd', n: 8,
+  { id: 'philidor', g: 'Tours', titre: 'La défense de Philidor', sub: 'La nulle à connaître', fen: '4k3/7R/8/3PK3/8/8/8/r7 b - - 0 1', side: 'b', goal: 'd', n: 8,
     intro: 'Il a un pion de plus et son roi avance. Tu peux tenir la nulle.', idea: 'Ta tour sur la 6e rangée empêche son roi d\'avancer. Dès que le pion y arrive, ta tour descend tout en bas et donne des échecs par derrière.' },
+  { id: 'court', g: 'Tours', titre: 'Le roi du côté court', sub: 'Quand Philidor n\'est plus possible', fen: '4k3/7R/4K3/4P3/8/8/8/r7 b - - 0 1', side: 'b', goal: 'd', n: 8,
+    intro: 'Il menace mat. Ton roi doit choisir un côté.', idea: 'Ton roi va du côté court du pion, ta tour garde le côté long : elle aura la place de donner des échecs de côté.' },
+  { id: 'vancura', g: 'Tours', titre: 'La défense de Vancura', sub: 'Contre le pion de tour', fen: 'R7/6k1/P7/8/8/8/3K4/r7 b - - 0 1', side: 'b', goal: 'd', n: 8,
+    intro: 'Sa tour est coincée devant son pion a. Son roi arrive pour l\'aider.', idea: 'Attaque le pion de côté avec ta tour. Si son roi approche, donne échec de côté, puis reviens sur le pion.' },
+  { id: 'carre', g: 'Pions', titre: 'La règle du carré', sub: 'Le pion passe-t-il tout seul ?', fen: '8/8/8/8/1k6/8/7P/K7 w - - 0 1', side: 'w', goal: 'w', n: 8,
+    intro: 'Ton pion file vers la dame. Son roi peut-il le rattraper ?', idea: 'Trace le carré du pion jusqu\'à sa case de promotion : si son roi ne peut pas y entrer, le pion passe. Ici, il faut avancer de deux cases tout de suite.' },
+  { id: 'devant', g: 'Pions', titre: 'Le roi devant son pion', sub: 'Roi et pion contre roi : gagner', fen: '4k3/8/8/4K3/4P3/8/8/8 w - - 0 1', side: 'w', goal: 'w', n: 14,
+    intro: 'Le pion ne passera pas tout seul.', idea: 'Ton roi avance d\'abord, devant son pion. Arrivé sur la 6e rangée devant lui, le gain est assuré.' },
+  { id: 'oppo', g: 'Pions', titre: 'Tenir l\'opposition', sub: 'Roi et pion contre roi : annuler', fen: '8/8/4k3/8/4PK2/8/8/8 b - - 0 1', side: 'b', goal: 'd', n: 8,
+    intro: 'Un pion de moins. Une seule case de roi tient la nulle.', idea: 'Mets ton roi en face du sien, une case entre les deux : c\'est l\'opposition. Il ne peut plus passer devant son pion.' },
+  { id: 'distance', g: 'Pions', titre: 'L\'opposition à distance', sub: 'Quand ton roi est loin', fen: '4k3/8/8/8/4PK2/8/8/8 b - - 0 1', side: 'b', goal: 'd', n: 8,
+    intro: 'Ton roi est loin. Une seule case tient encore.', idea: 'Même colonne que son roi, un nombre impair de cases entre vous : quand il avancera, c\'est toi qui auras l\'opposition.' },
+  { id: 'dame7', g: 'Dame', titre: 'Dame contre pion en 7e', sub: 'Gagner avant qu\'il fasse dame', fen: '7K/4Q3/8/8/8/8/3kp3/8 w - - 0 1', side: 'w', goal: 'w', n: 12,
+    intro: 'Son pion va faire dame, et ton roi est loin.', idea: 'Donne des échecs jusqu\'à forcer son roi devant son pion. À chaque fois, ton roi gagne un coup pour s\'approcher.' },
+  { id: 'pat', g: 'Dame', titre: 'Le pion fou en 7e', sub: 'Le pat qui sauve', fen: '8/8/8/8/8/1Q6/2p5/1k5K b - - 0 1', side: 'b', goal: 'd', n: 6,
+    intro: 'Il te donne échec. Tu as un pion en 7e contre une dame.', idea: 'Va dans le coin et laisse ton pion : s\'il le prend, tu es pat. Ça marche avec les pions des colonnes c et f, et avec ceux du bord.' },
+  { id: 'fou', g: 'Fou', titre: 'Le fou de la mauvaise couleur', sub: 'Un fou et un pion de plus, et c\'est nul', fen: '8/8/8/8/5k2/4b2p/8/6K1 w - - 0 1', side: 'w', goal: 'd', n: 6,
+    intro: 'Il a un fou et un pion de plus. Tu peux quand même annuler.', idea: 'Son fou ne contrôle pas la case de promotion. Reste dans le coin : il ne peut pas t\'en chasser sans te mettre pat.' },
 ];
 
 /* ---------- les écrans ---------- */
 const dayOf = (t: number) => new Date(t * 1000).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 const RES: Record<string, string> = { W: 'Gagnée', D: 'Nulle', L: 'Perdue' };
+const GROUPS: [Lesson['g'], string][] = [['Tours', 'Finales de tours'], ['Pions', 'Finales de pions'], ['Dame', 'Dame contre pion'], ['Fou', 'Fou et pion']];
 /** La page Finales : tes parties qui se sont jouées en finale, puis les classiques. */
 export function viewEndgames(root: HTMLElement) {
   const gs = endgameGames(), done = (id: string) => !!(store.state.settings as Record<string, unknown>)[`eg_${id}`];
   root.innerHTML = `
     ${gs.length ? `<section class="grp"><h2>Tes finales</h2><div class="surf card list">${gs.map(g => { const f = endFen(g);
       return `<a class="rowi egrow" href="#/finale/${encodeURIComponent(g.id)}">${miniFen(f, g.color).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(material(f, g.color))}</b><small>${RES[g.res] ?? ''} contre ${esc(g.opp)} · ${dayOf(g.t)}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}
-    <section class="grp"><h2>Les classiques</h2><div class="surf card list">${LESSONS.map(l => `<a class="rowi egrow" href="#/finales/${l.id}">${miniFen(l.fen, l.side).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(l.titre)}</b><small>${esc(l.sub)}</small></span>${done(l.id) ? `<span class="vok">${icon('check')}</span>` : ''}${icon('chev', 'chev')}</a>`).join('')}</div></section>`;
+    ${GROUPS.map(([g, title]) => `<section class="grp"><h2>${title}</h2><div class="surf card list">${LESSONS.filter(l => l.g === g).map(l => `<a class="rowi egrow" href="#/finales/${l.id}">${miniFen(l.fen, l.side).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(l.titre)}</b><small>${esc(l.sub)}</small></span>${done(l.id) ? `<span class="vok">${icon('check')}</span>` : ''}${icon('chev', 'chev')}</a>`).join('')}</div></section>`).join('')}`;
 }
 
 /** Une de tes finales : la bande gagné / nul / perdu, et chaque moment où le résultat a changé. */
