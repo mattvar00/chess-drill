@@ -100,7 +100,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     $('#bHint', actions).onclick = hint; const sk = $('#bSkip', actions); if (sk) sk.onclick = skip;
     $('#bRestart', actions).onclick = e => { e.preventDefault(); remount(); };
   }
-  const nb = (t: string) => t.replace(/ ([:?!;])/g, '\u00a0$1');
+  const nb = (t: string) => t.replace(/ ([:?!;…])/g, '\u00a0$1');
   const bare = (note?: string) => { const t = (note ?? '').replace(/^[^:]*:\s*/, ''); return nb(t.charAt(0).toUpperCase() + t.slice(1)); };
   /** Ce que dit le coach avant un nouveau coup : pourquoi, puis quoi jouer, en mots. */
   /** Coupe un texte en bulles d'environ 80 caractères, à la fin d'une phrase. */
@@ -171,9 +171,18 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
 
   /* ---------- Méthode du cours ---------- */
   /** Fin des coups. Après la découverte, on rejoue la variante de mémoire, depuis le premier coup : c'est ce passage qui compte. */
+  /**
+   * Ce qu'on dit à la fin de la variante : l'explication du dernier coup (sinon l'écran de fin la cache avant qu'on la lise),
+   * puis le bilan s'il y en a un et qu'il dit autre chose.
+   */
+  function closing(): string {
+    const i = moves.length - 1, last = br.notes[i] ? `${num(i)}${moves[i].san} : ${bare(br.notes[i]).replace(/^./, c => c.toLowerCase())}` : '';
+    const bil = br.bilan?.trim() ?? '';
+    return nb([last, bil && !(last && last.includes(bil.slice(0, 40))) ? bil : ''].filter(Boolean).join(' '));
+  }
   function end() {
     if (!learn) return finish(); locked = true; SFX.done(); $('.trainer', root).classList.add('fin');
-    talk('happy', '<p class="lead">Variante vue.</p>', `${br.bilan ?? ''} Maintenant, rejoue-la sans aide.`.trim(), '', 120);
+    talk('happy', '<p class="lead">Variante vue.</p>', `${closing()} Maintenant, rejoue-la sans aide.`.trim(), '', 120);
     actions.innerHTML = '<button class="btn pri" id="bGo">À toi, de mémoire</button>';
     $('#bGo', actions).onclick = () => {
       $('.trainer', root).classList.remove('fin'); clearTimeout(timer); learn = false; game = new Chess(); last = null; ply = 0; steps.length = 0; errs = 0; wrongHere = 0; hintLevel = 0; lastNote = null; locked = false;
@@ -199,7 +208,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     if (course) {
       const allOk = !!S && S.pool.every(i => passed(store.state.br[i])), chName = br.ch ?? 'Tirées de tes parties';
       talk(errs === 0 ? 'party' : 'idle', `<p class="lead ${errs ? 'bad' : 'ok'}">${errs === 0 ? 'Variante validée' : `Pas encore validée : ${plural(errs, 'erreur')}`}</p>`,
-        `${br.bilan ?? ''}${errs ? ' Elle reviendra.' : ''}`.trim(), `${br.suite ? `<p class="suite"><b>Et après :</b> ${esc(br.suite)}</p>` : ''}${S ? `<p class="why">${left ? `Encore ${left} dans ce chapitre.` : allOk ? 'Chapitre terminé.' : ''}</p>` : ''}`, 120);
+        `${closing()}${errs ? ' Elle reviendra.' : ''}`.trim(), `${br.suite ? `<p class="suite"><b>Et après :</b> ${esc(br.suite)}</p>` : ''}${S ? `<p class="why">${left ? `Encore ${left} dans ce chapitre.` : allOk ? 'Chapitre terminé.' : ''}</p>` : ''}`, 120);
       // toujours le même écran entre deux variantes : où tu en es dans le chapitre, ce qui vient, et le plan s'il y en a un
       const chap = br.ch ? sys.branches.filter(b => b.ch === br.ch && !b.plus === !br.plus) : sys.branches.filter(b => !b.ch && b.type), nid = S?.ordered ? remaining()[0] : null, stop = S?.exit ?? listUrl;
       const info = `<p class="cinfo"><span class="cdots" role="img" aria-label="${chap.filter(b => passed(store.state.br[b.id])).length} sur ${chap.length}">${chap.map(b => `<i class="${passed(store.state.br[b.id]) ? 'ok' : ''}${b.id === id ? ' now' : ''}"></i>`).join('')}</span></p>`; void nid; void chName;
