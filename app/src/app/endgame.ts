@@ -13,6 +13,7 @@ import { $, esc, icon, plural } from '../ui/dom';
 import { confetti } from '../ui/fx';
 import { SFX } from '../ui/sound';
 import { markActive, save, store } from './store';
+import { COURS, type Slide } from './endgame-cours';
 
 /* ---------- la table ---------- */
 /** Résultat pour le camp au trait : gagné, nul, perdu (les gains qui butent sur la règle des 50 coups comptent comme nuls). */
@@ -155,7 +156,7 @@ export function endDue(): { n: number; href: string; title: string; fen: string;
   const dm = dueMoments(), dl = LESSONS.filter(l => isDone(l.id) && isDue(l.id)), n = dm.length + dl.length;
   if (dm[0]) { const g = store.games.find(x => x.id === dm[0].m.g), t = cachedReport(dm[0].m.g)?.turns.find(x => x.ply === dm[0].m.ply);
     return { n, href: dm[0].href, title: 'Tes fautes de finale', fen: t?.fen ?? (g ? endFen(g) : new Chess().fen()), side: g?.color ?? 'w' }; }
-  return dl[0] ? { n, href: `#/finales/${dl[0].id}`, title: dl[0].titre, fen: dl[0].fen, side: dl[0].side } : null;
+  return dl[0] ? { n, href: `#/finales/${dl[0].id}/1`, title: dl[0].titre, fen: dl[0].fen, side: dl[0].side } : null;
 }
 
 /** Ton bilan sur les finales déjà lues : selon ce que disait la table à l'entrée en finale, ce que tu en as fait. */
@@ -221,7 +222,7 @@ export function viewEndgames(root: HTMLElement): () => void {
   const nx = nextLesson(), nDone = LESSONS.filter(l => done(l.id)).length, dueL = LESSONS.filter(l => done(l.id) && isDue(l.id)), dm = dueMoments(), rec = endRecord();
   let dead = false;
   root.innerHTML = `<header class="pagehead"><h1>Finales</h1></header>
-    <section class="surf card padded egnext"><div><b>${nDone ? `${nDone} sur ${LESSONS.length}` : `${LESSONS.length} leçons`}${dueL.length ? `<small>${dueL.length} à revoir</small>` : ''}</b><span class="prog"><b style="width:${Math.round(100 * nDone / LESSONS.length)}%"></b></span></div>${dueL.length ? `<a class="btn pri" href="#/finales/${dueL[0].id}">Revoir</a>` : nx ? `<a class="btn pri" href="#/finales/${nx.id}">${nDone ? 'Continuer' : 'Commencer'}</a>` : ''}</section>
+    <section class="surf card padded egnext"><div><b>${nDone ? `${nDone} sur ${LESSONS.length}` : `${LESSONS.length} leçons`}${dueL.length ? `<small>${dueL.length} à revoir</small>` : ''}</b><span class="prog"><b style="width:${Math.round(100 * nDone / LESSONS.length)}%"></b></span></div>${dueL.length ? `<a class="btn pri" href="#/finales/${dueL[0].id}/1">Revoir</a>` : nx ? `<a class="btn pri" href="#/finales/${nx.id}">${nDone ? 'Continuer' : 'Commencer'}</a>` : ''}</section>
     ${gs.length ? `<section class="grp"><h2>Tes finales</h2><p class="egrec" id="egrec"${rec.text ? '' : ' hidden'}>${esc(rec.text)}</p><div class="surf card list"><a class="rowi egrow" id="egm" href="${dm[0]?.href ?? '#'}"${dm.length ? '' : ' hidden'}><span class="ico">${icon('target')}</span><span class="body"><b>Tes fautes à rejouer</b><small>${plural(dm.length, 'position')}, jugées par la table</small></span>${icon('chev', 'chev')}</a>${gs.map(g => { const f = endFen(g);
       return `<a class="rowi egrow" href="#/finale/${encodeURIComponent(g.id)}">${miniFen(f, g.color).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(material(f, g.color))}</b><small>${RES[g.res] ?? ''} contre ${esc(g.opp)} · ${dayOf(g.t)}</small></span>${icon('chev', 'chev')}</a>`; }).join('')}</div></section>` : ''}
     ${GROUPS.map(([g, title]) => `<section class="grp"><h2>${title}</h2><div class="surf card list">${LESSONS.filter(l => l.g === g).map(l => `<a class="rowi egrow" href="#/finales/${l.id}">${miniFen(l.fen, l.side).replace('class="mini"', 'class="mini cthumb"')}<span class="body"><b>${esc(l.titre)}</b><small>${esc(l.sub)}</small></span>${done(l.id) ? (isDue(l.id) ? '<span class="vdue">à revoir</span>' : `<span class="vok">${icon('check')}</span>`) : ''}${icon('chev', 'chev')}</a>`).join('')}</div></section>`).join('')}`;
@@ -252,7 +253,7 @@ export function viewEndgame(root: HTMLElement, g: Game) {
   return () => { dead = true; };
 }
 
-interface Drill { fen: string; side: Color; goal: 'w' | 'd'; n: number; title: string; intro: string; idea: string; back: string; /** `clean` : réussi sans erreur ni indice. */ done?: (clean: boolean) => void;
+interface Drill { fen: string; side: Color; goal: 'w' | 'd'; n: number; title: string; intro: string; idea: string; back: string; /** le cours de la leçon, pour le revoir */ cours?: string; step?: string; nextLabel?: string; /** `clean` : réussi sans erreur ni indice. */ done?: (clean: boolean) => void;
   /** L'exercice suivant, pour enchaîner sans repasser par la liste. */ next?: string;
   /** Le nom de la position quand elle en a un (« le pont de Lucena ») : dit à la fin, pour le retenir. */ nom?: string }
 /** La position d'une de tes fautes de finale, prête à rejouer. */
@@ -269,9 +270,47 @@ export function nextLesson(after?: string): Lesson | undefined {
   const i = after ? LESSONS.findIndex(l => l.id === after) : -1, rest = [...LESSONS.slice(i + 1), ...LESSONS.slice(0, Math.max(0, i))];
   return rest.find(l => !isDone(l.id)) ?? rest.find(l => isDue(l.id)) ?? (after ? LESSONS[i + 1] : LESSONS[0]);
 }
-export const lessonDrill = (l: Lesson): Drill => ({ fen: l.fen, side: l.side, goal: l.goal, n: l.n, title: l.titre, intro: l.intro, idea: l.idea, back: '#/finales', nom: l.nom,
-  get next() { const n = nextLesson(l.id); return n && n.id !== l.id ? `#/finales/${n.id}` : undefined; },
-  done: clean => passed(l.id, clean) });
+/* ---------- une leçon : le cours, puis 3 à 5 positions du même thème ---------- */
+/** Les positions d'une leçon : celle du cours d'abord, puis les autres, de la plus simple à la plus dure (toutes passées à la table). */
+export const exos = (l: Lesson) => [l.fen, ...(COURS[l.id]?.pos ?? [])];
+const turnOf = (fen: string): Color => fen.split(' ')[1] === 'b' ? 'b' : 'w';
+/** Sans faute sur toutes les positions de la leçon (pour savoir si elle remonte d'un cran). */
+const RUN: Record<string, boolean> = {};
+export const lessonHref = (l: Lesson) => isDone(l.id) ? `#/finales/${l.id}/1` : `#/finales/${l.id}`;
+export function lessonDrill(l: Lesson, k = 1): Drill {
+  const ex = exos(l), N = ex.length, i = Math.min(Math.max(k, 1), N), fen = ex[i - 1], nx = nextLesson(l.id);
+  return { fen, side: turnOf(fen), goal: l.goal, n: l.n, title: l.titre, back: '#/finales', nom: l.nom, idea: l.idea, cours: `#/finales/${l.id}`,
+    intro: i === 1 ? l.intro : `Même thème${l.nom ? ` : ${l.nom}` : ''}, ailleurs sur l'échiquier. Reconnais-le.`,
+    step: `Position ${i} sur ${N}`, nextLabel: i < N ? 'Position suivante' : 'Leçon suivante',
+    next: i < N ? `#/finales/${l.id}/${i + 1}` : nx && nx.id !== l.id ? `#/finales/${nx.id}` : undefined,
+    done: clean => { RUN[l.id] = (i === 1 || RUN[l.id] !== false) && clean; if (i === N) passed(l.id, RUN[l.id]); } };
+}
+
+/** Le cours : quelques écrans, chacun une position avec le plan dessiné (flèches, cases clés) et une phrase. */
+export function viewCourse(root: HTMLElement, l: Lesson): () => void {
+  const S = COURS[l.id]?.cours ?? [], N = S.length;
+  if (!N) { location.replace(`#/finales/${l.id}/1`); return () => {}; }
+  root.innerHTML = `<div class="trainer cours egc"><div class="tboard"><div id="board"></div></div>
+    <div class="tside"><div class="tmain"><div class="coach ctop" id="coach" aria-live="polite"></div><div class="actions" id="actions"></div></div></div></div>`;
+  $('.trainer', root).insertBefore($('#coach', root), $('.tboard', root));
+  const coach = $('#coach', root), actions = $('#actions', root);
+  const board = new Board($('#board', root), { movable: () => null, onMove: () => {} });
+  let k = 0;
+  const show = () => {
+    const s: Slide = S[k], g = new Chess(s.fen ?? l.fen); let last: Move | null = null;
+    for (const m of s.pre ?? []) last = tryMove(g, m as never) ?? last;
+    board.set(g, l.side, last, k > 0 && !!last);
+    board.overlay({ arrows: [...(s.arrows ?? []).map(a => ({ from: a.slice(0, 2), to: a.slice(2, 4), cls: 'best' })), ...(s.plan ?? []).map(a => ({ from: a.slice(0, 2), to: a.slice(2, 4), cls: 'plan' })), ...(s.bad ?? []).map(a => ({ from: a.slice(0, 2), to: a.slice(2, 4), cls: 'bad' }))],
+      marks: [...(s.zone ?? []).map(q => ({ sq: q, cls: 'zone' })), ...(s.keys ?? []).map(q => ({ sq: q, cls: 'key' }))] });
+    coach.innerHTML = coachSay(k === N - 1 ? 'happy' : 'talk', `${k === 0 ? `<p class="lead">${esc(l.titre)}</p>` : ''}<p>${esc(s.t)}</p><p class="egdots" aria-label="Écran ${k + 1} sur ${N}">${S.map((_, j) => `<i class="${j === k ? 'on' : j < k ? 'ok' : ''}"></i>`).join('')}</p>`);
+    const n = exos(l).length;
+    actions.innerHTML = `${k ? '<button class="btn" id="cPrev">Précédent</button>' : `<a class="btn" href="#/finales/${l.id}/1">Passer le cours</a>`}${k < N - 1 ? '<button class="btn pri" id="cNext">Suivant</button>' : `<a class="btn pri" href="#/finales/${l.id}/1">À toi : ${plural(n, 'position')}</a>`}`;
+    actions.querySelector<HTMLElement>('#cPrev')?.addEventListener('click', () => { k--; show(); });
+    actions.querySelector<HTMLElement>('#cNext')?.addEventListener('click', () => { k++; show(); });
+  };
+  show();
+  return () => board.destroy();
+}
 
 const sq = (s: string) => [s.charCodeAt(0) - 97, +s[1] - 1];
 const kingOf = (c: Chess, col: Color) => { for (const row of c.board()) for (const p of row) if (p && p.type === 'k' && p.color === col) return p.square as string; return 'a1'; };
@@ -307,18 +346,51 @@ export function mountDrill(root: HTMLElement, d: Drill): () => void {
   root.innerHTML = `<div class="trainer cours"><div class="tboard"><div id="board"></div></div>
     <div class="tside"><div class="tmain"><div class="coach ctop" id="coach" aria-live="polite"></div><div class="actions" id="actions"></div></div></div></div>`;
   $('.trainer', root).insertBefore($('#coach', root), $('.tboard', root));
-  const coach = $('#coach', root), actions = $('#actions', root);
+  const coach = $('#coach', root), actions = $('#actions', root), egx = document.createElement('div');
+  egx.className = 'egx ctop'; egx.id = 'egx'; egx.hidden = true; $('.trainer', root).insertBefore(egx, $('.tboard', root));   // en haut, à la place du coach : visible avec l'échiquier
+  const xShow = (on: boolean) => { egx.hidden = !on; coach.hidden = on; $('#bX', actions)?.classList.toggle('on', on); };
+  let xOpen = false, helped = false, hintLv = 0;
   let game = new Chess(d.fen), busy = false, over = false, won = false, errs = 0, ok = 0, miss = 0, dead = false, last: Move | null = null, near = Infinity, idle = 0;
   const say = (mood: Mood, head: string, text = '') => { coach.innerHTML = coachSay(mood, `<p class="lead${mood === 'oops' ? ' bad' : ''}">${head}</p>${text ? `<p class="why">${text}</p>` : ''}`); };
   const board = new Board($('#board', root), { movable: () => (busy || over ? null : d.side), onMove: m => { void play(m); } });
   const goalWord = d.goal === 'w' ? 'le gain' : 'la nulle';
-  const paint = () => board.set(game, d.side, last, true);
-  const btns = () => { actions.innerHTML = over ? `<button class="btn" id="bAgain">Rejouer</button>${won && d.next ? `<a class="btn pri" href="${d.next}">Suivante</a><a class="btn" href="${d.back}">Arrêter là</a>` : `<a class="btn pri" href="${d.back}">Continuer</a>`}` : `<button class="btn" id="bHint">Indice</button><a class="btn" href="${d.back}">Arrêter là</a>`;
-    actions.querySelector<HTMLElement>('#bAgain')?.addEventListener('click', restart); actions.querySelector<HTMLElement>('#bHint')?.addEventListener('click', () => { void hint(); }); };
-  function restart() { game = new Chess(d.fen); over = false; won = false; busy = false; errs = 0; ok = 0; miss = 0; last = null; near = Infinity; idle = 0; if (d.goal === 'w') void probe(d.fen).then(t => { if (t && near === Infinity && !ok) near = t.dtz; }); $('.trainer', root).classList.remove('fin'); paint(); btns(); say('idle', esc(d.intro), `À toi : ${d.goal === 'w' ? 'gagne' : 'tiens la nulle'}.`); }
-  async function hint() { if (busy || over) return; const tb = await probe(game.fen()); if (dead || !tb) return; const m = tb.moves.find(x => x.out === tb.out) ?? tb.moves[0]; if (!m) return;
-    miss++; board.hint(miss >= 2 ? [m.uci.slice(0, 2), m.uci.slice(2, 4)] : [m.uci.slice(0, 2)]); say('talk', 'Indice', esc(d.idea)); }
-  function finish(win: boolean, head: string, text: string) { over = true; won = win; if (win && d.nom) text = `${text} <b>Retiens : ${esc(d.nom)}.</b>`; $('.trainer', root).classList.add('fin'); if (win) { SFX.done(); if (!errs) confetti(24); d.done?.(!errs && !miss); markActive(); } say(win ? (errs ? 'happy' : 'party') : 'oops', head, text); btns(); }
+  const paint = () => { board.set(game, d.side, last, true); hintLv = 0; if (xOpen) void explore(); };
+  const go = (h: string) => { location.hash = h; };
+  const btns = () => {
+    actions.innerHTML = over
+      ? `<button class="btn" id="bAgain">${icon('restart')}Rejouer</button>${won && d.next ? `<button class="btn pri" id="bNext">${d.nextLabel ?? 'Suivante'}</button>` : `<button class="btn pri" id="bStop">Continuer</button>`}<button class="btn" id="bX">${icon('search')}Explorer</button>${d.cours ? `<button class="btn" id="bCours">Revoir le cours</button>` : ''}${won && d.next ? '<button class="btn" id="bStop">Arrêter là</button>' : ''}`
+      : `<button class="btn" id="bHint">${icon('bulb')}Indice</button><button class="btn" id="bX">${icon('search')}Explorer</button><button class="btn" id="bStop">Arrêter là</button>`;
+    const on = (id: string, f: () => void) => actions.querySelector<HTMLElement>('#' + id)?.addEventListener('click', f);
+    on('bAgain', restart); on('bHint', () => { void hint(); }); on('bX', () => { xOpen = !xOpen; if (xOpen) void explore(); else { xShow(false); board.overlay({}); } });
+    on('bNext', () => go(d.next!)); on('bStop', () => go(d.back)); on('bCours', () => go(d.cours!)); };
+  /**
+   * L'explorateur : tous tes coups possibles, rangés par ce qu'en dit la table (gagne, nul, perd). Toucher un coup le dessine.
+   * Pendant l'exercice, l'ouvrir compte comme une aide.
+   */
+  async function explore() {
+    xShow(true); egx.innerHTML = '<p class="why">La table regarde…</p>';
+    const fen = game.fen(), mine = game.turn() === d.side, tb = await probe(fen); if (dead || game.fen() !== fen || !xOpen) return;
+    if (!tb) { egx.innerHTML = '<p class="why">La table de finales ne répond pas.</p>'; return; }
+    if (!over && mine && !helped) { helped = true; miss++; }
+    const who = mine ? 'Tes coups' : 'Ses coups', W: Record<Out, string> = { w: 'Gagnent', d: 'Annulent', l: 'Perdent' };
+    const groups = (['w', 'd', 'l'] as Out[]).map(o => [o, tb.moves.filter(m => m.out === o)] as const).filter(([, ms]) => ms.length);
+    egx.innerHTML = `<p class="egxh"><b>${who}</b> selon la table <span class="dim">· ${tb.out === 'w' ? 'position gagnante' : tb.out === 'd' ? 'position nulle' : 'position perdante'} pour le camp au trait</span></p>
+      ${groups.map(([o, ms]) => `<div class="egxg"><span class="egxk o-${o}">${W[o]}</span><span class="egxm">${ms.map(m => `<button class="egxc o-${o}" data-u="${m.uci}">${esc(frSan(m.san))}</button>`).join('')}</span></div>`).join('')}`;
+    egx.querySelectorAll<HTMLElement>('.egxc').forEach(b => b.addEventListener('click', () => {
+      egx.querySelectorAll('.egxc.on').forEach(x => x.classList.remove('on')); b.classList.add('on'); const u = b.dataset.u!, o = b.className.match(/o-(\w)/)?.[1];
+      board.overlay({ arrows: [{ from: u.slice(0, 2), to: u.slice(2, 4), cls: o === 'w' ? 'best' : o === 'd' ? 'plan' : 'bad' }] }); }));
+  }
+  function restart() { game = new Chess(d.fen); over = false; won = false; busy = false; errs = 0; ok = 0; miss = 0; last = null; near = Infinity; idle = 0; helped = false; xOpen = false; xShow(false); if (d.goal === 'w') void probe(d.fen).then(t => { if (t && near === Infinity && !ok) near = t.dtz; }); $('.trainer', root).classList.remove('fin'); paint(); btns(); say('idle', esc(d.intro), `À toi : ${d.goal === 'w' ? 'gagne' : 'tiens la nulle'}.${d.step ? ` <span class="dim">${d.step}</span>` : ''}`); }
+  /** Indice : 1er appui, l'idée et la pièce à jouer (entourée) ; 2e appui, la flèche du coup. Chaque appui compte comme une aide. */
+  async function hint() {
+    if (busy || over) return; hintLv = Math.min(hintLv + 1, 2); miss++;
+    say('talk', hintLv === 1 ? 'Indice : le plan' : 'Indice : le coup', `${esc(d.idea)}${hintLv === 1 ? ' Touche encore Indice pour voir le coup.' : ''}`);
+    const fen = game.fen(), tb = await probe(fen); if (dead || game.fen() !== fen) return;
+    const m = tb?.moves.find(x => x.out === tb.out) ?? tb?.moves[0];
+    if (!m) { say('oops', 'Pas de réseau', 'La table de finales ne répond pas. Réessaie dans un instant.'); return; }
+    board.overlay(hintLv === 1 ? { marks: [{ sq: m.uci.slice(0, 2), cls: 'key' }] } : { arrows: [{ from: m.uci.slice(0, 2), to: m.uci.slice(2, 4), cls: 'best' }], marks: [{ sq: m.uci.slice(0, 2), cls: 'key' }] });
+  }
+  function finish(win: boolean, head: string, text: string) { over = true; won = win; xOpen = false; xShow(false); if (win && d.nom) text = `${text} <b>Retiens : ${esc(d.nom)}.</b>`; $('.trainer', root).classList.add('fin'); if (win) { SFX.done(); if (!errs) confetti(24); d.done?.(!errs && !miss); markActive(); } say(win ? (errs ? 'happy' : 'party') : 'oops', head, text); btns(); }
   async function play(m: Move) {
     if (busy || over) return; busy = true;
     const before = game.fen(), promo = m.flags.includes('p'), made = tryMove(game, { from: m.from, to: m.to, promotion: m.promotion });
@@ -331,7 +403,7 @@ export function mountDrill(root: HTMLElement, d: Drill): () => void {
       errs++; board.flash(m.to, 'bad'); await wait(450); if (dead) return;
       game = new Chess(before); last = null; paint(); busy = false;
       say('oops', `${frSan(made.san)} laisse filer ${goalWord}.`, errs >= 2 ? esc(d.idea) : 'Essaie autre chose.');
-      if (errs >= 3) { const t = await probe(before); const b = t?.moves.find(x => x.out === t.out); if (b && !dead) board.hint([b.uci.slice(0, 2), b.uci.slice(2, 4)]); }
+      if (errs >= 3) { const t = await probe(before); const b = t?.moves.find(x => x.out === t.out); if (b && !dead) board.overlay({ arrows: [{ from: b.uci.slice(0, 2), to: b.uci.slice(2, 4), cls: 'best' }] }); }
       return;
     }
     // un gain doit avancer : la prochaine prise ou poussée de pion se rapproche (ou le coup en est une)

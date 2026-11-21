@@ -13,7 +13,7 @@ import { endSession, lineUrl, session } from './app/session';
 import { pullChessCom, sync } from './app/api';
 import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile } from './app/games';
-import { LESSONS, endDue, lessonDrill, mountDrill, turnDrill, viewEndgame, viewEndgames } from './app/endgame';
+import { LESSONS, endDue, lessonDrill, mountDrill, turnDrill, viewCourse, viewEndgame, viewEndgames } from './app/endgame';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
@@ -96,7 +96,9 @@ function route() {
     else if ((p[0] === 'rep' && p[1] === 'sorties') || p[0] === 'entrainer') { location.replace('#/rep'); return; }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewPath(view); }
-    else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!; shell(l.titre, l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle', '#/finales', FIN, '', 'session'); cleanup = mountDrill(view, lessonDrill(l)); }
+    else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!;
+      if (p[2]) { const d = lessonDrill(l, +p[2] || 1); shell(l.titre, `${l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle'} · ${d.step}`, '#/finales', FIN, '', 'session'); cleanup = mountDrill(view, d); }
+      else { shell(l.titre, 'Le cours', '#/finales', FIN, '', 'session'); cleanup = viewCourse(view, l); } }
     else if (p[0] === 'finales') { shell('Finales', '', null, FIN); cleanup = viewEndgames(view); }
     else if (p[0] === 'finale' && p[1]) { const g = store.games.find(x => x.id === decodeURIComponent(p[1])), back = `#/finale/${p[1]}`;
       if (!g) { location.replace('#/finales'); return; }
