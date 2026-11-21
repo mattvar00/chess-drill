@@ -349,36 +349,47 @@ export function mountDrill(root: HTMLElement, d: Drill): () => void {
   const coach = $('#coach', root), actions = $('#actions', root), egx = document.createElement('div');
   egx.className = 'egx ctop'; egx.id = 'egx'; egx.hidden = true; $('.trainer', root).insertBefore(egx, $('.tboard', root));   // en haut, à la place du coach : visible avec l'échiquier
   const xShow = (on: boolean) => { egx.hidden = !on; coach.hidden = on; $('#bX', actions)?.classList.toggle('on', on); };
-  let xOpen = false, helped = false, hintLv = 0;
+  let xOpen = false, helped = false, hintLv = 0, xHist: string[] = [], xMoves: Move[] = [], xI = 0;
   let game = new Chess(d.fen), busy = false, over = false, won = false, errs = 0, ok = 0, miss = 0, dead = false, last: Move | null = null, near = Infinity, idle = 0;
   const say = (mood: Mood, head: string, text = '') => { coach.innerHTML = coachSay(mood, `<p class="lead${mood === 'oops' ? ' bad' : ''}">${head}</p>${text ? `<p class="why">${text}</p>` : ''}`); };
-  const board = new Board($('#board', root), { movable: () => (busy || over ? null : d.side), onMove: m => { void play(m); } });
+  const board = new Board($('#board', root), { movable: () => (xOpen ? new Chess(xHist[xI]).turn() : busy || over ? null : d.side), onMove: m => { if (xOpen) xMove(m); else void play(m); } });
   const goalWord = d.goal === 'w' ? 'le gain' : 'la nulle';
-  const paint = () => { board.set(game, d.side, last, true); hintLv = 0; if (xOpen) void explore(); };
+  const paint = () => { board.set(game, d.side, last, true); hintLv = 0; };
   const go = (h: string) => { location.hash = h; };
   const btns = () => {
     actions.innerHTML = over
       ? `<button class="btn" id="bAgain">${icon('restart')}Rejouer</button>${won && d.next ? `<button class="btn pri" id="bNext">${d.nextLabel ?? 'Suivante'}</button>` : `<button class="btn pri" id="bStop">Continuer</button>`}<button class="btn" id="bX">${icon('search')}Explorer</button>${d.cours ? `<button class="btn" id="bCours">Revoir le cours</button>` : ''}${won && d.next ? '<button class="btn" id="bStop">Arrêter là</button>' : ''}`
       : `<button class="btn" id="bHint">${icon('bulb')}Indice</button><button class="btn" id="bX">${icon('search')}Explorer</button><button class="btn" id="bStop">Arrêter là</button>`;
     const on = (id: string, f: () => void) => actions.querySelector<HTMLElement>('#' + id)?.addEventListener('click', f);
-    on('bAgain', restart); on('bHint', () => { void hint(); }); on('bX', () => { xOpen = !xOpen; if (xOpen) void explore(); else { xShow(false); board.overlay({}); } });
+    on('bAgain', restart); on('bHint', () => { void hint(); }); on('bX', openX);
     on('bNext', () => go(d.next!)); on('bStop', () => go(d.back)); on('bCours', () => go(d.cours!)); };
   /**
-   * L'explorateur : tous tes coups possibles, rangés par ce qu'en dit la table (gagne, nul, perd). Toucher un coup le dessine.
-   * Pendant l'exercice, l'ouvrir compte comme une aide.
+   * L'explorateur : tu joues librement les coups des deux camps depuis la position affichée, tu reviens en arrière,
+   * et une ligne dit seulement ce que vaut la position (la table). Pendant l'exercice, l'ouvrir compte comme une aide.
    */
-  async function explore() {
-    xShow(true); egx.innerHTML = '<p class="why">La table regarde…</p>';
-    const fen = game.fen(), mine = game.turn() === d.side, tb = await probe(fen); if (dead || game.fen() !== fen || !xOpen) return;
-    if (!tb) { egx.innerHTML = '<p class="why">La table de finales ne répond pas.</p>'; return; }
-    if (!over && mine && !helped) { helped = true; miss++; }
-    const who = mine ? 'Tes coups' : 'Ses coups', W: Record<Out, string> = { w: 'Gagnent', d: 'Annulent', l: 'Perdent' };
-    const groups = (['w', 'd', 'l'] as Out[]).map(o => [o, tb.moves.filter(m => m.out === o)] as const).filter(([, ms]) => ms.length);
-    egx.innerHTML = `<p class="egxh"><b>${who}</b> selon la table <span class="dim">· ${tb.out === 'w' ? 'position gagnante' : tb.out === 'd' ? 'position nulle' : 'position perdante'} pour le camp au trait</span></p>
-      ${groups.map(([o, ms]) => `<div class="egxg"><span class="egxk o-${o}">${W[o]}</span><span class="egxm">${ms.map(m => `<button class="egxc o-${o}" data-u="${m.uci}">${esc(frSan(m.san))}</button>`).join('')}</span></div>`).join('')}`;
-    egx.querySelectorAll<HTMLElement>('.egxc').forEach(b => b.addEventListener('click', () => {
-      egx.querySelectorAll('.egxc.on').forEach(x => x.classList.remove('on')); b.classList.add('on'); const u = b.dataset.u!, o = b.className.match(/o-(\w)/)?.[1];
-      board.overlay({ arrows: [{ from: u.slice(0, 2), to: u.slice(2, 4), cls: o === 'w' ? 'best' : o === 'd' ? 'plan' : 'bad' }] }); }));
+  function openX() {
+    if (busy) return; xOpen = true; xHist = [game.fen()]; xMoves = []; xI = 0;
+    if (!over && !helped) { helped = true; miss++; }
+    xShow(true); xPaint();
+  }
+  function closeX() { xOpen = false; xShow(false); paint(); btns(); }
+  function xMove(m: Move) {
+    const g = new Chess(xHist[xI]), made = tryMove(g, { from: m.from, to: m.to, promotion: m.promotion }); if (!made) return;
+    xHist = [...xHist.slice(0, xI + 1), g.fen()]; xMoves = [...xMoves.slice(0, xI), made]; xI++; xPaint(true);
+  }
+  function xPaint(anim = false) {
+    const g = new Chess(xHist[xI]); board.set(g, d.side, xMoves[xI - 1] ?? null, anim);
+    const side = (c: Color) => c === 'w' ? 'les Blancs' : 'les Noirs';
+    actions.innerHTML = `<button class="btn" id="xBack" ${xI ? '' : 'disabled'} aria-label="Coup précédent">${icon('chev', 'flip')}Retour</button><button class="btn" id="xFwd" ${xI < xHist.length - 1 ? '' : 'disabled'} aria-label="Coup suivant">Avancer${icon('chev')}</button><button class="btn pri" id="xClose">Revenir à l'exercice</button>`;
+    actions.querySelector<HTMLElement>('#xBack')!.onclick = () => { if (xI) { xI--; xPaint(); } };
+    actions.querySelector<HTMLElement>('#xFwd')!.onclick = () => { if (xI < xHist.length - 1) { xI++; xPaint(true); } };
+    actions.querySelector<HTMLElement>('#xClose')!.onclick = closeX;
+    const head = `<p class="egxh"><b>Exploration libre</b> <span class="dim">· joue les coups des deux camps</span></p>`;
+    if (g.isCheckmate()) { egx.innerHTML = `${head}<p class="egxv">Mat : ${side(g.turn() === 'w' ? 'b' : 'w')} gagnent.</p>`; return; }
+    if (g.isDraw()) { egx.innerHTML = `${head}<p class="egxv">Nulle${g.isStalemate() ? ' : pat' : ''}.</p>`; return; }
+    egx.innerHTML = `${head}<p class="egxv dim">La table regarde…</p>`;
+    const fen = g.fen(); void probe(fen).then(tb => { if (dead || !xOpen || xHist[xI] !== fen) return; const v = egx.querySelector('.egxv'); if (!v) return;
+      v.classList.remove('dim'); v.textContent = !tb ? 'La table de finales ne répond pas.' : tb.out === 'd' ? `Position nulle. Trait aux ${side(g.turn()).slice(4)}.` : `${tb.out === 'w' ? side(g.turn()) : side(g.turn() === 'w' ? 'b' : 'w')} gagnent. Trait aux ${side(g.turn()).slice(4)}.`.replace(/^l/, 'L'); });
   }
   function restart() { game = new Chess(d.fen); over = false; won = false; busy = false; errs = 0; ok = 0; miss = 0; last = null; near = Infinity; idle = 0; helped = false; xOpen = false; xShow(false); if (d.goal === 'w') void probe(d.fen).then(t => { if (t && near === Infinity && !ok) near = t.dtz; }); $('.trainer', root).classList.remove('fin'); paint(); btns(); say('idle', esc(d.intro), `À toi : ${d.goal === 'w' ? 'gagne' : 'tiens la nulle'}.${d.step ? ` <span class="dim">${d.step}</span>` : ''}`); }
   /** Indice : 1er appui, l'idée et la pièce à jouer (entourée) ; 2e appui, la flèche du coup. Chaque appui compte comme une aide. */
