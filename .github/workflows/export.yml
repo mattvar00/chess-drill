@@ -1,0 +1,33 @@
+# Export des données (parties analysées, fautes, progression) sur la branche « donnees », pour les lire hors de l'app.
+# Tourne après chaque analyse, à la demande, et quand le script d'export change. La branche ne garde qu'un seul commit.
+name: Export
+on:
+  workflow_run: { workflows: [Analyse], types: [completed] }
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['app/scripts/export.mjs', '.github/workflows/export.yml']
+permissions: { contents: write }
+concurrency: { group: export, cancel-in-progress: true }
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - name: Export
+        env:
+          API_URL: ${{ vars.API_URL || 'https://chess-drill.mattvar36.workers.dev' }}
+          USERS: ${{ vars.USERS || 'matt_chess00' }}
+        run: node app/scripts/export.mjs "$RUNNER_TEMP/donnees"
+      - name: Publier sur la branche donnees
+        working-directory: ${{ runner.temp }}/donnees
+        run: |
+          git init -q -b donnees
+          git config user.name "chess-drill export"
+          git config user.email "export@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Données du $(date -u +%Y-%m-%d\ %H:%M) UTC"
+          git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" donnees
