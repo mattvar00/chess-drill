@@ -6,7 +6,7 @@ import { esc, plural, $, icon } from '../ui/dom';
 import { miniBoard, pieceSrc } from '../ui/board';
 import { meetCounts } from '../core/rank';
 import { endDue, endFen, endgameGames, material } from './endgame';
-import { bindPath, courseBoard, devRow, familyColor, nextUp, openCourse, otherUps, pathBlock, runUp, shortName, unitFor } from './path';
+import { bindPath, courseBoard, devRow, familyColor, nextUp, openCourse, otherUps, pathBlock, runUp, setCourseView, shortName, unitFor } from './path';
 import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
 import { lineName, lineTitle, nomTitle, plainName, popBars, roleLabel, shortNom, typeLabel, variantTitle } from '../core/names';
 import { structureStats } from '../core/stats';
@@ -137,8 +137,8 @@ function inYourGames(sys: System): string {
   return `<p class="pnote">Dans tes parties : ${plural(games.length, 'jouée', 'jouées')}, ${score} % des points.${an.length >= 3 ? ` ${drop <= -5 ? `Tu perds en moyenne ${-drop} points de chances entre les coups 10 et 20 : c'est le plan du milieu de jeu qui te coûte, pas la théorie.` : drop >= 5 ? `Tu gagnes en moyenne ${drop} points de chances entre les coups 10 et 20.` : 'Tes chances restent stables entre les coups 10 et 20.'}` : ''}</p>`;
 }
 /** Page d'une ouverture : où tu en es (une seule mesure), ce qu'il faut corriger, tes lignes, puis les liens vers ses fautes et ses plans. */
-export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System, tab: CourseTab = 'chemin') {
-  const back = `#/rep/${bloc.id}/${sys.id}`, played = gamesOfSystem(sys);
+export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System, tab: CourseTab = 'chemin', base?: string) {
+  const back = base ?? `#/rep/${bloc.id}/${sys.id}`, played = gamesOfSystem(sys);
   const u = unitFor(bloc, sys), known = knownLines(u, store.state.br);
   const own = ownLines(sys), nPun = sys.branches.length - own.length;
   const devs = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 60, 10).filter(g => BR[refBranch(g, BR)!]?.sys.id === sys.id).slice(0, 3);
@@ -170,3 +170,5 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System, tab: Cour
   bindPath(root, u);
 
 }
+
+setCourseView(viewSystem);

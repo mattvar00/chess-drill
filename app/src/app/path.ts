@@ -234,10 +234,16 @@ export function viewPath(root: HTMLElement) {
   if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur);
   // la recommandation reste visible : une ligne en haut quand elle porte sur un autre cours, un mot sous le nom quand c'est celui-ci
   root.innerHTML = `<a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}</small></span>${icon('chev', 'chev')}</a>
-    ${pathBlock(cur)}
-    <a class="quiet" href="${openingUrl(cur)}">Plus sur ce cours</a>`;
-  bindPath(root, cur);
+    <div id="ccourse"></div>`;
+  // le cours lui-même, avec son bilan et ses trois vues (chemin, plans, arbre) : une seule page par cours
+  const v = new URLSearchParams(location.hash.split('?')[1] ?? '').get('v');
+  showCourse(root.querySelector<HTMLElement>('#ccourse')!, cur.bloc, cur.sys, v === 'plans' || v === 'arbre' ? v : 'chemin', '#/rep');
 }
+/** Fait de ce cours le cours en cours (celui que montre l'onglet Ouvertures). */
+export const setCurrentCourse = (sysId: string) => setLS(LAST_KEY, sysId);
+let showCourse: (root: HTMLElement, bloc: Bloc, sys: System, tab: 'chemin' | 'plans' | 'arbre', base: string) => void = () => {};
+/** Branché par la page du cours (pour éviter une dépendance circulaire). */
+export const setCourseView = (f: typeof showCourse) => { showCourse = f; };
 /**
  * « Tes cours », classés par besoin : d'abord ceux qu'il est le plus utile de travailler (souvent joués et mal réussis, ou oubliés),
  * puis ceux que tu joues bien, puis ceux que tu n'as pas encore rencontrés. Un seul ordre, décidé par les recommandations.

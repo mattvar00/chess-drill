@@ -18,7 +18,7 @@ import { viewOpenings } from './app/course';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
-import { shortName, viewLessonEnd, viewPath } from './app/path';
+import { setCurrentCourse, shortName, viewLessonEnd, viewPath } from './app/path';
 import { popLevel, lineTitle } from './core/names';
 
 restoreLook();
@@ -93,7 +93,8 @@ function route() {
   } else {
     if (p[0] !== 'plans') endSession();   // les plans se consultent entre deux variantes sans quitter le cours
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
-    if (bloc && sys) { shell(shortName(sys.titre), `${bloc.titre}, ${bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`, '#/rep', TRAIN); viewSystem(view, bloc, sys, (['plans', 'arbre'] as const).find(v => v === q.get('v')) ?? 'chemin'); }
+    // une seule page par cours : celle de l'onglet Ouvertures, qui montre le cours choisi
+    if (bloc && sys) { setCurrentCourse(sys.id); const v = q.get('v'); location.replace(`#/rep${v ? '?v=' + v : ''}`); return; }
     else if ((p[0] === 'rep' && p[1] === 'sorties') || p[0] === 'entrainer') { location.replace('#/rep'); return; }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewPath(view); }
