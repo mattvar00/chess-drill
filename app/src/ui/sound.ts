@@ -1,6 +1,12 @@
 /** Sons synthétisés (aucun fichier audio). */
 import type { Move } from '../core/chess';
 let ac: AudioContext | null = null; let enabled = true;
+/**
+ * Sur iPhone, une page web joue ses sons même quand le téléphone est en silencieux et coupe la musique en cours.
+ * La session audio « ambient » (Safari 16.4 et plus) fait respecter le bouton silencieux et laisse la musique jouer.
+ */
+function ambient() { try { const s = (navigator as unknown as { audioSession?: { type: string } }).audioSession; if (s && s.type !== 'ambient') s.type = 'ambient'; } catch { /* navigateur sans session audio */ } }
+ambient();
 export const setSound = (on: boolean) => { enabled = on; if (!on && ac && ac.state === 'running') void ac.suspend(); };
 
 /**
@@ -34,6 +40,7 @@ function sample(k: 'Move' | 'Capture' | 'Check', vol = 1): boolean {
 /** À appeler sur un geste de l'utilisateur : les navigateurs bloquent le son avant. */
 export function unlockAudio(): AudioContext | null {
   if (!enabled) return null;
+  ambient();
   if (!ac) { try { ac = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)(); } catch { return null; } }
   if (ac.state === 'suspended') void ac.resume();
   if (!bufs.size) preload();
