@@ -14,6 +14,7 @@ import { pullChessCom, sync } from './app/api';
 import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile } from './app/games';
 import { LESSONS, endDue, lessonDrill, mountDrill, turnDrill, viewCourse, viewEndgame, viewEndgames } from './app/endgame';
+import { viewOpenings } from './app/course';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
@@ -80,7 +81,7 @@ function route() {
     endSession(); const id = decodeURIComponent(p[1]), r = q.get('r'), backTo = r && r.startsWith('#/') ? r : PROG, [t, sub] = reviewTitle(id);
     shell(t, sub, backTo, PROG, '', 'review'); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
   } else if (p[0] === 'plan' && p[1]) {
-    shell(planTitle(p[1]), 'Plan animé', lastPlans, TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
+    const r = q.get('r'); shell(planTitle(p[1]), 'Plan animé', r && r.startsWith('#/') ? r : lastPlans, TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
   } else if (p[0] === 'structure' && p[1]) {
     endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/plans', TRAIN, '', 'board'); cleanup = mountStruct(view, p[1]);
   } else if (p[0] === 'wood' && p[1] === 'go') {
@@ -92,10 +93,11 @@ function route() {
   } else {
     if (p[0] !== 'plans') endSession();   // les plans se consultent entre deux variantes sans quitter le cours
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
-    if (bloc && sys) { shell(shortName(sys.titre), `${bloc.titre}, ${bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`, '#/rep', TRAIN); viewSystem(view, bloc, sys); }
+    if (bloc && sys) { shell(shortName(sys.titre), `${bloc.titre}, ${bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`, '#/rep', TRAIN); viewSystem(view, bloc, sys, (['plans', 'arbre'] as const).find(v => v === q.get('v')) ?? 'chemin'); }
     else if ((p[0] === 'rep' && p[1] === 'sorties') || p[0] === 'entrainer') { location.replace('#/rep'); return; }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewPath(view); }
+    else if (p[0] === 'ouvertures') { shell('Tes ouvertures', 'Le bilan de chacune', PROG, PROG); viewOpenings(view); }
     else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!;
       if (p[2]) { const d = lessonDrill(l, +p[2] || 1); shell(l.titre, `${l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle'} · ${d.step}`, '#/finales', FIN, '', 'session'); cleanup = mountDrill(view, d); }
       else { shell(l.titre, 'Le cours', '#/finales', FIN, '', 'session'); cleanup = viewCourse(view, l); } }

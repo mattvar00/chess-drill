@@ -149,6 +149,7 @@ export function viewGames(root: HTMLElement) {
       <span class="pcard-more">Voir le radar et le détail${icon('chev')}</span></a>` : ''}
     <div class="tiles">${tiles.join('')}</div>
     <div class="surf card list">
+      <a class="rowi" href="#/ouvertures"><span class="ico">${icon('stack')}</span><span class="body"><b>Tes ouvertures</b><small>Le bilan de chacune, les plus faibles d'abord</small></span>${icon('chev', 'chev')}</a>
       <a class="rowi" href="#/finales"><span class="ico">${icon('rook')}</span><span class="body"><b>Tes finales</b><small>${esc(endRecord().text || 'Gagnant, nul ou perdant : ce que dit la table, coup par coup')}</small></span>${icon('chev', 'chev')}</a>
       <a class="rowi" href="${weak ? `#/structure/${weak[0]}` : '#/plans'}"><span class="ico">${icon('pawn')}</span><span class="body"><b>${weak ? `À travailler : ${esc(STRUCT[weak[0]].name)}` : 'Tes structures de pions'}</b><small>${weak ? `${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires` : 'Leurs plans, ton score, et tes fautes à y rejouer'}</small></span>${chev}</a>
     </div>

@@ -19,6 +19,7 @@ import { gameRow, gameUrl } from './games';
 import { PLAN_LINES } from './trainer';
 import { startCycle } from './wood';
 import { coldStart, keyMoment, lastSession, myWp } from '../core/stats';
+import { courseHead, gamesOfSystem, mountTree, plansPanel, type CourseTab } from './course';
 
 const DAY = 864e5;
 const st = (id: string) => store.state.br[id];
@@ -126,7 +127,6 @@ function lineStatus(br: Branch): string {
   return parts.join(', ');
 }
 /** Tes parties jouées dans un système (d'après la ligne du répertoire suivie le plus longtemps), les plus récentes d'abord. */
-const gamesOfSystem = (sys: System) => store.games.filter(g => { const id = refBranch(g, BR); return !!id && BR[id].sys.id === sys.id; }).sort((a, b) => b.t - a.t);
 /** Ce que tes parties disent de cette ouverture : score, et ce que tu fais de la sortie d'ouverture. */
 function inYourGames(sys: System): string {
   const games = gamesOfSystem(sys), an = games.filter(g => g.st && myWp(g)); if (!games.length) return '';
@@ -137,12 +137,12 @@ function inYourGames(sys: System): string {
   return `<p class="pnote">Dans tes parties : ${plural(games.length, 'jouée', 'jouées')}, ${score} % des points.${an.length >= 3 ? ` ${drop <= -5 ? `Tu perds en moyenne ${-drop} points de chances entre les coups 10 et 20 : c'est le plan du milieu de jeu qui te coûte, pas la théorie.` : drop >= 5 ? `Tu gagnes en moyenne ${drop} points de chances entre les coups 10 et 20.` : 'Tes chances restent stables entre les coups 10 et 20.'}` : ''}</p>`;
 }
 /** Page d'une ouverture : où tu en es (une seule mesure), ce qu'il faut corriger, tes lignes, puis les liens vers ses fautes et ses plans. */
-export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
+export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System, tab: CourseTab = 'chemin') {
   const back = `#/rep/${bloc.id}/${sys.id}`, played = gamesOfSystem(sys);
   const u = unitFor(bloc, sys), known = knownLines(u, store.state.br);
   const own = ownLines(sys), nPun = sys.branches.length - own.length;
   const devs = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 60, 10).filter(g => BR[refBranch(g, BR)!]?.sys.id === sys.id).slice(0, 3);
-  const gids = new Set(played.map(g => g.id)), nFaults = store.faults.filter(f => gids.has(f.game)).length, plans = plansFor(sys.id);
+  const gids = new Set(played.map(g => g.id)), nFaults = store.faults.filter(f => gids.has(f.game)).length;
   const cells = u.lessons.map(l => `<i class="${l.state}"></i>`).join('');
   // un cours : les lignes sous le nom de leur chapitre (une case du chemin), avec leur rôle ; sinon une seule liste
   const chapters = chaptersOf(own.filter(b => !b.type)), rest = own.filter(b => b.type);
@@ -153,13 +153,14 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System) {
   const row = (br: Branch, common = '') => { const st = store.state.br[br.id], known = !!st?.clean && st.clean >= 1, due = known && isDue(st!), v = variantTitle(br), same = !!common && br.nom === common;
     return `<a class="rowi vrow" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(same ? v.sub || v.title : v.title)}</b>${!same && v.sub ? `<small>${esc(v.sub)}</small>` : ''}${due ? '<small class="due">à revoir</small>' : ''}</span>${known && !due ? `<span class="vok">${icon('check')}</span>` : ''}${chev}</a>`; };
   const plusIds = own.filter(b => b.plus).map(b => b.id), plusLeft = plusIds.filter(id => !store.state.br[id]?.clean);
-  root.innerHTML = `
+  const head = courseHead(sys, back, tab);
+  if (tab === 'plans') { root.innerHTML = head + plansPanel(sys, back); return; }
+  if (tab === 'arbre') { root.innerHTML = head + '<div id="ctree"></div>'; mountTree($('#ctree', root), bloc, sys, own.filter(b => !b.type)); return; }
+  root.innerHTML = `${head}
     ${pathBlock(u)}
     ${devs.length ? `<section class="grp fix"><h2>À corriger : quittée en partie</h2><div class="surf card list">${devs.map(g => devRow(g)).join('')}</div></section>` : ''}
     ${plusIds.length ? (u.promoted ? `<button class="surf card lk1" id="bPlus"><b>Pour aller plus loin</b><span class="dim">${plusLeft.length ? plural(plusLeft.length, 'variante rare', 'variantes rares') : 'tout est su'}</span>${chev}</button>` : `<p class="pnote plusnote">Pour aller plus loin : ${plural(plusIds.length, 'variante rare', 'variantes rares')}, après la dame.</p>`) : ''}
-    <details class="others allv morec"><summary>Plus : plans, variantes, tes parties</summary>
-    ${plans.length ? `<a class="surf card lk1" href="#/plans?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Les plans de cette ouverture</b><span class="dim">${plans.length}</span>${chev}</a>` : ''}
-    ${(sys.modeles ?? []).map(m => `<a class="surf card lk1" href="${lineUrl(m.id, 'explore')}"><b>Partie modèle</b><span class="dim">${esc(m.titre)}</span>${chev}</a>`).join('')}
+    <details class="others allv morec"><summary>Plus : toutes les variantes, tes fautes, tes parties</summary>
     ${nFaults ? `<a class="surf card lk1" href="#/wood?o=${sys.id}&r=${encodeURIComponent(back)}"><b>Tes fautes dans cette ouverture</b><span class="dim">${nFaults}</span>${chev}</a>` : ''}
     <h3 class="chap">Toutes les variantes</h3>${groups.map(g => { const cn = commonNom(g.lines); return `${g.name ? `<h3 class="chap">${esc(cn ? nomTitle(cn) : g.name.split(' : ')[0])}</h3>` : ''}<div class="surf card list">${g.lines.map(b => row(b, cn)).join('')}</div>`; }).join('')}
       <button class="quiet" id="bDrill">Rejouer les ${own.length} variantes à la suite</button>
