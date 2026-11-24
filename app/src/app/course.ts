@@ -108,7 +108,7 @@ export function mountTree(root: HTMLElement, bloc: Bloc, sys: System, lines: Bra
       ${br ? `<a class="btn pri" href="${lineUrl(br.id, 'drill')}">Apprendre cette variante</a>` : ''}</div></section>` : ''}
       <p class="pnote">${trunkLine ? `Après ${esc(trunkLine)}. ` : ''}Touche un coup pour voir la position.</p>
       <div class="surf card tree" role="list">${rows.map((x, i) => `<button class="trow${i === sel ? ' on' : ''}${x.last ? ' last' : ''}" role="listitem" data-i="${i}" style="--d:${x.depth}" aria-pressed="${i === sel}">
-        <b>${esc(num(x.node.ply, x.node.san))}</b><span class="tst"><i class="dot ${x.n ? scoreCls(x.p) : 'none'}"></i>${x.n ? `${plural(x.n, 'partie')} · ${x.p} %` : 'jamais jouée'}</span></button>`).join('')}</div>`;
+        <b>${esc(num(x.node.ply, x.node.san))}</b><span class="tst"><i class="sdot ${x.n ? scoreCls(x.p) : 'none'}"></i>${x.n ? `${plural(x.n, 'partie')} · ${x.p} %` : 'jamais jouée'}</span></button>`).join('')}</div>`;
     root.querySelectorAll<HTMLElement>('.trow').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.i!; draw(); root.querySelector<HTMLElement>(`.trow[data-i="${sel}"]`)?.focus(); }));
   };
   draw();

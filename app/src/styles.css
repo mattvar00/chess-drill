@@ -1176,7 +1176,7 @@ h1,h2,.pbn,.ftext h2,.cpick b{letter-spacing:-.015em}
 .trow::after{content:"";position:absolute;left:calc(14px + var(--d) * 22px);top:50%;width:10px;border-top:2px solid var(--line)}
 .trow b{min-width:66px;font-size:15px}.trow.on{background:var(--soft)}.trow.on b{color:var(--soft-ink)}
 .tst{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--c-mute)}
-.dot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--line)}.dot.low{background:#D0453A}.dot.mid{background:#E6A34C}.dot.high{background:#2E9E5B}
+.sdot{width:10px;height:10px;border-radius:50%;flex:none;background:var(--line)}.sdot.low{background:#D0453A}.sdot.mid{background:#E6A34C}.sdot.high{background:#2E9E5B}
 .obil{display:grid;gap:10px}
 .orow{display:grid;gap:8px;padding:12px 14px;text-decoration:none;color:var(--c-ink)}
 .ohead{display:flex;align-items:center;gap:8px}.ohead b:first-child{flex:1;font-size:15px}.ohead .dim{font-size:12px;color:var(--c-mute)}.ohead .cbs{font-size:18px}
