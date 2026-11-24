@@ -15,6 +15,7 @@ import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile } from './app/games';
 import { LESSONS, endDue, lessonDrill, mountDrill, turnDrill, viewCourse, viewEndgame, viewEndgames } from './app/endgame';
 import { viewOpenings } from './app/course';
+import { mountPlanPlay } from './app/planplay';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
@@ -80,6 +81,8 @@ function route() {
   } else if (p[0] === 'partie' && p[1]) {
     endSession(); const id = decodeURIComponent(p[1]), r = q.get('r'), backTo = r && r.startsWith('#/') ? r : PROG, [t, sub] = reviewTitle(id);
     shell(t, sub, backTo, PROG, '', 'review'); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
+  } else if (p[0] === 'plan' && p[1] && p[2] === 'jouer') {
+    shell(planTitle(p[1]), 'Joue le plan contre le moteur', `#/plan/${p[1]}?vu=1`, TRAIN, '', 'session'); cleanup = mountPlanPlay(view, p[1]);
   } else if (p[0] === 'plan' && p[1]) {
     const r = q.get('r'); shell(planTitle(p[1]), 'Plan animé', r && r.startsWith('#/') ? r : lastPlans, TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
   } else if (p[0] === 'structure' && p[1]) {

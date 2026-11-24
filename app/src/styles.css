@@ -1162,7 +1162,7 @@ h1,h2,.pbn,.ftext h2,.cpick b{letter-spacing:-.015em}
 .cseg.on{background:var(--c-seg-on,var(--surface));color:var(--c-seg-on-ink,var(--ink));box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .cseg .cn{font-size:11px;padding:2px 6px;border-radius:8px;background:rgba(127,127,127,.22)}
 .pcards{display:grid;gap:10px;margin-bottom:14px}
-.pcard2{display:flex;align-items:center;gap:12px;padding:10px;text-decoration:none;color:var(--c-ink)}
+.pcard2{display:flex;align-items:center;gap:10px;padding:10px;color:var(--c-ink)}.pcard2 .pmain{flex:1;min-width:0;display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit}.pjouer{flex:none;min-height:44px;padding:0 14px}
 .pcard2 .body{flex:1;display:grid;gap:4px}.pcard2 b{font-size:15px;line-height:1.3}.pcard2 small{font-size:12.5px;color:var(--c-mute)}
 .minip{position:relative;flex:none;display:block}.minip .mini{width:92px;height:92px}
 .minip svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}

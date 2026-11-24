@@ -47,7 +47,7 @@ export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): ()
     <div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">
       <div class="coach" aria-live="polite"><p class="meta" id="mv"></p><p class="moves mseg" id="seg"></p><p id="cap"></p></div>
       <div class="explnav three"><button class="btn" id="bPrev" aria-label="Étape précédente">${icon('back')}</button><button class="btn" id="bPlay"></button><button class="btn" id="bNext" aria-label="Étape suivante">${icon('chev')}</button></div>
-      <div class="row"><a class="btn" href="${lineUrl(planBranch(P.id), 'drill')}">${done ? 'Rejouer la ligne' : 'Jouer la ligne'}</a></div>
+      <div class="row"><a class="btn pri" href="#/plan/${P.id}/jouer">Joue le plan contre le moteur</a><a class="btn" href="${lineUrl(planBranch(P.id), 'drill')}">${done ? 'Rejouer la ligne' : 'Jouer la ligne'}</a></div>
       ${done ? `<p class="hint">Ligne déjà jouée${done.errs ? `, ${plural(done.errs, 'erreur')} la dernière fois` : ' sans faute'}.</p>` : ''}
       <details class="help"><summary>Toute la ligne et les sources</summary><p class="line">${P.sans.map((s, k) => (k % 2 === 0 ? `${k / 2 + 1}.` : '') + esc(s)).join(' ')}</p>
         <p>Idées tirées de : ${P.src.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\/(www\.)?/, '').split('/')[0])}</a>`).join(', ')}. Chaque coup est vérifié au moteur.</p></details>

@@ -72,7 +72,7 @@ export function plansPanel(sys: System, back: string): string {
   const plans = plansFor(sys.id);
   const cards = plans.map(P => { const st = keyStep(P), g = new Chess(); P.sans.slice(0, st.p).forEach(s => tryMove(g, s));
     const line = P.title.includes(' · ') ? P.title.split(' · ').slice(1).join(' · ') : P.title;
-    return `<a class="surf card pcard2" href="#/plan/${P.id}?vu=1&r=${encodeURIComponent(back + '?v=plans')}">${miniPlan(g, P.side, st.a, st.h)}<span class="body"><b>${esc(P.sub)}</b><small>${esc(line)} · ${plural(P.steps.length, 'étape')}</small></span>${chev}</a>`; }).join('');
+    return `<div class="surf card pcard2"><a class="pmain" href="#/plan/${P.id}?vu=1&r=${encodeURIComponent(back + '?v=plans')}">${miniPlan(g, P.side, st.a, st.h)}<span class="body"><b>${esc(P.sub)}</b><small>${esc(line)} · ${plural(P.steps.length, 'étape')}</small></span></a><a class="btn pjouer" href="#/plan/${P.id}/jouer" aria-label="Jouer ce plan contre le moteur">Jouer</a></div>`; }).join('');
   const models = (sys.modeles ?? []).map(m => `<a class="surf card lk1" href="${lineUrl(m.id, 'explore')}"><b>Partie modèle</b><span class="dim">${esc(m.titre)}</span>${chev}</a>`).join('');
   if (!plans.length && !models) return '<p class="pnote">Pas encore de plan en images pour cette ouverture.</p>';
   return `${cards ? `<div class="pcards">${cards}</div><a class="btn pri block" href="#/plan/${plans[0].id}?vu=1&r=${encodeURIComponent(back + '?v=plans')}">Voir les plans en images</a>` : ''}${models ? `<section class="grp"><h2>Pour voir le plan en vrai</h2>${models}</section>` : ''}`;
