@@ -1317,3 +1317,29 @@ main .surf.card.list>.rowi,main .surf.card.list>a,main .surf.card.list>button{pa
 /* les onglets dans une page : un seul style */
 .seg,.csegs{border-radius:var(--rad)}.seg button,.seg label span,.cseg{border-radius:9px;min-height:40px;height:40px;font-size:var(--t-sub)}
 .btn.block.ofaults{width:auto}
+
+/* Finales : un chiffre, un bouton, les leçons, puis tes parties */
+.eghead{display:flex;flex-direction:column;gap:12px;margin:2px 0 22px}
+.egnum{display:flex;align-items:baseline;gap:10px}.egnum b{font:700 44px/1 var(--f-title);letter-spacing:-.02em}.egnum span{font-size:var(--t-sub);color:var(--c-mute)}
+.eghead .btn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;text-align:center}
+.egmore{display:none}.list.all .egmore{display:flex}.list.all .egall{display:none}
+.egall{width:100%;background:none;border:0;color:var(--c-link);text-align:left;cursor:pointer;font:inherit}.egall b{color:var(--c-link);font-weight:600}
+
+/* Pages d'échiquier : les boutons toujours en bas, sous le pouce */
+.tside>.tmain,.tside>#ex{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0}
+.explnav.dock{position:sticky;bottom:calc(var(--tabs) + env(safe-area-inset-bottom));z-index:4;margin-top:auto;padding:10px 0 12px;background:var(--ground)}
+body.fit .explnav.dock{bottom:0;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
+.explnav.dock.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.explnav.dock .btn.pri{min-height:48px;display:flex;align-items:center;justify-content:center}
+@media(min-width:900px){.explnav.dock{position:static;margin-top:0}}
+.egnum{justify-content:flex-start}.eghead .prog{display:block;height:4px;border-radius:2px;background:var(--line);overflow:hidden}.eghead .prog b{display:block;height:100%;background:var(--accent)}
+.egnx{margin:2px 0 0;font-size:var(--t-sub);color:var(--c-mute)}
+
+/* Progrès : toutes les tuiles au même gabarit (même fond, même rayon, même libellé, même chiffre) */
+.tsec{margin-top:18px}.tsec h2{margin-bottom:10px}
+.tiles{gap:8px}
+.tiles .tile,.tiles .tile.t2,.tiles .tile.padded{border-radius:var(--rad);padding:14px;gap:6px;box-shadow:none}
+.tiles .tile h2,.tiles .tl{font:600 var(--t-cap)/1.3 var(--f-text);color:var(--c-mute);letter-spacing:0;margin:0}
+.tiles .tn,.tiles .tile .elohead b{font:700 28px/1.1 var(--f-title);letter-spacing:-.02em}
+.tiles .tile small{font-size:var(--t-cap);color:var(--c-mute)}
+.eghead{align-items:stretch;text-align:left}.egnum{width:100%}.eghead .egnx{text-align:left}

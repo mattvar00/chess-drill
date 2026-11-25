@@ -16,6 +16,7 @@ import { insightsHtml } from './insights';
 import { themeLabel } from '../core/wood';
 import { punishRate } from './exits';
 import { lineTitle } from '../core/names';
+import { shortName } from './path';
 import { passed } from '../core/path';
 import { isDue } from '../core/schedule';
 import { explorerSlot } from './explorer';
@@ -59,7 +60,7 @@ const axis = (title: string, big: string, label: string, v: number | null, sub: 
 const inScope = () => { const cut = period ? Date.now() / 1000 - period * 86400 : 0; return store.games.filter(g => g.t >= cut && !store.state.ignored[g.id] && (cadence === 'all' || g.tc === cadence)).sort((a, b) => b.t - a.t); };
 export function gameRow(g: Game, back?: string) {
   return `<a class="rowi" href="${gameUrl(g.id, undefined, back)}"><span class="chip ${g.color}" role="img" aria-label="${g.color === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}"></span>
-    <span class="body"><b>${esc(g.opp)} <span class="dim">${g.oppElo || ''}</span></b><small>${[ecoName(g.eco), day(g.t), TC[g.tc] ?? g.tc].filter(Boolean).map(esc).join(', ')}</small></span>
+    <span class="body"><b>${esc(g.opp)} <span class="dim">${g.oppElo || ''}</span></b><small>${[opName(g), day(g.t), TC[g.tc] ?? g.tc].filter(Boolean).map(esc).join(', ')}</small></span>
     ${g.st?.acc != null ? `<span class="acc" title="Ta précision">${g.st.acc}</span>` : ''}<span class="res res-${g.res}">${RES[g.res]}</span>${chev}</a>`;
 }
 /** Profil de la période et de la cadence choisies, avec les fautes les plus fréquentes. */
@@ -94,6 +95,9 @@ function bindPull(root: HTMLElement) {
     if (n > 0) { viewGames(root); const s2 = $('#pullSt', root); s2.hidden = false; s2.textContent = `${plural(n, 'nouvelle partie', 'nouvelles parties')}. Le moteur les analysera cette nuit ; les finales se lisent déjà.`; }
     else st.textContent = 'Tu es à jour : aucune nouvelle partie.'; };
 }
+/** Le nom de l'ouverture d'une partie : celui de ton cours quand elle en suit un (le même partout dans l'app), sinon celui de chess.com. */
+const opName = (g: Game) => { const id = g.a?.branches?.[0], t = id && BR[id] ? BR[id].sys.titre : ''; if (!t) return ecoName(g.eco); const [a, ...r] = t.split(' : '); return shortName(r.length && /^les autres$/i.test(a.trim()) ? r.join(' : ') : a); };
+
 export function viewGames(root: HTMLElement) {
   if (!store.games.length) {
     root.innerHTML = `${progHead()}<section class="empty"><p>Tes parties apparaissent ici après la première analyse de nuit, ou tout de suite avec « Mettre à jour ».</p></section>`; bindPull(root); return;
@@ -127,7 +131,7 @@ export function viewGames(root: HTMLElement) {
   const tiles = [
     p0 ? `<section class="surf card padded tile"><div class="elohead"><div><span class="tl">Elo en ${(TC[elo[0][0]] ?? elo[0][0]).toLowerCase()}</span><b>${p0[p0.length - 1].e}</b></div>${delta(p0)}</div>${eloChart(p0)}</section>` : '',
     pair(e1 && half(`Elo en ${(TC[e1[0]] ?? e1[0]).toLowerCase()}`, String(e1[1][e1[1].length - 1].e), spark(e1[1]), `${e1[1][e1[1].length - 1].e >= e1[1][0].e ? '+' : '−'}${Math.abs(e1[1][e1[1].length - 1].e - e1[1][0].e)} sur ${plural(e1[1].length, 'partie')}`),
-      card.worst && facts[card.worst] && `<a class="tile t2 hot" href="#/profil"><span class="tl">Ton point faible</span><b class="tn">${cap(article(card.worst))}</b><small>${facts[card.worst]}.</small></a>`),
+      null),
     pair(half('Victoires', `${pct(all.w, all.n)} %`, wdlBar(all), `${all.w} gagnée${all.w > 1 ? 's' : ''}, ${all.l} perdue${all.l > 1 ? 's' : ''}`),
       pr.tactics && half('Précision', String(pr.tactics.acc), ph.o != null || ph.m != null ? `<div class="phases">${phase('Ouverture', ph.o)}${phase('Milieu', ph.m)}${phase('Finale', ph.f)}</div>` : '', '')),
     pair(color('w'), color('b')),
@@ -135,7 +139,7 @@ export function viewGames(root: HTMLElement) {
       cs && half('Début de session', `${cs.first} %`, `<div class="bars3" role="img" aria-label="${cs.first} % de victoires sur les 3 premières parties, ${cs.rest} % ensuite"><i class="${cs.first < cs.rest ? 'lo' : ''}" style="height:${cs.first}%"></i><i style="height:${cs.rest}%"></i></div>`, `de victoires sur tes 3 premières parties, ${cs.rest} % ensuite`)),
     mo.length >= 2 ? `<section class="surf card padded tile"><h2>Victoires selon le moment de la journée</h2><div class="cols" style="--n:${mo.length}">${mo.map(x => `<div class="${x === best ? 'best' : ''}"><b>${x.pct} %</b><span class="colbar"><i style="height:${x.pct}%"></i></span><span>${x.label}</span><small>${plural(x.n, 'partie')}</small></div>`).join('')}</div></section>` : '',
     punishTile(),
-    th.length ? `<section class="surf card tile flist"><h2>Tes fautes les plus fréquentes</h2><div class="list">${th.map(([k, v]) => `<a class="rowi" href="#/wood?t=${encodeURIComponent(k)}&r=${encodeURIComponent('#/progres')}"><span class="body"><b>${esc(themeLabel(k))}</b><span class="prog"><b style="width:${Math.round((100 * v) / thMax)}%"></b></span></span><span class="dim">${v}</span><span class="go">Rejouer</span></a>`).join('')}</div></section>` : '',
+    '',   // les fautes les plus fréquentes sont dans « Ce qui te coûte des points » et dans l'onglet Fautes
   ];
   root.innerHTML = `
     ${progHead()}<header class="pagehead"><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
@@ -149,6 +153,7 @@ export function viewGames(root: HTMLElement) {
     ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
     ${list.length ? `
     ${insightsHtml(list)}
+    <section class="isec tsec"><h2>Tes chiffres</h2></section>
     <div class="tiles">${tiles.join('')}</div>
     <div class="surf card list">
       <a class="rowi" href="#/ouvertures"><span class="ico">${icon('stack')}</span><span class="body"><b>Tes ouvertures</b><small>Le bilan de chacune, les plus faibles d'abord</small></span>${icon('chev', 'chev')}</a>
@@ -205,7 +210,7 @@ const label = (k: ReviewClass) => `<span class="cls c-${k}"><i>${CLASS[k][1]}</i
 /** Titre et sous-titre de la revue. */
 export function reviewTitle(id: string): [string, string] {
   const g = store.games.find(x => x.id === id); if (!g) return ['Partie', ''];
-  return [`${RES[g.res]} contre ${g.opp}`, [day(g.t, true), TC[g.tc] ?? g.tc, ecoName(g.eco)].filter(Boolean).join(', ')];
+  return [`${RES[g.res]} contre ${g.opp}`, [day(g.t, true), TC[g.tc] ?? g.tc, opName(g)].filter(Boolean).join(', ')];
 }
 
 export function mountReview(root: HTMLElement, id: string, start: number | null, back: string): () => void {

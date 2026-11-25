@@ -37,8 +37,8 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     <div class="tboard"><div id="board"></div><div class="stepper" id="stepper"></div></div>
     <div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">
       <div class="coach" id="coach" aria-live="polite"></div>
-      <div class="explnav" id="explnav" ${mode === 'explore' ? '' : 'hidden'}>${[['first', 'Début', 'first'], ['prev', 'Coup précédent', 'back'], ['next', 'Coup suivant', 'chev'], ['last', 'Fin', 'last']].map(([to, l, i]) => `<button class="btn" data-to="${to}" aria-label="${l}">${icon(i)}</button>`).join('')}</div>
       <div class="moves" id="moves"></div>
+      <div class="explnav dock${br.model ? ' two' : ' three'}" id="explnav" ${mode === 'explore' ? '' : 'hidden'}><button class="btn" data-to="prev" aria-label="Coup précédent">${icon('back')}</button>${br.model ? '' : `<a class="btn pri" href="${lineUrl(id, 'drill')}">De mémoire</a>`}<button class="btn" data-to="next" aria-label="Coup suivant">${icon('chev')}</button></div>
       <div class="actions" id="actions"></div>
     </div></div></div>`;
   const coach = $('#coach', root), actions = $('#actions', root), movesEl = $('#moves', root), stepper = $('#stepper', root);
@@ -87,9 +87,9 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     target = Math.max(0, Math.min(moves.length, target)); const forward = target === ply + 1;
     game = new Chess(); last = null; for (let i = 0; i < target; i++) apply(i);
     ply = target; show(forward); paintMoves();
-    if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(br.intro ?? sys.resume)}</p><p class="why">Avance avec les flèches, à l'écran ou au clavier. Les coups soulignés portent un commentaire.</p>`);
+    if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(br.intro ?? sys.resume)}</p>`);
     else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)}${esc(moves[ply - 1].san)}`, note ? `<p>${esc(note)}</p>` : '<p class="why">Coup de la ligne.</p>'); }
-    actions.innerHTML = ply >= moves.length && !br.model ? `<a class="btn pri" href="${lineUrl(id, 'drill')}">La jouer de mémoire</a>` : '';
+    actions.innerHTML = '';   // « De mémoire » est dans la barre du bas, toujours au même endroit
   }
   const onKey = (e: KeyboardEvent) => { if (mode !== 'explore' || xa()) return; if (e.key === 'ArrowRight') explTo(ply + 1); if (e.key === 'ArrowLeft') explTo(ply - 1); };
 

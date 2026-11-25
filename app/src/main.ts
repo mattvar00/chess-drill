@@ -84,7 +84,7 @@ function routeTo() {
     const kind = br.role === 'erreur' ? 'Erreur à punir' : br.role === 'theorie' ? 'Théorie' : '';   // on sait toujours si on apprend une punition ou la théorie
     // en séance : le nom de l'ouverture en titre (lisible sur téléphone), et où on en est en dessous ; le nom de la variante, c'est le coach qui le dit
     const where = cur ? `${cur.done.size + (cur.done.has(br.id) ? 0 : 1)} sur ${cur.pool.length}` : `${kind ? kind + ' · ' : ''}${sys.titre}`; void popLevel;
-    shell(cur && bloc.id !== 'plans' ? shortName(sys.titre) : lineTitle(br.titre), where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/o/${sys.id}`, TRAIN, (cur && mode === 'drill') || br.model ? '' : `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'De mémoire'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
+    shell(cur && bloc.id !== 'plans' ? shortName(sys.titre) : lineTitle(br.titre), where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/o/${sys.id}`, TRAIN, cur || br.model || mode !== 'drill' ? '' : `<a class="hchip" href="${lineUrl(br.id, 'explore')}">Voir la ligne</a>`, cur || mode === 'drill' ? 'session' : 'board');
     cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
   } else if (p[0] === 'partie' && p[1] && p[2] === 'refaire') {
     const id = decodeURIComponent(p[1]), ply = +p[3], f = retryFault(id, ply), backTo = gameUrl(id, ply + 1);
