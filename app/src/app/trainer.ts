@@ -88,7 +88,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     game = new Chess(); last = null; for (let i = 0; i < target; i++) apply(i);
     ply = target; show(forward); paintMoves();
     if (!ply) say('you', esc(sys.titre), `<p class="why">${esc(br.intro ?? sys.resume)}</p>`);
-    else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)}${esc(moves[ply - 1].san)}`, note ? `<p>${esc(note)}</p>` : '<p class="why">Coup de la ligne.</p>'); }
+    else { const note = br.notes[ply - 1]; say('', `${num(ply - 1)}${esc(moves[ply - 1].san)}`, note ? `<p>${esc(bare(note))}</p>` : '<p class="why">Coup de la ligne.</p>'); }
     actions.innerHTML = '';   // « De mémoire » est dans la barre du bas, toujours au même endroit
   }
   const onKey = (e: KeyboardEvent) => { if (mode !== 'explore' || xa()) return; if (e.key === 'ArrowRight') explTo(ply + 1); if (e.key === 'ArrowLeft') explTo(ply - 1); };
