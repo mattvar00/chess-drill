@@ -62,3 +62,16 @@ export function variantTitle(br: { titre: string; nom?: string }): { title: stri
   const idea = plainName(br.titre).title;
   return br.nom ? { title: nomTitle(br.nom), sub: idea } : { title: idea, sub: '' };
 }
+
+/** Le nom d'une variante, le même partout : le coup qui la définit (« 6…Bc8 »), puis l'idée en mots (« Il rentre le fou »). */
+export function varLabel(br: { titre: string }): { key: string; idea: string } {
+  const dash = br.titre.split(' — '); if (dash.length > 1) return { key: '', idea: dash.slice(1).join(' — ') };
+  const n = plainName(br.titre), mv = /[?!]+\s*$/.exec(br.titre)?.[0].trim() ?? '', d = n.detail.replace(/\s*[?!]+$/, '');
+  return /^\d/.test(d) && d.length <= 14 ? { key: d + mv, idea: n.title } : { key: '', idea: n.title };
+}
+/** Le nom d'un chapitre du chemin : son coup (« 4…Bf5 ») et ce qu'il veut dire (« le fou sort avant …e6 »). */
+export function chapParts(name: string): { key: string; idea: string } {
+  const m = /^(.*?)(?:, | : )(.+)$/.exec(name);
+  if (m && /^\d/.test(m[1]) && m[1].length <= 22) return { key: m[1], idea: m[2].charAt(0).toUpperCase() + m[2].slice(1) };
+  return { key: '', idea: name };
+}

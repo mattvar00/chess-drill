@@ -32,7 +32,7 @@ let active: (() => void) | null = null;
 
 export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'explore', fromGame?: Game): () => void {
   const { br, sys, bloc } = BR[id], side = bloc.side, moves = br.moves, S = session();
-  const plan = id.startsWith('plan-') ? id.slice(5) : null, listUrl = plan ? `#/plan/${plan}?vu=1` : `#/rep/${bloc.id}/${sys.id}`;
+  const plan = id.startsWith('plan-') ? id.slice(5) : null, listUrl = plan ? `#/plan/${plan}?vu=1` : `#/o/${sys.id}`;
   root.innerHTML = `<div class="trainer">
     <div class="tboard"><div id="board"></div><div class="stepper" id="stepper"></div></div>
     <div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">

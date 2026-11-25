@@ -37,6 +37,9 @@ $('#tabs').addEventListener('click', e => { const a = (e.target as HTMLElement).
   if (h === (location.hash || '#/') || (h === '#/' && location.hash === '')) { e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); } });
 mountTool($<HTMLButtonElement>('#xtool'));
 let cleanup: (() => void) | null = null;
+const planFrom: Record<string, string> = {};
+/** D'où l'on a ouvert une ouverture (la liste, Pour toi ou Progrès) : c'est là que ramène son bouton retour. */
+let oFrom = '#/rep', prevSeg = 'rep';
 
 /**
  * Barre du haut (seulement sur les écrans où l'on revient en arrière) et onglet actif. `right` : contenu à droite du titre.
@@ -59,17 +62,29 @@ const backOf = (q: URLSearchParams, dflt: string) => { const r = q.get('r'); ret
 const planSysTitle = (o: string) => { for (const b of REP.blocs) for (const sy of b.systemes) if (sy.id === o) return shortName(sy.titre); return ''; };
 /** La liste des plans d'où l'on vient (avec son retour vers la variante en cours), pour y revenir depuis un plan. */
 let lastPlans = '#/plans';
+/** Profondeur d'une page dans l'onglet Ouvertures : la page glisse vers la gauche quand on avance, vers la droite quand on revient. */
+const DEPTH: Record<string, number> = { rep: 0, o: 1, partie: 2, l: 2, plan: 2, plans: 2, lecon: 2 };
+let lastDepth = -1;
+function slide() {
+  const k = location.hash.slice(2).split(/[/?]/)[0], d = DEPTH[k];
+  view.classList.remove('go-in', 'go-out');
+  if (d != null && lastDepth >= 0 && d !== lastDepth) { void view.offsetWidth; view.classList.add(d > lastDepth ? 'go-in' : 'go-out'); }
+  lastDepth = d ?? -1;
+}
 function route() {
-  cleanup?.(); cleanup = null;
+  cleanup?.(); cleanup = null; slide();
+  try { routeTo(); } finally { prevSeg = location.hash.slice(2).split(/[/?]/)[0]; }
+}
+function routeTo() {
   const [path, query = ''] = location.hash.slice(1).split('?'), p = path.split('/').filter(Boolean), q = new URLSearchParams(query);
   if (p[0] === 'l' && BR[p[1]]) {
     const { br, sys, bloc } = BR[p[1]], mode = p[2] === 'drill' ? 'drill' : 'explore', S = session();
     if (S && !S.pool.includes(br.id)) endSession();
     const cur = session(), g = q.get('g');
-    const kind = br.role === 'erreur' ? 'Piège' : br.role === 'theorie' ? 'Théorie' : '';   // on sait toujours si on apprend une punition ou la théorie
+    const kind = br.role === 'erreur' ? 'Erreur à punir' : br.role === 'theorie' ? 'Théorie' : '';   // on sait toujours si on apprend une punition ou la théorie
     // en séance : le nom de l'ouverture en titre (lisible sur téléphone), et où on en est en dessous ; le nom de la variante, c'est le coach qui le dit
     const where = cur ? `${cur.done.size + (cur.done.has(br.id) ? 0 : 1)} sur ${cur.pool.length}` : `${kind ? kind + ' · ' : ''}${sys.titre}`; void popLevel;
-    shell(cur && bloc.id !== 'plans' ? shortName(sys.titre) : lineTitle(br.titre), where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/rep/${bloc.id}/${sys.id}`, TRAIN, (cur && mode === 'drill') || br.model ? '' : `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'De mémoire'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
+    shell(cur && bloc.id !== 'plans' ? shortName(sys.titre) : lineTitle(br.titre), where, cur ? (cur.exit ?? cur.back) : bloc.id === 'plans' ? `#/plan/${br.id.slice(5)}` : `#/o/${sys.id}`, TRAIN, (cur && mode === 'drill') || br.model ? '' : `<a class="hchip" href="${lineUrl(br.id, mode === 'drill' ? 'explore' : 'drill')}">${mode === 'drill' ? 'Voir la ligne' : 'De mémoire'}</a>`, cur || mode === 'drill' ? 'session' : 'board');
     cleanup = mountTrainer(view, br.id, mode, g ? store.games.find(x => x.id === g) : undefined);
   } else if (p[0] === 'partie' && p[1] && p[2] === 'refaire') {
     const id = decodeURIComponent(p[1]), ply = +p[3], f = retryFault(id, ply), backTo = gameUrl(id, ply + 1);
@@ -88,7 +103,9 @@ function route() {
   } else if (p[0] === 'plan' && p[1] && p[2] === 'jouer') {
     shell(planTitle(p[1]), 'Joue le plan contre le moteur', `#/plan/${p[1]}?vu=1`, TRAIN, '', 'session'); cleanup = mountPlanPlay(view, p[1]);
   } else if (p[0] === 'plan' && p[1]) {
-    const r = q.get('r'); shell(planTitle(p[1]), 'Plan animé', r && r.startsWith('#/') ? r : lastPlans, TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
+    // d'où l'on est venu voir ce plan : on y retourne, même après l'avoir joué contre le moteur
+    const r = q.get('r'); if (r && r.startsWith('#/')) planFrom[p[1]] = r;
+    shell(planTitle(p[1]), 'Plan animé', planFrom[p[1]] ?? lastPlans, TRAIN, '', 'board'); cleanup = mountPlan(view, p[1], q.has('vu'));
   } else if (p[0] === 'structure' && p[1]) {
     endSession(); shell(STRUCT[p[1]]?.name ?? 'Structure', STRUCT[p[1]]?.fam ?? '', '#/plans', TRAIN, '', 'board'); cleanup = mountStruct(view, p[1]);
   } else if (p[0] === 'wood' && p[1] === 'go') {
@@ -101,12 +118,14 @@ function route() {
     if (p[0] !== 'plans') endSession();   // les plans se consultent entre deux variantes sans quitter le cours
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
     // une seule page par cours : #/cours, qui montre le cours choisi ; l'onglet Ouvertures, lui, montre la liste
-    if (bloc && sys) { setCurrentCourse(sys.id); const v = q.get('v'); location.replace(`#/cours?o=${sys.id}${v ? '&v=' + v : ''}`); return; }
+    // une seule page par ouverture : #/o/<cours> (les anciennes adresses y mènent)
+    const vOf = (v: string | null) => (v === 'plans' || v === 'parties' ? `?v=${v}` : '');
+    if (bloc && sys) { location.replace(`#/o/${sys.id}${vOf(q.get('v'))}`); return; }
+    else if (p[0] === 'cours') { const o = q.get('o') ?? courseNow()?.id; location.replace(o ? `#/o/${o}${vOf(q.get('v'))}` : '#/rep'); return; }
     else if ((p[0] === 'rep' && (p[1] === 'sorties' || p[1] === 'choisir')) || p[0] === 'entrainer') { location.replace('#/rep'); return; }
-    else if (p[0] === 'o' && p[1]) { const so = REP.blocs.flatMap(b => b.systemes).find(x => x.id === p[1]);
-      shell(so ? famTitle(so.titre) : 'Ouverture', '', '#/rep', TRAIN); cleanup = viewOpeningPage(view, p[1]) || null; }
-    else if (p[0] === 'cours') { const o = q.get('o'); if (o) setCurrentCourse(o); const cur = courseNow();
-      shell(cur ? shortName(cur.titre) : 'Le cours', 'Le cours', cur ? `#/o/${cur.id}` : '#/rep', TRAIN); viewPath(view); }
+    else if (p[0] === 'o' && p[1]) { const so = REP.blocs.flatMap(b => b.systemes).find(x => x.id === p[1]), v = q.get('v');
+      if (prevSeg === '' || prevSeg === 'progres' || prevSeg === 'rep') oFrom = prevSeg === 'rep' ? '#/rep' : `#/${prevSeg}`;
+      shell(so ? famTitle(so.titre) : 'Ouverture', '', oFrom, TRAIN); cleanup = viewOpeningPage(view, p[1], v === 'plans' || v === 'parties' ? v : 'chemin') || null; }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
     else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewOpeningList(view); }
     else if (p[0] === 'ouvertures') { shell('Tes ouvertures', 'Le bilan de chacune', PROG, PROG); viewOpenings(view); }

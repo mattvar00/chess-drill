@@ -108,7 +108,7 @@ export function viewHome(root: HTMLElement) {
     if (st.length) {
       const list = `<span class="wsteps">${st.map(({ x, ok }) => `<span class="${ok ? 'ok' : x === nx?.x ? 'now' : ''}"><i></i>${esc(x.title)}</span>`).join('')}</span>`;
       // la miniature de l'étape : l'ouverture, la position à conclure, ou une de ces fautes
-      const sysId = nx?.x.id === 'open' ? nx.x.href.slice(4) : null, fb = sysId ? REP.blocs.find(b => b.systemes.some(x => x.id === sysId)) : null;
+      const sysId = nx?.x.id === 'open' ? (/o=([^,&]+)/.exec(nx.x.href)?.[1] ?? null) : null, fb = sysId ? REP.blocs.find(b => b.systemes.some(x => x.id === sysId)) : null;
       const cv = nx?.x.id === 'conv' ? convertList()[0] : null, ft = store.faults.find(f => nx?.x.label === 'Pièces en prise' ? /en prise/.test(f.theme) : true);
       const brd = fb && sysId ? courseBoard(unitFor(fb, fb.systemes.find(x => x.id === sysId)!)).replace('mini cthumb', 'mini') : cv ? miniBoard(new Chess(cv.fen), cv.g.color) : ft ? miniBoard(new Chess(ft.fen), ft.side) : '';
       cards.unshift({ kick: `Ta semaine · ${nDone} sur ${st.length}`, title: nx ? nx.x.title : 'Semaine terminée', why: `${nx ? esc(nx.x.sub) : 'Les trois étapes sont faites. Le nouveau plan arrive lundi.'}${list}`,

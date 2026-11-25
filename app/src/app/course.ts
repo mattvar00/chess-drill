@@ -124,7 +124,7 @@ export function viewOpenings(root: HTMLElement) {
   const all = REP.blocs.flatMap(b => b.systemes.map(s => ({ b, s, x: bilanOf(s) }))).filter(o => o.x.n >= 5).sort((a, z) => a.x.score - z.x.score || z.x.n - a.x.n);
   const nAn = store.games.filter(g => g.st).length;
   root.innerHTML = all.length ? `<p class="intro">D'après tes ${plural(nAn, 'partie analysée', 'parties analysées')}. Les plus faibles d'abord.</p>
-    <div class="obil">${all.map(({ b, s, x }) => `<a class="surf card orow" href="#/rep/${b.id}/${s.id}">
+    <div class="obil">${all.map(({ b, s, x }) => `<a class="surf card orow" href="#/o/${s.id}">
       <span class="ohead"><b>${esc(s.titre)}</b><span class="dim">${b.side === 'w' ? 'Blancs' : 'Noirs'} · ${plural(x.n, 'partie')}</span><b class="cbs ${scoreCls(x.score)}">${x.score} %</b></span>
       <span class="prog"><b class="${scoreCls(x.score)}" style="width:${x.score}%"></b></span>
       ${x.phase && x.inPhase >= 2 ? `<small class="dim">${x.inPhase} défaite${x.inPhase > 1 ? 's' : ''} sur ${x.losses} ${PH[x.phase]}</small>` : ''}

@@ -11,7 +11,7 @@ import { punishLines, punishRow } from './exits';
 import { scanExits } from '../core/scan';
 import { myWp } from '../core/stats';
 import type { Game } from '../core/types';
-import { lineName, lineTitle, nomTitle, plainName, popBars, roleLabel, shortNom, typeLabel, variantTitle } from '../core/names';
+import { chapParts, lineName, lineTitle, nomTitle, plainName, popBars, roleLabel, shortNom, typeLabel, varLabel, variantTitle } from '../core/names';
 import { recentDeviations, refBranch } from '../core/drill';
 import { lineUrl } from './session';
 import { isDue } from '../core/schedule';
@@ -29,7 +29,7 @@ const setLS = (k: string, v: string) => { try { localStorage.setItem(k, v); } ca
 /** Nom court d'une ouverture : le titre du système sans ses précisions entre parenthèses ni après le tiret. */
 export const shortName = (t: string) => t.replace(/\s*\(.*?\)\s*/g, ' ').split(/\s[—–-]\s/)[0].replace(/\s+/g, ' ').trim();
 const queens = () => store.state.queens ?? {};
-const openingUrl = (u: Unit) => `#/rep/${u.bloc.id}/${u.sys.id}`;
+const openingUrl = (u: Unit) => `#/o/${u.sys.id}`;
 /** Toutes les ouvertures (hors plans), et la dame notée au passage pour celles qui viennent d'être finies. */
 function allUnits(): Unit[] {
   const meet = meetCounts(store.games), out = REP.blocs.flatMap(b => unitsOf(b, store.state.br, meet, Date.now(), queens()));
@@ -43,7 +43,7 @@ function currentUnit(units = allUnits()): Unit {
   return recommend(factsOf(units)).todo[0]?.f.u ?? units.find(played) ?? units[0];
 }
 /** Ouvre la page d'une ouverture (son chemin en haut). */
-export function openUnit(blocId: string, sysId: string) { location.hash = `#/rep/${blocId}/${sysId}`; }
+export function openUnit(_blocId: string, sysId: string) { location.hash = `#/o/${sysId}`; }
 
 /** Les lignes à jouer quand on (re)lance une case : celles qui ne sont pas encore sues pour la case en cours,
  *  celles qui reviennent en révision pour une case à revoir, toutes pour une case réussie qu'on veut rejouer. */
@@ -65,21 +65,39 @@ const selPick: Record<string, number> = {};
 const selOf = (u: Unit) => { const s = selPick[u.sys.id]; return s != null && s < u.lessons.length ? s : -1; };
 const STATE: Record<Lesson['state'], string> = { done: 'réussie', crack: 'à revoir', cur: 'à jouer', lock: 'pas encore ouverte' };
 
+/** Tes parties, rangées par variante du cours (celle que la partie a suivie le plus longtemps). Recalculé quand les parties changent. */
+let lgKey: unknown = null, lgMap = new Map<string, Game[]>();
+function lineGames(): Map<string, Game[]> {
+  if (lgKey !== store.games) { lgKey = store.games; lgMap = new Map();
+    for (const g of store.games) { if (store.state.ignored[g.id]) continue; const id = refBranch(g, BR); if (id) (lgMap.get(id) ?? lgMap.set(id, []).get(id)!).push(g); } }
+  return lgMap;
+}
+/** Ton résultat en partie sur un ensemble de variantes : « 67 % · 12 parties », coloré seulement si l'écart à 50 % est net. */
+function playStat(ids: string[]): { n: number; html: string } {
+  const gs = ids.flatMap(id => lineGames().get(id) ?? []), n = gs.length; if (!n) return { n, html: '' };
+  const p = Math.round(100 * gs.reduce((a, g) => a + (g.res === 'W' ? 1 : g.res === 'D' ? .5 : 0), 0) / n);
+  const tone = n >= 15 && Math.abs(p - 50) > 164.5 * Math.sqrt(.25 / n) ? (p > 50 ? ' good' : ' bad') : '';
+  return { n, html: `<small class="pgs${tone}">${p} % · ${plural(n, 'partie')}</small>` };
+}
 /** La bulle sous la case choisie : ce qu'elle contient, où elle en est, et l'action qui va avec. */
 function bubble(u: Unit, L: Lesson, i: number, x: number) {
   // Peu de mots : le nom de la case, à quelle fréquence on la rencontre, ses variantes (cochées quand elles sont sues), un bouton.
   const n = u.lessons.length, st = store.state.br;
   const mark = (id: string) => { const s = st[id]; return s?.clean && s.clean >= 1 ? (isDue(s) ? 'rev' : 'ok') : 'new'; };
   const pips = `<span class="ppips" role="img" aria-label="${L.ids.filter(id => mark(id) === 'ok').length} sur ${L.ids.length}">${L.ids.map(id => `<i class="${mark(id)}"></i>`).join('')}</span>`;
-  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary><ul class="plines simple">${L.ids.map(id => `<li class="${mark(id)}">${mark(id) === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${esc(variantTitle(BR[id].br).sub || variantTitle(BR[id].br).title)}</span></li>`).join('')}</ul></details>`;
-  const share = L.name ? u.sys.shares?.[L.name] : undefined, rest = lessonIds(L).length;
+  // ses variantes, nommées comme partout (le coup, puis l'idée) : la théorie d'abord, puis les erreurs adverses ; chacune s'ouvre
+  const vrow = (id: string) => { const br = BR[id].br, v = varLabel(br), m = mark(id), ps = playStat([id]);
+    return `<li class="${m}"><a href="${lineUrl(id, 'explore')}">${m === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${v.key ? `<b>${esc(v.key)}</b> ` : ''}${esc(v.idea)}${m === 'rev' ? ' <em>à revoir</em>' : ''}${ps.html}</span></a></li>`; };
+  const isErr = (id: string) => BR[id].br.role === 'erreur' || BR[id].br.type === 'punir', th = L.ids.filter(id => !isErr(id)), er = L.ids.filter(isErr);
+  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary>${th.length ? `<p class="pvh">La théorie</p><ul class="plines simple">${th.map(vrow).join('')}</ul>` : ''}${er.length ? `<p class="pvh">Ses erreurs à punir</p><ul class="plines simple">${er.map(vrow).join('')}</ul>` : ''}</details>`;
+  const rest = lessonIds(L).length;
   const note = L.state === 'lock' ? `Finis d'abord la case ${i}.` : '';
   const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">${rest < L.ids.length ? 'Continuer' : 'Commencer'}</button>`
     : L.state === 'crack' ? `<button class="btn pri" data-go="${i}">Réviser</button>`
     : L.state === 'done' ? `<button class="btn" data-go="${i}">Rejouer</button>` : '';
   return `<div class="pbubble ${L.state}" style="--x:${x}%" role="region" aria-label="Case ${i + 1} sur ${n}, ${STATE[L.state]}">
-    ${L.name ? `<p class="pbn">${esc(chapLabel(L))}</p>${chapLabel(L) !== shortChap(L.name) ? `<p class="pbo">${esc(shortChap(L.name))}</p>` : ''}` : `<p class="pbn">Case ${i + 1}</p>`}
-    ${share ? `<p class="pbf">Environ 1 partie sur ${Math.max(2, Math.round(1 / share))}</p>` : ''}${note ? `<p class="pbw">${note}</p>` : ''}${pips}${act}${lines}</div>`;
+    ${L.name ? (() => { const c = chapParts(L.name!); return `<p class="pbn">${c.key ? esc(c.key) : esc(c.idea)}</p>${c.key ? `<p class="pbo">${esc(c.idea)}</p>` : ''}`; })() : `<p class="pbn">Case ${i + 1}</p>`}
+    ${playStat(L.ids).html.replace('<small class="pgs', '<p class="pgs').replace('">', '">En partie : ').replace('</small>', '</p>')}${note ? `<p class="pbw">${note}</p>` : ''}${pips}${act}${lines}</div>`;
 }
 /** Nom court d'un chapitre pour le chemin : ce qui précède la virgule, les deux-points ou la parenthèse (le nom complet est dans la bulle). */
 /** Sur le chemin : un chapitre nommé par ses coups (« 7.Bc4 Nb6… ») prend le nom officiel que partagent ses variantes, quand il y en a un. */
@@ -96,7 +114,7 @@ function step(u: Unit, L: Lesson, i: number, sel: number) {
   const inner = cur ? `<img src="${pieceSrc('p')}" alt="">` : last ? `<img class="${u.promoted ? '' : 'qghost'}" src="${pieceSrc('q')}" alt="">` : L.state === 'lock' ? `<span class="pn">${i + 1}</span>` : icon('check');
   return `<div class="prow${on ? ' issel' : ''}${cur ? ' iscur' : ''}${last ? ' isgoal' : ''}">
     <button class="psq ${L.state}${last ? ' goal' : ''}${last && u.promoted ? ' won' : ''}${on ? ' sel' : ''}" style="left:${x}%" data-i="${i}" aria-expanded="${on}" aria-label="Case ${i + 1} sur ${u.lessons.length}, ${STATE[L.state]}">${inner}${L.state === 'crack' ? '<i class="dot"></i>' : ''}</button>
-    ${L.name && !on ? `<span class="plab ${x <= 50 ? 'r' : 'l'}" style="${x <= 50 ? `left:calc(${x}% + 46px);max-width:calc(${100 - x}% - 50px)` : `right:calc(${100 - x}% + 46px);max-width:calc(${x}% - 50px)`}"><b>${esc(chapLabel(L))}</b></span>` : ''}
+    ${L.name && !on ? (() => { const c = chapParts(L.name!); return `<span class="plab ${x <= 50 ? 'r' : 'l'}" style="${x <= 50 ? `left:calc(${x}% + 46px);max-width:calc(${100 - x}% - 50px)` : `right:calc(${100 - x}% + 46px);max-width:calc(${x}% - 50px)`}"><b>${esc(c.key || c.idea)}</b>${c.key ? `<small class="pid">${esc(c.idea)}</small>` : ''}${/good|bad/.test(playStat(L.ids).html) ? playStat(L.ids).html : ''}</span>`; })() : ''}
     ${on ? bubble(u, L, i, x) : ''}</div>`;
 }
 const legend = `<p class="plegend"><span><i class="lg done"></i>réussie</span><span><i class="lg crack"></i>à revoir</span><span><i class="lg cur"></i>le pion : en cours</span><span><i class="lg lock"></i>à venir</span></p>`;
@@ -182,9 +200,9 @@ function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {
   const lesson = i >= 0 ? { label: u.lessons[i].state === 'crack' ? 'Réviser' : 'Apprendre la suite', run: () => startLesson(u, i) } : { label: 'Voir l\'ouverture', href: openingUrl(u) };
   if (r.kind === 'oubli') { const g = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50).find(x => BR[refBranch(x, BR)!]?.sys.id === u.sys.id);
     return g ? { label: 'Rejouer la ligne', href: lineUrl(refBranch(g, BR)!, 'drill', g.id) } : lesson; }
-  if (r.kind === 'milieu') return { label: 'Voir ses plans', href: `#/plans?o=${u.sys.id}&r=${encodeURIComponent('#/cours?o=' + u.sys.id)}` };
+  if (r.kind === 'milieu') return { label: 'Voir ses plans', href: `#/plans?o=${u.sys.id}&r=${encodeURIComponent('#/o/' + u.sys.id)}` };
   if (r.kind === 'revoir') { const ids = ownLines(u.sys).map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
-    return { label: 'Revoir maintenant', run: () => { setLS(LAST_KEY, u.sys.id); location.hash = startSession(`${shortName(u.sys.titre)}, à revoir`, ids, `#/cours?o=${u.sys.id}`); } }; }
+    return { label: 'Revoir maintenant', run: () => { setLS(LAST_KEY, u.sys.id); location.hash = startSession(`${shortName(u.sys.titre)}, à revoir`, ids, `#/o/${u.sys.id}`); } }; }
   return lesson;
 }
 const sideWord = (u: Unit) => `${u.bloc.titre}, ${u.bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`;
@@ -316,6 +334,6 @@ export function viewLessonEnd(root: HTMLElement) {
 }
 
 /** Le cours d'une carte « Pour toi » : on l'ouvre comme cours en cours. */
-export function openCourse(u: Unit) { setLS(LAST_KEY, u.sys.id); location.hash = `#/cours?o=${u.sys.id}`; }
+export function openCourse(u: Unit) { setLS(LAST_KEY, u.sys.id); location.hash = `#/o/${u.sys.id}`; }
 /** Le cours en cours (celui que montre #/cours). */
 export const courseNow = () => { const u = allUnits(); return (u.find(x => x.sys.id === getLS(LAST_KEY)) ?? nextUp()?.u ?? currentUnit(u))?.sys ?? null; };

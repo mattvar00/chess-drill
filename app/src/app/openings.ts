@@ -13,8 +13,8 @@ import type { Bloc, Game, System } from '../core/types';
 import { miniBoard } from '../ui/board';
 import { $, esc, icon, plural } from '../ui/dom';
 import { BR, REP, plansFor, store } from './store';
-import { lossPhase } from './course';
-import { courseBoard, setCurrentCourse, shortName, unitFor } from './path';
+import { lossPhase, plansPanel } from './course';
+import { bindPath, courseBoard, pathBlock, setCurrentCourse, shortName, unitFor } from './path';
 import { lineUrl } from './session';
 import { gameUrl } from './games';
 import { passed } from '../core/path';
@@ -90,63 +90,57 @@ function endBoard(id: string): string {
   return miniBoard(g, bloc.side).replace('class="mini"', 'class="mini othumb"');
 }
 
-export function viewOpeningPage(root: HTMLElement, sysId: string): (() => void) | void {
+export type OTab = 'chemin' | 'parties' | 'plans';
+/**
+ * La page d'une ouverture, la seule : ton score en une ligne, puis trois vues.
+ * - Chemin : le cours (une case par chapitre, nommée par le coup adverse), avec « Continuer » ;
+ * - Mes parties : où se jouent tes défaites, et tes parties ouvertes sur leur moment clé ;
+ * - Plans : les plans en images, à jouer contre le moteur.
+ * Une ouverture faite de plusieurs cours (Sveshnikov) les propose en haut du chemin.
+ */
+export function viewOpeningPage(root: HTMLElement, sysId: string, tab: OTab = 'chemin'): (() => void) | void {
   const fam = familyOf(sysId);
   if (!fam) { location.replace('#/rep'); return; }
-  const { b, list } = fam, s = list[0], byS = gamesBySys(), games = list.flatMap(x => byS.get(x.id) ?? []).sort((x, y) => y.t - x.t);
-  const n = games.length, p = scoreOf(games), v = verdict(p, n), here = openingUrl(sysId);
-  const ids = new Set(games.map(g => g.id)), faults = store.faults.filter(f => ids.has(f.game)).length;
-  const nPlans = new Set(list.flatMap(x => plansFor(x.id).map(pl => pl.id))).size;
-  const courseUrl = (x: System) => `#/cours?o=${x.id}`;
-  const cRow = (x: System) => { const u = unitFor(b, x), ls = u.sys.branches.filter(y => !y.plus), k = ls.filter(y => passed(store.state.br[y.id])).length;
-    return `<a class="orow" href="${courseUrl(x)}" data-course="${x.id}">${courseBoard(u)}<span class="ot"><b>${esc(list.length > 1 ? partName(x).charAt(0).toUpperCase() + partName(x).slice(1) : 'Le cours')}</b>${bar(ls.length ? Math.round(100 * k / ls.length) : 0, 'few')}<small>${k} variantes sur ${ls.length}</small></span>${icon('chev', 'chev')}</a>`; };
-  const tiles = `<h2 class="oh">${list.length > 1 ? 'Les cours' : 'Le cours'}</h2>${list.map(cRow).join('')}
-    <div class="otiles two"><a href="${courseUrl(s)}&v=plans" data-course="${s.id}"><b>${nPlans}</b><span>${nPlans > 1 ? 'Les plans' : 'Plan'}</span></a>
-      <a href="#/wood?o=${list.map(x => x.id).join(',')}&r=${encodeURIComponent(here)}"><b>${faults}</b><span>Tes fautes ici</span></a></div>`;
-  if (!n) {
-    root.innerHTML = `<div class="op"><p class="osub">${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'} · ${esc(b.titre.toLowerCase())}</p><p class="oempty">Pas encore de partie dans cette ouverture : le cours t'y prépare.</p>${tiles}</div>`;
-    bindCourse(root); return;
-  }
-  // où se jouent tes défaites (le coup qui a fait le plus chuter tes chances)
-  const lost = games.filter(g => g.res === 'L'), ph: Record<Phase, Game[]> = { ouv: [], mil: [], fin: [] };
-  for (const g of lost) { const k = lossPhase(g); if (k) ph[k].push(g); }
-  const nPh = ph.ouv.length + ph.mil.length + ph.fin.length, PHS: Phase[] = ['ouv', 'mil', 'fin'];
-  // les variantes : la ligne de ton cours que chaque partie a suivie le plus longtemps
-  const byVar = new Map<string, Game[]>(); for (const g of games) { const id = refBranch(g, BR); if (id) (byVar.get(id) ?? byVar.set(id, []).get(id)!).push(g); }
-  const vars = [...byVar].sort((a, c) => c[1].length - a[1].length);
-  // une variante se lit d'un coup d'œil : le coup qui la définit, puis l'idée en mots ; la théorie et les erreurs adverses sont séparées
-  const vrow = ([id, gs]: [string, Game[]]) => { const br = BR[id].br, vp = scoreOf(gs), vv = verdict(vp, gs.length), dash = br.titre.split(' — '), [idea, mv] = dash.length > 1 ? [dash.slice(1).join(' — '), ''] : br.titre.split(' : ');
-    const key = mv ? mv.replace(/\s+([?!]+)$/, '$1') : '', off = br.nom ? variantTitle(br).title : '';
-    return `<a class="orow" href="${lineUrl(id, 'explore')}">${endBoard(id)}<span class="ot"><b>${key ? `<span class="okeymv">${esc(key)}</span>` : ''}${esc(idea)}</b>${bar(vp, vv)}<small>${off ? esc(off) + ' · ' : ''}${plural(gs.length, 'partie')}</small></span>${pct(vp, vv)}</a>`; };
-  const isErr = (id: string) => BR[id].br.role === 'erreur' || BR[id].br.type === 'punir';
-  const theory = vars.filter(x => !isErr(x[0])), errors = vars.filter(x => isErr(x[0]));
-  const vblock = (title: string, hint: string, list: [string, Game[]][], k: string) => !list.length ? '' : `<h2 class="oh">${title}${list.length > 3 ? `<button type="button" class="olink" data-more="${k}">Les ${list.length}</button>` : ''}</h2><p class="onote ohint">${hint}</p><div id="v${k}">${list.slice(0, 3).map(vrow).join('')}</div>`;
-  const grow = (g: Game) => { const k = keyMoment(g);
-    return `<a class="orow" href="${keyUrl(g, here)}">${spark(g)}<span class="ot"><b>${esc(g.opp)}</b><small>${dateFr(g.t)}${k ? ` · ${Math.floor(k.ply / 2) + 1}${k.ply % 2 ? '…' : '.'}${esc(k.san)}, ${k.before} → ${k.after} %` : ''}</small></span><i class="ores ${g.res}"></i></a>`; };
-  const phOf = new Map<string, Phase>(); for (const k of PHS) for (const g of ph[k]) phOf.set(g.id, k);
-  root.innerHTML = `<div class="op">
-    <p class="osub">${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'} · ${esc(b.titre.toLowerCase())} · ${plural(n, 'partie')}</p>
-    <div class="ohero"><div><div class="obig">${p}<small>%</small></div><p>des points${v === 'few' ? ', à confirmer' : v === 'good' ? ', nettement au-dessus de 50 %' : v === 'bad' ? ', nettement en dessous de 50 %' : ''}</p></div>${ring(p ?? 0, v)}</div>
-    ${nPh ? `<h2 class="oh">Tes ${plural(nPh, 'défaite')}, par phase</h2>
+  const { b, list } = fam, sys = list.find(x => x.id === sysId) ?? list[0], byS = gamesBySys(), games = list.flatMap(x => byS.get(x.id) ?? []).sort((x, y) => y.t - x.t);
+  const n = games.length, p = scoreOf(games), v = verdict(p, n), here = openingUrl(sys.id);
+  setCurrentCourse(sys.id);
+  const nPlans = plansFor(sys.id).length;
+  const tabs = `<nav class="csegs" aria-label="Vues de l'ouverture">${([['chemin', 'Chemin'], ['parties', n ? `Mes parties <span class="cn">${n}</span>` : 'Mes parties'], ['plans', nPlans ? `Plans <span class="cn">${nPlans}</span>` : 'Plans']] as [OTab, string][])
+    .map(([k, l]) => `<a class="cseg${k === tab ? ' on' : ''}" href="${here}${k === 'chemin' ? '' : '?v=' + k}" ${k === tab ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
+  const head = `<p class="oline">${p == null ? '' : `<b class="${v}">${p} %</b>`}<span>${n ? `des points sur ${plural(n, 'partie')}` : 'Pas encore de partie'} · ${b.side === 'w' ? 'Blancs' : 'Noirs'}</span></p>${tabs}`;
+  const wrap = (html: string) => { root.innerHTML = `<div class="opage">${head}${html}</div>`; };
+
+  if (tab === 'plans') { wrap(plansPanel(sys, here)); return; }
+  if (tab === 'parties') {
+    if (!n) { wrap('<p class="oempty">Pas encore de partie dans cette ouverture.</p>'); return; }
+    const lost = games.filter(g => g.res === 'L'), ph: Record<Phase, Game[]> = { ouv: [], mil: [], fin: [] };
+    for (const g of lost) { const k = lossPhase(g); if (k) ph[k].push(g); }
+    const nPh = ph.ouv.length + ph.mil.length + ph.fin.length, PHS: Phase[] = ['ouv', 'mil', 'fin'];
+    const phOf = new Map<string, Phase>(); for (const k of PHS) for (const g of ph[k]) phOf.set(g.id, k);
+    const grow = (g: Game) => { const k = keyMoment(g);
+      return `<a class="orow" href="${keyUrl(g, here + '?v=parties')}">${spark(g)}<span class="ot"><b>${esc(g.opp)}</b><small>${dateFr(g.t)}${k ? ` · ${Math.floor(k.ply / 2) + 1}${k.ply % 2 ? '…' : '.'}${esc(k.san)}, ${k.before} → ${k.after} %` : ''}</small></span><i class="ores ${g.res}"></i></a>`; };
+    const ids = new Set(games.map(g => g.id)), faults = store.faults.filter(f => ids.has(f.game)).length;
+    wrap(`<div class="op">${nPh ? `<h2 class="oh">Tes ${plural(nPh, 'défaite')}, par phase</h2>
       <div class="ophases" id="ophases">${PHS.filter(k => ph[k].length).map(k => `<button type="button" data-ph="${k}" class="${k}" style="flex-grow:${ph[k].length}" aria-label="${PHASE_LABEL[k]} : ${plural(ph[k].length, 'défaite')}">${ph[k].length}</button>`).join('')}</div>
-      <div class="olegend">${PHS.map(k => `<span><i class="${k}"></i>${PHASE_LABEL[k].replace(' de partie', '')} ${ph[k].length}</span>`).join('')}</div>
-      <p class="onote">Touche une phase pour voir ces défaites.</p>` : ''}
-    ${vblock('La théorie', 'Les vraies lignes de l\'ouverture, celles que jouent les bons joueurs.', theory, 't')}
-    ${vblock('Ses erreurs à punir', 'Des coups douteux de l\'adversaire : il y a une punition à connaître.', errors, 'e')}
-    <h2 class="oh">${plural(n, 'partie')}<span class="omute">les plus récentes d'abord</span></h2>
-    <div class="odots" id="odots">${games.map(g => `<a href="${keyUrl(g, here)}" class="${g.res}" data-ph="${phOf.get(g.id) ?? ''}" aria-label="${esc(g.opp)}, ${dateFr(g.t)}"></a>`).join('')}</div>
-    <div class="olegend"><span><i class="W"></i>gagnée</span><span><i class="L"></i>perdue</span><span><i class="D"></i>nulle</span></div>
-    <div id="glist">${games.slice(0, 4).map(grow).join('')}</div>
-    ${tiles}</div>`;
-  bindCourse(root);
-  root.querySelectorAll<HTMLElement>('[data-more]').forEach(bt => bt.addEventListener('click', () => { const k = bt.dataset.more!; $('#v' + k, root).innerHTML = (k === 't' ? theory : errors).map(vrow).join(''); bt.remove(); }));
-  const P = root.querySelector<HTMLElement>('#ophases'), D = $('#odots', root), L = $('#glist', root);
-  P?.addEventListener('click', e => { const bt = (e.target as HTMLElement).closest<HTMLElement>('[data-ph]'); if (!bt) return;
-    const on = bt.classList.contains('on'); P.querySelectorAll('button').forEach(x => x.classList.remove('on')); P.classList.toggle('pick', !on); D.classList.toggle('pick', !on);
-    if (on) { D.querySelectorAll('a').forEach(a => a.classList.remove('off')); L.innerHTML = games.slice(0, 4).map(grow).join(''); return; }
-    bt.classList.add('on'); const k = bt.dataset.ph as Phase;
-    D.querySelectorAll<HTMLElement>('a').forEach(a => a.classList.toggle('off', a.dataset.ph !== k));
-    L.innerHTML = ph[k].slice(0, 6).map(grow).join(''); });
+      <div class="olegend">${PHS.map(k => `<span><i class="${k}"></i>${PHASE_LABEL[k].replace(' de partie', '')} ${ph[k].length}</span>`).join('')}</div>` : ''}
+      <div class="odots" id="odots">${games.map(g => `<a href="${keyUrl(g, here + '?v=parties')}" class="${g.res}" data-ph="${phOf.get(g.id) ?? ''}" aria-label="${esc(g.opp)}, ${dateFr(g.t)}"></a>`).join('')}</div>
+      <div class="olegend"><span><i class="W"></i>gagnée</span><span><i class="L"></i>perdue</span><span><i class="D"></i>nulle</span></div>
+      <div id="glist">${games.slice(0, 5).map(grow).join('')}</div>
+      ${faults ? `<a class="btn block ofaults" href="#/wood?o=${list.map(x => x.id).join(',')}&r=${encodeURIComponent(here + '?v=parties')}">Rejouer mes ${plural(faults, 'faute')} ici</a>` : ''}</div>`);
+    const P = root.querySelector<HTMLElement>('#ophases'), D = $('#odots', root), L = $('#glist', root);
+    P?.addEventListener('click', e => { const bt = (e.target as HTMLElement).closest<HTMLElement>('[data-ph]'); if (!bt) return;
+      const on = bt.classList.contains('on'); P.querySelectorAll('button').forEach(x => x.classList.remove('on')); P.classList.toggle('pick', !on); D.classList.toggle('pick', !on);
+      if (on) { D.querySelectorAll('a').forEach(a => a.classList.remove('off')); L.innerHTML = games.slice(0, 5).map(grow).join(''); return; }
+      bt.classList.add('on'); const k = bt.dataset.ph as Phase;
+      D.querySelectorAll<HTMLElement>('a').forEach(a => a.classList.toggle('off', a.dataset.ph !== k));
+      L.innerHTML = ph[k].slice(0, 6).map(grow).join(''); });
+    return;
+  }
+  // le chemin : quand l'ouverture a plusieurs cours, on choisit lequel juste au-dessus
+  const u = unitFor(b, sys);
+  const pills = list.length > 1 ? `<nav class="opills" aria-label="Les cours de cette ouverture">${list.map(x => `<a href="${openingUrl(x.id)}" class="${x.id === sys.id ? 'on' : ''}" ${x.id === sys.id ? 'aria-current="page"' : ''}>${esc(partName(x).charAt(0).toUpperCase() + partName(x).slice(1))}</a>`).join('')}</nav>` : '';
+  wrap(pills + pathBlock(u));
+  bindPath(root, u);
 }
 /** Le cours s'ouvre comme « cours en cours » : c'est lui que montre la page du cours. */
 function bindCourse(root: HTMLElement) { root.querySelectorAll<HTMLElement>('[data-course]').forEach(a => a.addEventListener('click', () => setCurrentCourse(a.dataset.course!))); }
