@@ -8,7 +8,7 @@ on:
   # quand la façon d'analyser change, toutes les parties récentes sont réanalysées avec la nouvelle version
   push:
     branches: [main]
-    paths: ['app/src/core/analysis.ts', 'app/src/core/phase.ts', 'app/scripts/analyse.ts', 'app/scripts/uci.ts']
+    paths: ['app/src/core/analysis.ts', 'app/src/core/phase.ts', 'app/scripts/analyse.ts', 'app/scripts/uci.ts', '.github/workflows/analyse.yml']
   workflow_dispatch:
     inputs:
       users: { description: 'Pseudos chess.com (virgules)', required: false, default: '' }
@@ -35,9 +35,12 @@ jobs:
           API_URL: ${{ vars.API_URL || 'https://chess-drill.mattvar36.workers.dev' }}
           API_TOKEN: ${{ secrets.APP_TOKEN }}
           USERS: ${{ inputs.users || vars.USERS || 'matt_chess00' }}
+        # en cas d'échec, la fin du journal devient une annotation : elle se lit sans être connecté à GitHub
         run: |
+          set -o pipefail
           if [ "${{ github.event_name }}" = "push" ]; then
-            npx tsx scripts/analyse.ts --days 90 --analyse-days 90 --max 1000 --depth 16 --redo
+            ARGS="--days 90 --analyse-days 90 --max 1000 --depth 16 --redo"
           else
-            npx tsx scripts/analyse.ts --days "${{ inputs.days || '3' }}" --analyse-days "${{ inputs.analyse_days || inputs.days || '3' }}" --max "${{ inputs.max || '200' }}" --depth 16 ${{ inputs.redo && '--redo' || '' }}
+            ARGS="--days ${{ inputs.days || '3' }} --analyse-days ${{ inputs.analyse_days || inputs.days || '3' }} --max ${{ inputs.max || '200' }} --depth 16 ${{ inputs.redo && '--redo' || '' }}"
           fi
+          npx tsx scripts/analyse.ts $ARGS 2>&1 | tee "$RUNNER_TEMP/analyse.log" || { echo "::error title=Analyse::$(grep -v '^✓' "$RUNNER_TEMP/analyse.log" | tail -c 1500 | tr '\n' ' ')"; exit 1; }
