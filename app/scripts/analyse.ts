@@ -15,7 +15,7 @@ import { Chess } from '../src/core/chess';
 import { FAULT_LOSS, replay, rateGame, type RawEval, type Rated } from '../src/core/analysis';
 import { winPct } from '../src/core/winpct';
 import { toGame, monthsSince, type ChessComGame } from '../src/core/ingest';
-import { buildBook, indexBranches } from '../src/core/book';
+import { analyseGame, buildBook, indexBranches } from '../src/core/book';
 import type { Game, Repertoire } from '../src/core/types';
 import rep from '../src/data/repertoire.json';
 import { UciEngine } from './uci';
@@ -44,9 +44,16 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
 
 /** Parties récentes d'un joueur (hors parties par correspondance), de la plus récente à la plus ancienne. */
 async function recentGames(user: string): Promise<ChessComGame[]> {
-  const { archives } = await getJson<{ archives: string[] }>(`https://api.chess.com/pub/player/${user.toLowerCase()}/games/archives`);
+  const base = `https://api.chess.com/pub/player/${user.toLowerCase()}/games`;
+  // la liste des archives répond parfois 404 sans raison : on construit alors les mois nous-mêmes
+  const archives = await getJson<{ archives: string[] }>(`${base}/archives`).then(r => r.archives).catch(e => {
+    console.warn(`archives indisponibles (${(e as Error).message}) : mois construits à la main`);
+    const out: string[] = [], d = new Date(SINCE * 1000), now = new Date();
+    for (let y = d.getUTCFullYear(), m = d.getUTCMonth(); y * 12 + m <= now.getUTCFullYear() * 12 + now.getUTCMonth(); m++, (m > 11 && (m = 0, y++))) out.push(`${base}/${y}/${String(m + 1).padStart(2, '0')}`);
+    return out;
+  });
   const out: ChessComGame[] = [];
-  for (const m of monthsSince(archives, SINCE)) out.push(...(await getJson<{ games: ChessComGame[] }>(m)).games); // en série, comme le demande chess.com
+  for (const m of monthsSince(archives, SINCE)) out.push(...(await getJson<{ games: ChessComGame[] }>(m).catch(() => ({ games: [] as ChessComGame[] }))).games); // en série, comme le demande chess.com
   return out.filter(g => g.end_time >= SINCE && g.time_class !== 'daily').sort((x, y) => y.end_time - x.end_time);
 }
 
@@ -88,6 +95,13 @@ async function main() {
   const input: ChessComGame[] | null = a.input ? JSON.parse(await readFile(a.input, 'utf8')) : null;
   const todo: { user: string; game: Game }[] = [];
   for (const user of users) {
+    // réanalyse : les parties déjà importées suffisent (pas besoin de chess.com) ; le cours est recalculé avec le répertoire actuel
+    if (a.redo && API && !input) {
+      const stored = await getJson<Game[]>(`${API}/api/games?user=${encodeURIComponent(user)}&since=${ANALYSE_SINCE}`);
+      for (const g of stored) { const { ev: _e, st: _s, cls: _c, wp: _w, ...game } = g; if (game.sans?.length && !a.skip!.includes(game.id)) todo.push({ user, game: { ...game, a: analyseGame(book, branches, game.sans, game.color) } as Game }); }
+      console.log(`${user} : ${stored.length} partie(s) déjà importées, à réanalyser`);
+      continue;
+    }
     const raw = input ?? await recentGames(user); const skip = new Set([...(a.redo ? [] : await ids('analysed', user)), ...a.skip!]), have = await ids('known', user);
     const games = raw.map(r => toGame(r, user, book, branches)).filter((g): g is Game => !!g && g.sans.length > 0);
     // 1. Import léger : toutes les parties de la fenêtre, sans moteur (quelques secondes). Elles servent tout de suite aux statistiques.
