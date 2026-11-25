@@ -1,0 +1,5 @@
+Error: https://api.chess.com/pub/player/matt_chess00/games/archives → HTTP 404
+    at getJson (/home/runner/work/chess-drill/chess-drill/app/scripts/analyse.ts:41:11)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async recentGames (/home/runner/work/chess-drill/chess-drill/app/scripts/analyse.ts:47:24)
+    at async main (/home/runner/work/chess-drill/chess-drill/app/scripts/analyse.ts:91:26)
