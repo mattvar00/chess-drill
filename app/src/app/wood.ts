@@ -65,9 +65,10 @@ export function viewWood(root: HTMLElement, q = new URLSearchParams()) {
     ? `<p class="label">Cycle choisi</p><h2>${esc(F.label)}</h2><p>${F.faults.length ? `${plural(pick.length, 'position')}${F.faults.length > pick.length ? ` sur ${F.faults.length}` : ''}, les plus utiles d'abord.` : 'Aucune position pour l\'instant.'}</p>`
     : cur ? `<p class="label">Cycle en cours</p><h2>${esc(cur.label)}</h2><p>Position ${Math.min(cur.i + 1, cur.ids.length)} sur ${cur.ids.length}, ${fmtTime(cur.elapsed)} au compteur</p>`
     : `<p class="label">Cycle conseillé</p><h2>${plural(n, 'position prioritaire', 'positions prioritaires')}</h2><p>Celles à revoir, puis les plus coûteuses et les plus récentes.</p>`;
-  const chip = (key: string, label: string, k: number) => `<button type="button" class="fchip" data-c="${esc(key)}">${esc(label)} <b>${k}</b></button>`;
+  const maxOf = (xs: [string, number][]) => Math.max(1, ...xs.map(x => x[1]));
+  const chip = (key: string, label: string, k: number, max: number) => `<button type="button" class="fchip frow" data-c="${esc(key)}"><span class="ft"><b>${esc(label)}</b><span class="obar" aria-hidden="true"><i style="--w:${Math.round(100 * k / max)}%"></i></span></span><span class="fn">${k}</span></button>`;
   root.innerHTML = `
-    <header class="pagehead">
+    <header class="pagehead">${F ? '' : '<h1>Fautes</h1>'}
       <div class="sumrow"><p>${plural(all.length, 'position tirée', 'positions tirées')} de tes parties</p>${due ? `<p class="duetxt">${due} à revoir</p>` : ''}</div></header>
     <section class="surf today">
       <div class="today-top"><div class="today-text">${hero}</div>${shown ? miniBoard(new Chess(shown.fen), shown.side) : ''}</div>
@@ -75,8 +76,8 @@ export function viewWood(root: HTMLElement, q = new URLSearchParams()) {
     </section>
     ${F ? '<a class="quiet" href="#/wood">Voir tous les cycles</a>' : ''}
     ${!F && hang.length >= 5 && hang.length >= other ? `<section class="grp"><h2>Ta faute la plus fréquente</h2><div class="surf card list">${row('bHang', 'target', 'Pièces en prise', `${plural(hang.length, 'position')} de tes parties : une pièce attaquée oubliée, ou posée sur une case attaquée. 10 par cycle.`)}</div></section>` : ''}
-    ${themes.length ? `<section class="grp"><h2>Par type de faute</h2><div class="fchips">${themes.map(([t, k]) => chip('t:' + t, themeLabel(t), k)).join('')}</div></section>` : ''}
-    ${opens.length ? `<section class="grp"><h2>Par ouverture</h2><div class="fchips">${opens.map(([o, k]) => chip('o:' + o, sysName(o), k)).join('')}</div></section>` : ''}
+    ${themes.length ? `<section class="grp"><h2>Par type de faute</h2><div class="fchips">${themes.map(([t, k]) => chip('t:' + t, themeLabel(t), k, maxOf(themes))).join('')}</div></section>` : ''}
+    ${opens.length ? `<section class="grp"><h2>Par ouverture</h2><div class="fchips">${opens.map(([o, k]) => chip('o:' + o, sysName(o), k, maxOf(opens))).join('')}</div></section>` : ''}
     <section class="grp"><h2>Autres cycles</h2><div class="surf card list">
       ${cur || F ? row('bPrio', 'target', plural(n, 'position prioritaire', 'positions prioritaires'), 'Celles à revoir, puis les plus coûteuses et les plus récentes') : ''}
       ${month.length ? row('bMonth', 'calendar', 'Fautes du mois', `Les ${month.length > 1 ? month.length + ' plus coûteuses' : 'plus coûteuse'} des 30 derniers jours`) : ''}

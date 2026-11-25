@@ -1273,3 +1273,47 @@ p.pgs{margin:0;font-size:13px}
 .opage>.csegs{position:sticky;top:calc(var(--top) + env(safe-area-inset-top));z-index:6;margin:0 calc(-1*var(--pad)) 12px;padding:6px var(--pad);border-radius:0;background:var(--ground)}
 .opage>.csegs .cseg{background:var(--c-track,rgba(127,127,127,.18));border-radius:10px}
 .opage>.csegs .cseg.on{background:var(--c-seg-on,var(--surface))}
+
+/* ==========================================================================
+   Système visuel (26 nov. 2026) : une seule façon de faire chaque chose.
+   Cinq tailles de texte, un arrondi, un en-tête, une rangée, deux boutons.
+   Cette couche passe après tout le reste et le ramène à la règle.
+   ========================================================================== */
+:root{--t-page:28px;--t-sec:18px;--t-row:16px;--t-sub:14px;--t-cap:12px;--rad:12px}
+/* titres */
+.hello h1,.pagehead h1{font:700 var(--t-page)/1.1 var(--f-text);letter-spacing:-.02em}
+.grp>h2,.isec h2,.oh{font-size:var(--t-sec);font-weight:650;color:var(--c-ink);letter-spacing:-.01em;margin-top:4px}
+.grp>h2 .dim{font-size:var(--t-sub)}
+/* l'en-tête : retour, un titre sur une ligne, une action */
+.htitle b{font-size:17px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.htitle small{font-size:var(--t-cap)}
+.hchip,.xtool,.xtool[aria-pressed="true"]{height:44px;padding:0 8px;border-radius:0;background:none;box-shadow:none;color:var(--accent-text);font:600 var(--t-sub) var(--f-text)}
+.xtool .ic{display:none}
+/* les boutons : le jaune (un par écran) et le contour */
+.btn{min-height:52px;border-radius:var(--rad);background:transparent;box-shadow:inset 0 0 0 1px var(--line);font:600 var(--t-row)/1.2 var(--f-text)}
+.btn.pri{background:var(--c-pri);box-shadow:none}
+.btn.small,.btn.pjouer{min-height:44px;font-size:var(--t-sub)}
+.btn.upd{min-height:40px;padding:0 12px;border-radius:var(--rad);background:transparent;color:var(--accent-text);box-shadow:none;font-size:var(--t-sub)}
+/* les listes : des rangées séparées par un filet, sans cadre */
+main .surf.card.list{background:none;border-radius:0;box-shadow:none;margin:0 calc(-1*var(--pad))}
+main .surf.card.list>.rowi,main .surf.card.list>a,main .surf.card.list>button{padding-left:var(--pad);padding-right:var(--pad);border-radius:0}
+.rowi{min-height:64px;gap:14px}.rowi b{font-size:var(--t-row);letter-spacing:-.01em}.rowi small{font-size:13px}
+.rowi .mini{width:44px;height:44px;border-radius:6px}
+.card,.surf.today,.tile,.tile.t2,.pbubble,.cbub{border-radius:var(--rad)}
+.lk1{margin:0 calc(-1*var(--pad));padding:16px var(--pad);border-radius:0;background:none;border-top:1px solid var(--line);min-height:56px}
+/* les filtres de fautes : des rangées avec leur poids */
+.fchips{display:flex;flex-direction:column;gap:0;margin:0 calc(-1*var(--pad))}
+.fchip.frow{display:flex;align-items:center;gap:14px;width:100%;min-height:56px;padding:8px var(--pad);border:0;border-top:1px solid var(--line);border-radius:0;background:none;text-align:left}
+.fchips .frow:first-child{border-top:0}
+.frow .ft{flex:1;display:flex;flex-direction:column;gap:6px}.frow .ft b{font-size:var(--t-row);font-weight:600;color:var(--c-ink)}
+.frow .fn{font-size:17px;font-weight:650;color:var(--c-ink);min-width:36px;text-align:right}
+.frow .obar i{background:var(--accent)}
+/* les onglets du bas : une icône et un mot, l'onglet actif en couleur */
+.tabs a{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:11px;font-weight:500}
+.tabs a .ic{width:22px;height:22px}
+.tabs a[aria-current]{color:var(--accent-text);font-weight:600}
+.tabs a[aria-current]::before{display:none}
+.tabs a.dot::after{top:8px;left:calc(50% + 8px)}
+/* les onglets dans une page : un seul style */
+.seg,.csegs{border-radius:var(--rad)}.seg button,.seg label span,.cseg{border-radius:9px;min-height:40px;height:40px;font-size:var(--t-sub)}
+.btn.block.ofaults{width:auto}

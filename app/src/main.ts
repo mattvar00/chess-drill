@@ -25,12 +25,12 @@ import { popLevel, lineTitle } from './core/names';
 
 restoreLook();
 /** Cinq onglets : ce que je fais maintenant, mes cours d'ouvertures, les finales, mes fautes à rejouer, où j'en suis. */
-const TABS = [['#/', 'Pour toi'], ['#/rep', 'Ouvertures'], ['#/finales', 'Finales'], ['#/wood', 'Fautes'], ['#/progres', 'Progrès']] as const;
+const TABS = [['#/', 'Pour toi', 'home'], ['#/rep', 'Ouvertures', 'book'], ['#/finales', 'Finales', 'rook'], ['#/wood', 'Fautes', 'target'], ['#/progres', 'Progrès', 'chart']] as const;
 const TRAIN = '#/rep', FIN = '#/finales', WOOD = '#/wood', PROG = '#/progres';
 document.getElementById('app')!.innerHTML = `
   <header class="top" id="top" hidden><a class="back" id="back" aria-label="Retour">${icon('back')}</a><div class="htitle"><b id="title"></b><small id="subtitle"></small></div><span class="hright" id="hright"></span><button class="xtool" id="xtool" type="button" hidden>${icon('search')}<span>Explorer</span></button></header>
   <main id="view" tabindex="-1"></main>
-  <nav class="tabs surf" id="tabs" aria-label="Sections">${TABS.map(([h, l]) => `<a href="${h}">${l}</a>`).join('')}</nav>`;
+  <nav class="tabs surf" id="tabs" aria-label="Sections">${TABS.map(([h, l, i]) => `<a href="${h}">${icon(i)}<span>${l}</span></a>`).join('')}</nav>`;
 const view = $('#view'), back = $<HTMLAnchorElement>('#back');
 // Toucher l'onglet où l'on est déjà : retour en haut de la page (sur une sous-page, le lien ramène déjà à la page de l'onglet).
 $('#tabs').addEventListener('click', e => { const a = (e.target as HTMLElement).closest('a'); if (!a) return; const h = a.getAttribute('href')!;
@@ -127,7 +127,7 @@ function routeTo() {
       if (prevSeg === '' || prevSeg === 'progres' || prevSeg === 'rep') oFrom = prevSeg === 'rep' ? '#/rep' : `#/${prevSeg}`;
       shell(so ? famTitle(so.titre) : 'Ouverture', '', oFrom, TRAIN); cleanup = viewOpeningPage(view, p[1], v === 'plans' || v === 'parties' ? v : 'chemin') || null; }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
-    else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewOpeningList(view); }
+    else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewOpeningList(view); view.insertAdjacentHTML('afterbegin', '<header class="pagehead"><h1>Ouvertures</h1></header>'); }
     else if (p[0] === 'ouvertures') { shell('Tes ouvertures', 'Le bilan de chacune', PROG, PROG); viewOpenings(view); }
     else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!;
       if (p[2]) { const d = lessonDrill(l, +p[2] || 1); shell(l.titre, `${l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle'} · ${d.step}`, '#/finales', FIN, '', 'session'); cleanup = mountDrill(view, d); }
