@@ -182,9 +182,9 @@ function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {
   const lesson = i >= 0 ? { label: u.lessons[i].state === 'crack' ? 'Réviser' : 'Apprendre la suite', run: () => startLesson(u, i) } : { label: 'Voir l\'ouverture', href: openingUrl(u) };
   if (r.kind === 'oubli') { const g = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50).find(x => BR[refBranch(x, BR)!]?.sys.id === u.sys.id);
     return g ? { label: 'Rejouer la ligne', href: lineUrl(refBranch(g, BR)!, 'drill', g.id) } : lesson; }
-  if (r.kind === 'milieu') return { label: 'Voir ses plans', href: `#/plans?o=${u.sys.id}&r=${encodeURIComponent('#/rep')}` };
+  if (r.kind === 'milieu') return { label: 'Voir ses plans', href: `#/plans?o=${u.sys.id}&r=${encodeURIComponent('#/cours?o=' + u.sys.id)}` };
   if (r.kind === 'revoir') { const ids = ownLines(u.sys).map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
-    return { label: 'Revoir maintenant', run: () => { setLS(LAST_KEY, u.sys.id); location.hash = startSession(`${shortName(u.sys.titre)}, à revoir`, ids, '#/rep'); } }; }
+    return { label: 'Revoir maintenant', run: () => { setLS(LAST_KEY, u.sys.id); location.hash = startSession(`${shortName(u.sys.titre)}, à revoir`, ids, `#/cours?o=${u.sys.id}`); } }; }
   return lesson;
 }
 const sideWord = (u: Unit) => `${u.bloc.titre}, ${u.bloc.side === 'w' ? 'avec les Blancs' : 'avec les Noirs'}`;
@@ -232,12 +232,11 @@ export function courseBoard(u: Unit): string {
 export function viewPath(root: HTMLElement) {
   const units = allUnits(), up = nextUp(), cur = units.find(u => u.sys.id === getLS(LAST_KEY)) ?? up?.u ?? currentUnit(units);
   if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur);
-  // la recommandation reste visible : une ligne en haut quand elle porte sur un autre cours, un mot sous le nom quand c'est celui-ci
-  root.innerHTML = `<a class="cpick surf" href="#/rep/choisir" aria-label="Changer de cours : ${esc(shortName(cur.sys.titre))}">${courseBoard(cur)}<span class="body"><b>${esc(shortName(cur.sys.titre))}</b><small>${cur.bloc.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}</small></span>${icon('chev', 'chev')}</a>
-    <div id="ccourse"></div>`;
+  // le nom du cours est dans l'en-tête ; on change de cours depuis la liste des ouvertures
+  root.innerHTML = `<div id="ccourse"></div>`;
   // le cours lui-même, avec son bilan et ses trois vues (chemin, plans, arbre) : une seule page par cours
   const v = new URLSearchParams(location.hash.split('?')[1] ?? '').get('v');
-  showCourse(root.querySelector<HTMLElement>('#ccourse')!, cur.bloc, cur.sys, v === 'plans' || v === 'arbre' ? v : 'chemin', '#/rep');
+  showCourse(root.querySelector<HTMLElement>('#ccourse')!, cur.bloc, cur.sys, v === 'plans' || v === 'arbre' ? v : 'chemin', '#/cours');
 }
 /** Fait de ce cours le cours en cours (celui que montre l'onglet Ouvertures). */
 export const setCurrentCourse = (sysId: string) => setLS(LAST_KEY, sysId);
@@ -317,4 +316,6 @@ export function viewLessonEnd(root: HTMLElement) {
 }
 
 /** Le cours d'une carte « Pour toi » : on l'ouvre comme cours en cours. */
-export function openCourse(u: Unit) { setLS(LAST_KEY, u.sys.id); location.hash = '#/rep'; }
+export function openCourse(u: Unit) { setLS(LAST_KEY, u.sys.id); location.hash = `#/cours?o=${u.sys.id}`; }
+/** Le cours en cours (celui que montre #/cours). */
+export const courseNow = () => { const u = allUnits(); return (u.find(x => x.sys.id === getLS(LAST_KEY)) ?? nextUp()?.u ?? currentUnit(u))?.sys ?? null; };

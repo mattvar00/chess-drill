@@ -56,9 +56,11 @@ export function courseTabs(base: string, tab: CourseTab, nPlans: number): string
   const t = (k: CourseTab, label: string) => `<a class="cseg${k === tab ? ' on' : ''}" href="${base}${k === 'chemin' ? '' : '?v=' + k}" ${k === tab ? 'aria-current="page"' : ''}>${label}</a>`;
   return `<nav class="csegs" aria-label="Vue du cours">${t('chemin', 'Chemin')}${t('plans', nPlans ? `Plans <span class="cn">${nPlans}</span>` : 'Plans')}${t('arbre', 'Arbre')}</nav>`;
 }
+/** En tête du cours : ses trois vues. Le bilan (score, phases) est sur la page de l'ouverture, juste avant. */
 export function courseHead(sys: System, base: string, tab: CourseTab): string {
-  return bilanBlock(bilanOf(sys)) + courseTabs(base, tab, plansFor(sys.id).length);
+  return courseTabs(base, tab, plansFor(sys.id).length);
 }
+export const bilanHtml = (sys: System) => bilanBlock(bilanOf(sys));
 
 /** Un petit échiquier avec les flèches et les cases d'une étape de plan. */
 function miniPlan(game: Chess, side: Color, arrows: string[][], keys: string[]): string {

@@ -1,6 +1,6 @@
 /** Point d'entrée : coquille de l'app et navigation par adresse (#/…), pour que le bouton retour du téléphone fonctionne. */
-import '@fontsource-variable/figtree/wght.css';
-import '@fontsource-variable/bricolage-grotesque/wght.css';
+import '@fontsource-variable/onest';
+import { viewOpeningList, viewOpeningPage } from './app/openings';
 import './styles.css';
 import { $, esc, icon } from './ui/dom';
 import { setSound, setSoundSet } from './ui/sound';
@@ -19,7 +19,7 @@ import { mountPlanPlay } from './app/planplay';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
 import { STRUCT } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
-import { setCurrentCourse, shortName, viewLessonEnd, viewPath } from './app/path';
+import { courseNow, setCurrentCourse, shortName, viewLessonEnd, viewPath } from './app/path';
 import { popLevel, lineTitle } from './core/names';
 
 restoreLook();
@@ -96,11 +96,15 @@ function route() {
   } else {
     if (p[0] !== 'plans') endSession();   // les plans se consultent entre deux variantes sans quitter le cours
     const bloc = p[0] === 'rep' ? REP.blocs.find(b => b.id === p[1]) : undefined, sys = bloc?.systemes.find(s => s.id === p[2]);
-    // une seule page par cours : celle de l'onglet Ouvertures, qui montre le cours choisi
-    if (bloc && sys) { setCurrentCourse(sys.id); const v = q.get('v'); location.replace(`#/rep${v ? '?v=' + v : ''}`); return; }
-    else if ((p[0] === 'rep' && p[1] === 'sorties') || p[0] === 'entrainer') { location.replace('#/rep'); return; }
+    // une seule page par cours : #/cours, qui montre le cours choisi ; l'onglet Ouvertures, lui, montre la liste
+    if (bloc && sys) { setCurrentCourse(sys.id); const v = q.get('v'); location.replace(`#/cours?o=${sys.id}${v ? '&v=' + v : ''}`); return; }
+    else if ((p[0] === 'rep' && (p[1] === 'sorties' || p[1] === 'choisir')) || p[0] === 'entrainer') { location.replace('#/rep'); return; }
+    else if (p[0] === 'o' && p[1]) { const so = REP.blocs.flatMap(b => b.systemes).find(x => x.id === p[1]);
+      shell(so ? shortName(so.titre) : 'Ouverture', '', '#/rep', TRAIN); cleanup = viewOpeningPage(view, p[1]) || null; }
+    else if (p[0] === 'cours') { const o = q.get('o'); if (o) setCurrentCourse(o); const cur = courseNow();
+      shell(cur ? shortName(cur.titre) : 'Le cours', 'Le cours', cur ? `#/o/${cur.id}` : '#/rep', TRAIN); viewPath(view); }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }
-    else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewPath(view); }
+    else if (p[0] === 'rep') { shell('Ouvertures', '', null, TRAIN); viewOpeningList(view); }
     else if (p[0] === 'ouvertures') { shell('Tes ouvertures', 'Le bilan de chacune', PROG, PROG); viewOpenings(view); }
     else if (p[0] === 'finales' && p[1] && LESSONS.some(l => l.id === p[1])) { const l = LESSONS.find(x => x.id === p[1])!;
       if (p[2]) { const d = lessonDrill(l, +p[2] || 1); shell(l.titre, `${l.goal === 'w' ? 'À toi de gagner' : 'À toi de tenir la nulle'} · ${d.step}`, '#/finales', FIN, '', 'session'); cleanup = mountDrill(view, d); }
