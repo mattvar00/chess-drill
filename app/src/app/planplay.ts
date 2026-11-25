@@ -43,7 +43,7 @@ export function mountPlanPlay(root: HTMLElement, id: string): () => void {
   let game = new Chess(startFen), last: Move | null = null, busy = true, over = false, dead = false, n = 0, inPlan = 0, good = 0, meh = 0, errs = 0, miss = 0, wantHint = false;
   let here: EngineResult | null = null;   // l'analyse de la position où tu dois jouer
   const board = new Board($('#board', root), { movable: () => (busy || over ? null : side), onMove: m => { void play(m); } });
-  const paint = () => board.set(game, side, last, true);
+  const paint = (anim = false) => board.set(game, side, last, anim);   // anim : glisse la pièce et joue le bruit, une seule fois par coup
   const btns = () => {
     actions.innerHTML = over
       ? `<button class="btn" id="pAgain">${icon('restart')}Rejouer</button><button class="btn pri" id="pBack">Revoir le plan</button>`
@@ -71,7 +71,7 @@ export function mountPlanPlay(root: HTMLElement, id: string): () => void {
   async function play(m: Move) {
     if (busy || over) return; busy = true;
     const before = game.fen(), made = tryMove(game, { from: m.from, to: m.to, promotion: m.promotion ?? 'q' }); if (!made) { busy = false; return; }
-    last = made; paint(); SFX.forMove(made);
+    last = made; paint(true);
     const was = here ? pov(here, side) : null, after = await think(); if (dead) return;
     const now = after ? pov(after, side) : null;   // le moteur note du point de vue des Blancs : on remet tout de ton côté
     const loss = was != null && now != null ? Math.max(0, was - now) : 0;
@@ -90,7 +90,7 @@ export function mountPlanPlay(root: HTMLElement, id: string): () => void {
     if (after?.alt && after.cp != null && after.alt.cp != null && Math.abs(after.cp - after.alt.cp) <= 30 && Math.random() < .4) reply = after.alt.uci;
     if (!reply) return finish(head);
     await new Promise(r => setTimeout(r, 350)); if (dead) return;
-    const rm = tryMove(game, uciToObj(reply)); if (rm) { last = rm; paint(); SFX.forMove(rm); }
+    const rm = tryMove(game, uciToObj(reply)); if (rm) { last = rm; paint(true); }
     say(isPlan ? 'happy' : 'talk', head, rm ? `Il répond ${esc(rm.san)}. Coup ${n + 1} sur ${MOVES}.` : '');
     if (game.isGameOver()) return finish(head);
     void yourTurn();

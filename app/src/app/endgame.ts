@@ -354,7 +354,7 @@ export function mountDrill(root: HTMLElement, d: Drill): () => void {
   const say = (mood: Mood, head: string, text = '') => { coach.innerHTML = coachSay(mood, `<p class="lead${mood === 'oops' ? ' bad' : ''}">${head}</p>${text ? `<p class="why">${text}</p>` : ''}`); };
   const board = new Board($('#board', root), { movable: () => (xOpen ? new Chess(xHist[xI]).turn() : busy || over ? null : d.side), onMove: m => { if (xOpen) xMove(m); else void play(m); } });
   const goalWord = d.goal === 'w' ? 'le gain' : 'la nulle';
-  const paint = () => { board.set(game, d.side, last, true); hintLv = 0; };
+  const paint = (anim = false) => { board.set(game, d.side, last, anim); hintLv = 0; };
   const go = (h: string) => { location.hash = h; };
   const btns = () => {
     actions.innerHTML = over
@@ -406,7 +406,7 @@ export function mountDrill(root: HTMLElement, d: Drill): () => void {
     if (busy || over) return; busy = true;
     const before = game.fen(), promo = m.flags.includes('p'), made = tryMove(game, { from: m.from, to: m.to, promotion: m.promotion });
     if (!made) { busy = false; return; }
-    last = made; paint(); SFX.forMove(made);
+    last = made; paint(true);
     const tb = await probe(game.fen()); if (dead) return;
     if (!tb) { game = new Chess(before); last = null; paint(); busy = false; say('oops', 'Pas de réseau', 'La table de finales ne répond pas. Réessaie dans un instant.'); return; }
     const mine = flip(tb.out);                                         // le résultat pour toi, une fois ton coup joué
@@ -428,7 +428,7 @@ export function mountDrill(root: HTMLElement, d: Drill): () => void {
     // la meilleure défense : la table trie les coups du meilleur au moins bon pour le camp au trait
     const reply = pickReply(game, tb, d.side); await wait(380); if (dead) return;
     const rm = reply ? tryMove(game, uciToObj(reply.uci)) : null;
-    if (rm) { last = rm; paint(); SFX.forMove(rm); if (rm.captured || rm.piece === 'p') near = reply!.dtz; }
+    if (rm) { last = rm; paint(true); if (rm.captured || rm.piece === 'p') near = reply!.dtz; }
     if (game.isCheckmate() || game.isDraw()) return finish(d.goal === 'd' && !game.isCheckmate(), game.isCheckmate() ? 'Mat contre toi.' : d.goal === 'd' ? 'Nulle tenue.' : game.isThreefoldRepetition() ? 'Trois fois la même position : c\'est nul.' : 'Nulle.', esc(d.idea));
     busy = false;
     if (idle >= 2) say('talk', 'Ça gagne encore, mais tu tournes en rond.', `${esc(d.idea)}${rm ? ` Il répond ${frSan(rm.san)}.` : ''}`);
