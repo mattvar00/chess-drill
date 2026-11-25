@@ -35,21 +35,32 @@ function preload() {
 function sample(k: 'Move' | 'Capture' | 'Check', vol = 1): boolean {
   if (set === 'bois') return false; const a = enabled ? unlockAudio() : null; if (!a) return true;
   const b = bufs.get(set + k) ?? (k === 'Check' ? bufs.get(set + 'Move') : null); if (!b) { preload(); return false; }
-  const src = a.createBufferSource(), g = a.createGain(); src.buffer = b; g.gain.value = vol; src.connect(g); g.connect(a.destination); src.start(); return true;
+  live(a, () => { const src = a.createBufferSource(), g = a.createGain(); src.buffer = b; g.gain.value = vol; src.connect(g); g.connect(a.destination); src.start(); }); return true;
+}
+/**
+ * Joue seulement si le son peut sortir tout de suite. Un contexte audio endormi (avant le premier appui, ou au retour
+ * sur l'app) garde les sons en file et les lâche tous d'un coup au réveil : un bruit sans raison au prochain appui.
+ * On tente donc de le réveiller, et on abandonne le son s'il ne se réveille pas dans l'instant.
+ */
+function live(a: AudioContext, play: () => void) {
+  if (a.state === 'running') return play();
+  const t0 = performance.now();
+  a.resume().then(() => { if (a.state === 'running' && performance.now() - t0 < 150) play(); }).catch(() => { /* pas de geste : pas de son */ });
 }
 /** À appeler sur un geste de l'utilisateur : les navigateurs bloquent le son avant. */
 export function unlockAudio(): AudioContext | null {
   if (!enabled) return null;
   ambient();
   if (!ac) { try { ac = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)(); } catch { return null; } }
-  if (ac.state === 'suspended') void ac.resume();
+  if (ac.state !== 'running') void ac.resume().catch(() => { /* pas encore de geste */ });
   if (!bufs.size) preload();
   return ac;
 }
 function tone(f: number, dur: number, type: OscillatorType = 'triangle', vol = 0.18, delay = 0) {
-  const a = enabled ? unlockAudio() : null; if (!a) return; const t = a.currentTime + delay; const o = a.createOscillator(), g = a.createGain();
-  o.type = type; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.02);
+  const a = enabled ? unlockAudio() : null; if (!a) return;
+  live(a, () => { const t = a.currentTime + delay; const o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur + 0.02); });
 }
 /**
  * Pièce posée sur un plateau : un « toc » de bois très court. Synthèse modale : quelques résonances (sinusoïdes)
@@ -58,7 +69,8 @@ function tone(f: number, dur: number, type: OscillatorType = 'triangle', vol = 0
  */
 let click: AudioBuffer | null = null;
 function tock(modes: readonly (readonly [number, number, number])[], vol = 0.5, delay = 0, attack = 0.25) {
-  const a = enabled ? unlockAudio() : null; if (!a) return; const t = a.currentTime + delay;
+  const a = enabled ? unlockAudio() : null; if (!a) return;
+  live(a, () => { const t = a.currentTime + delay;
   const out = a.createGain(); out.gain.value = vol; out.connect(a.destination);
   for (const [f, decay, g] of modes) {   // fréquence (Hz), extinction (s), poids
     const o = a.createOscillator(), og = a.createGain(); o.type = 'sine'; o.frequency.value = f;
@@ -68,6 +80,7 @@ function tock(modes: readonly (readonly [number, number, number])[], vol = 0.5, 
   if (!click) { click = a.createBuffer(1, Math.floor(a.sampleRate * 0.004), a.sampleRate); const d = click.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2); }
   const n = a.createBufferSource(), hp = a.createBiquadFilter(), ng = a.createGain(); n.buffer = click; hp.type = 'bandpass'; hp.frequency.value = 2200; hp.Q.value = 0.8; ng.gain.value = attack;
   n.connect(hp); hp.connect(ng); ng.connect(out); n.start(t);
+  });
 }
 const MOVE = [[560, 0.022, 0.9], [830, 0.016, 0.6], [1240, 0.010, 0.35], [380, 0.018, 0.25]] as const;
 const TAKE = [[1350, 0.045, 0.8], [1880, 0.035, 0.55], [2650, 0.025, 0.3], [900, 0.03, 0.35]] as const;
@@ -82,3 +95,5 @@ export const SFX = {
     if (m.san.includes('+') || m.san.includes('#')) SFX.check(); else if (m.flags.includes('k') || m.flags.includes('q')) SFX.castle(); else if (m.captured) SFX.capture(); else SFX.move();
   },
 };
+
+if (typeof window !== 'undefined') window.addEventListener('pointerdown', () => { if (enabled && ac && ac.state !== 'running') void ac.resume().catch(() => { /* refusé */ }); }, { capture: true, passive: true });

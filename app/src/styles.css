@@ -1326,7 +1326,8 @@ main .surf.card.list>.rowi,main .surf.card.list>a,main .surf.card.list>button{pa
 .egall{width:100%;background:none;border:0;color:var(--c-link);text-align:left;cursor:pointer;font:inherit}.egall b{color:var(--c-link);font-weight:600}
 
 /* Pages d'échiquier : les boutons toujours en bas, sous le pouce */
-.tside>.tmain,.tside>#ex{flex:1;display:flex;flex-direction:column;gap:10px;min-height:0}
+.tside>.tmain,.tside>#ex{flex:1 0 auto;display:flex;flex-direction:column;gap:10px}
+.tside>.tmain>*,.tside>#ex>*{flex-shrink:0}   /* rien ne se tasse : c'est la colonne qui défile */
 .explnav.dock{position:sticky;bottom:calc(var(--tabs) + env(safe-area-inset-bottom));z-index:4;margin-top:auto;padding:10px 0 12px;background:var(--ground)}
 body.fit .explnav.dock{bottom:0;padding-bottom:calc(12px + env(safe-area-inset-bottom))}
 .explnav.dock.two{grid-template-columns:repeat(2,minmax(0,1fr))}
