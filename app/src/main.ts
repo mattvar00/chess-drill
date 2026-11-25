@@ -14,11 +14,11 @@ import { endSession, lineUrl, session } from './app/session';
 import { pullChessCom, sync } from './app/api';
 import { applyLook, restoreLook } from './app/theme';
 import { gameUrl, mountReview, retryFault, reviewTitle, viewGames, viewProfile } from './app/games';
-import { LESSONS, endDue, lessonDrill, mountDrill, turnDrill, viewCourse, viewEndgame, viewEndgames } from './app/endgame';
+import { LESSONS, endDue, endgameStart, lessonDrill, mountDrill, turnDrill, viewCourse, viewEndgame, viewEndgames } from './app/endgame';
 import { viewOpenings } from './app/course';
 import { mountPlanPlay } from './app/planplay';
 import { mountPlan, mountStruct, planTitle, viewPlans, viewStructs } from './app/plans';
-import { STRUCT } from './core/structures';
+import { STRUCT, gameStructure } from './core/structures';
 import { mountFreeExplorer, mountTool, setTool } from './app/explorer';
 import { courseNow, setCurrentCourse, shortName, viewLessonEnd, viewPath } from './app/path';
 import { popLevel, lineTitle } from './core/names';
@@ -152,13 +152,21 @@ function routeTo() {
   window.scrollTo(0, 0);
 }
 
+/** Prépare en tâche de fond ce que Progrès et Finales calculent sur chaque partie, pour qu'ouvrir ces pages soit immédiat. */
+function warm() {
+  const list = [...store.games].sort((a, b) => b.t - a.t); let i = 0;
+  // par tranches courtes, pour ne jamais bloquer un appui
+  const step = () => { const t = performance.now(); while (i < list.length && performance.now() - t < 14) { const g = list[i++]; gameStructure(g.sans); if (i <= 80) endgameStart(g); } if (i < list.length) setTimeout(step, 10); };
+  setTimeout(step, 250);
+}
+
 async function boot() {
   await loadStore(); const s = store.state.settings; setSound(s.sound !== false); setSoundSet(String(s.soundSet ?? 'classique'));
   if (s.palette || s.mode || s.board) applyLook({ palette: s.palette, mode: s.mode, board: s.board });
-  window.addEventListener('hashchange', route); route();
+  window.addEventListener('hashchange', route); route(); warm();
   // Nouvelles parties et progression des autres appareils : on rafraîchit l'écran d'accueil si quelque chose est arrivé.
   // (seulement sur les écrans de liste : une revue ou un exercice en cours n'est pas interrompu)
-  sync().then(r => { if ((r.games || r.lines) && /^(#\/?)?(rep|wood|parties|progres|entrainer|structures|plans)?$/.test(location.hash)) route(); }).catch(() => { /* hors ligne : l'app reste utilisable */ });
+  sync().then(r => { if (r.games) warm(); if ((r.games || r.lines) && /^(#\/?)?(rep|wood|parties|progres|entrainer|structures|plans)?$/.test(location.hash)) route(); }).catch(() => { /* hors ligne : l'app reste utilisable */ });
   // Tes dernières parties Chess.com, sans attendre la nuit : une seule requête légère, au plus toutes les 30 minutes, en arrière-plan.
   // Aucun calcul de moteur ici (il reste pour la nuit) : on lit les coups et on les compare au répertoire.
   const PULLED = 'cd_pulled';

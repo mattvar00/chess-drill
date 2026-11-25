@@ -32,7 +32,13 @@ export function detectStructure(fen: string): string | null {
   return null;
 }
 /** Structure d'une partie : position au 12ᵉ coup (24 demi-coups), si la partie est assez longue. */
-export function gameStructure(sans: string[]): { id: string; ply: number; fen: string } | null {
+type GS = { id: string; ply: number; fen: string } | null;
+const gsMemo = new WeakMap<string[], { v: GS }>();
+export function gameStructure(sans: string[]): GS {
+  const m = gsMemo.get(sans); if (m) return m.v;   // une partie ne change pas : on ne la rejoue qu'une fois
+  const v = computeStructure(sans); gsMemo.set(sans, { v }); return v;
+}
+function computeStructure(sans: string[]): GS {
   if (sans.length < 20) return null; const c = new Chess(); const n = Math.min(24, sans.length);
   for (let i = 0; i < n; i++) if (!tryMove(c, sans[i])) return null;
   const id = detectStructure(c.fen()); return id ? { id, ply: n, fen: c.fen() } : null;

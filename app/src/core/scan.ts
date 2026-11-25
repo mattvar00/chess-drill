@@ -27,11 +27,20 @@ export interface ExitCard {
 }
 const mine = (g: Game, wp: number) => (g.color === 'w' ? wp : 100 - wp);
 
+const afterMemo = new WeakMap<string[], Map<number, string | null>>();
+/** La position après le demi-coup `ply` : rejouée une seule fois par partie. */
+function afterFen(sans: string[], ply: number): string | null {
+  let m = afterMemo.get(sans); if (!m) afterMemo.set(sans, m = new Map());
+  if (m.has(ply)) return m.get(ply)!;
+  const t = new Chess(); let v: string | null = null, ok = true;
+  for (let i = 0; i <= ply && i < sans.length && ok; i++) ok = !!tryMove(t, sans[i]);
+  if (ok) v = t.fen(); m.set(ply, v); return v;
+}
 /** Une sortie de l'adversaire : la carte qu'elle donne, ou rien si la partie n'en a pas. */
 function exitOf(g: Game) {
   const a = g.a; if (a.status !== 'gap' || a.ply == null || !a.fen || !a.played) return null;
   const ply = a.ply, wp = g.wp, line = g.sans.slice(0, ply + 1);
-  const t = new Chess(); for (const s of line) if (!tryMove(t, s)) return null;
+  const fenAfter = afterFen(g.sans, ply); if (!fenAfter) return null;
   let err: boolean | null = null, ok: boolean | null = null, gain = 0;
   if (wp && wp.length > ply + 2) {
     gain = mine(g, wp[ply + 1]) - mine(g, wp[ply]);
@@ -42,7 +51,7 @@ function exitOf(g: Game) {
     const k = g.cls?.[ply + 1];
     ok = k ? GOOD.has(k) : mine(g, wp[ply + 1]) - mine(g, wp[ply + 2]) < KEEP;
   }
-  return { ply, line, fen: a.fen, fenAfter: t.fen(), played: a.played, reply: g.sans[ply + 1], err, ok, gain, branches: a.branches ?? [] };
+  return { ply, line, fen: a.fen, fenAfter, played: a.played, reply: g.sans[ply + 1], err, ok, gain, branches: a.branches ?? [] };
 }
 
 export function scanExits(games: Game[], ignored: Record<string, boolean> = {}) {

@@ -75,16 +75,22 @@ export interface Turn { ply: number; san: string; mine: boolean; from: Out; to: 
 export interface EndReport { start: number; fen: string; outs: Out[]; turns: Turn[]; last: Out }
 const REP = 'cd_eg_';
 /** Demi-coup à partir duquel la partie tient dans la table, ou -1 si elle n'y arrive pas (ou trop tard pour être une vraie finale). */
+const startMemo = new WeakMap<string[], number>(), fenMemo = new WeakMap<string[], string>();
 export function endgameStart(g: Pick<Game, 'sans'>): number {
-  if (g.sans.length < 30) return -1;
+  const m = startMemo.get(g.sans); if (m != null) return m;   // une partie ne change pas : on ne la rejoue qu'une fois
+  const v = computeStart(g.sans); startMemo.set(g.sans, v); return v;
+}
+function computeStart(sans: string[]): number {
+  if (sans.length < 30) return -1;
   const c = new Chess(); let k = -1;
-  for (let i = 0; i < g.sans.length; i++) { if (!tryMove(c, g.sans[i])) return -1; if (k < 0 && pieces(c.fen()) <= 7) k = i + 1; }
-  return k > 0 && g.sans.length - k >= 4 ? k : -1;
+  for (let i = 0; i < sans.length; i++) { if (!tryMove(c, sans[i])) return -1; if (k < 0 && pieces(c.fen()) <= 7) k = i + 1; }
+  return k > 0 && sans.length - k >= 4 ? k : -1;
 }
 /** La position qui résume la finale : quelques coups après l'entrée dans la table, une fois les derniers échanges faits. */
 export function endFen(g: Pick<Game, 'sans'>): string {
+  const m = fenMemo.get(g.sans); if (m) return m;
   const k = endgameStart(g), c = new Chess(); for (let i = 0; i < Math.min(g.sans.length, k + 6); i++) tryMove(c, g.sans[i]);
-  return c.fen();
+  const f = c.fen(); fenMemo.set(g.sans, f); return f;
 }
 /** Le rapport d'une finale : résultat de chaque position de ton point de vue, et les coups qui l'ont changé. Gardé sur l'appareil une fois calculé. */
 export async function endReport(g: Game, onStep?: (done: number, total: number) => void): Promise<EndReport | null> {
