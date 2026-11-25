@@ -139,16 +139,16 @@ export function viewGames(root: HTMLElement) {
   ];
   root.innerHTML = `
     ${progHead()}<header class="pagehead"><div class="sumrow"><p>${plural(list.length, 'partie')}${period ? ` sur ${period} jours` : ` depuis le ${day(oldest, true)}`}, ${plural(pr.nAn, 'analysée', 'analysées')}</p></div></header>
-    ${periods.length > 1 ? seg('period', periods, period) : ''}
-    ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
-    ${list.length ? `
-    ${insightsHtml(list)}
-    ${card.overall != null ? `<a class="pcard" href="#/profil" aria-label="Ta carte joueur. Voir le détail">
+    ${list.length ? `    ${card.overall != null ? `<a class="pcard" href="#/profil" aria-label="Ta carte joueur. Voir le détail">
       <div class="pcard-top"><div class="pcard-id"><b>${esc(String(store.state.settings.user || ''))}</b><span>${esc(card.type)}${card.best && card.worst ? ` : fort sur ${article(card.best)}, à travailler sur ${article(card.worst)}` : ''}</span></div>
         <div class="pcard-elo">${elo.slice(0, 2).map(([tc, p], k) => `<span class="${k ? 'out' : ''}">${TC[tc] ?? tc} ${p[p.length - 1].e}</span>`).join('')}</div></div>
       <div class="pcard-grid">${AXES.filter(([k]) => card.scores[k] != null).map(([k, l]) => `<div><b>${card.scores[k]}</b><span>${l}</span></div>`).join('')}</div>
       ${AXES.some(([k]) => card.scores[k] == null) ? `<p class="pcard-miss"><b>${AXES.filter(([k]) => card.scores[k] == null).map(([, l]) => l).join(', ')}</b> : pas encore assez de parties sur la période.</p>` : ''}
-      <span class="pcard-more">Voir le radar et le détail${icon('chev')}</span></a>` : ''}
+      <span class="pcard-more">Voir le radar et le détail${icon('chev')}</span></a>` : ''}` : ''}
+    ${periods.length > 1 ? seg('period', periods, period) : ''}
+    ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
+    ${list.length ? `
+    ${insightsHtml(list)}
     <div class="tiles">${tiles.join('')}</div>
     <div class="surf card list">
       <a class="rowi" href="#/ouvertures"><span class="ico">${icon('stack')}</span><span class="body"><b>Tes ouvertures</b><small>Le bilan de chacune, les plus faibles d'abord</small></span>${icon('chev', 'chev')}</a>
