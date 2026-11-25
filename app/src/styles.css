@@ -1233,3 +1233,12 @@ h1,h2,.pbn,.ftext h2,.cpick b{letter-spacing:-.015em}
 main.go-in{animation:goin .34s cubic-bezier(.22,.9,.24,1)}main.go-out{animation:goout .34s cubic-bezier(.22,.9,.24,1)}
 @keyframes goin{from{opacity:0;transform:translateX(28px)}}@keyframes goout{from{opacity:0;transform:translateX(-28px)}}
 @media(prefers-reduced-motion:reduce){.obar i,.oring .ofill,main.go-in,main.go-out{animation:none}}
+
+/* ---------- Progrès : ce qui te coûte des points ---------- */
+.isec{display:flex;flex-direction:column}
+.isec h2{margin:6px 0 4px;font-size:17px;font-weight:650;letter-spacing:-.01em}
+.irow{display:flex;gap:12px;padding:14px 0;border-top:1px solid var(--line);color:var(--c-ink);text-decoration:none}
+.isec h2+.irow{border-top:0}
+.irow span{display:flex;flex-direction:column;gap:3px}.irow b{font-size:16px;font-weight:600;line-height:1.3}.irow small{color:var(--c-mute);font-size:13px}
+.irow em{font-style:normal;font-weight:600;font-size:14px;color:var(--accent-text);margin-top:4px}
+.idot{flex:none;width:10px;height:10px;border-radius:3px;margin-top:6px}.idot.bad{background:var(--bad)}.idot.warn{background:var(--mist)}.idot.good{background:var(--ok)}

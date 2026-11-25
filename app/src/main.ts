@@ -1,6 +1,7 @@
 /** Point d'entrée : coquille de l'app et navigation par adresse (#/…), pour que le bouton retour du téléphone fonctionne. */
 import '@fontsource-variable/onest';
-import { viewOpeningList, viewOpeningPage } from './app/openings';
+import { famTitle, viewOpeningList, viewOpeningPage } from './app/openings';
+import { mountConvert } from './app/convert';
 import './styles.css';
 import { $, esc, icon } from './ui/dom';
 import { setSound, setSoundSet } from './ui/sound';
@@ -81,6 +82,9 @@ function route() {
   } else if (p[0] === 'partie' && p[1]) {
     endSession(); const id = decodeURIComponent(p[1]), r = q.get('r'), backTo = r && r.startsWith('#/') ? r : PROG, [t, sub] = reviewTitle(id);
     shell(t, sub, backTo, PROG, '', 'review'); cleanup = mountReview(view, id, q.has('i') ? +q.get('i')! : null, backTo);
+  } else if (p[0] === 'conclure') {
+    endSession(); shell('Conclure', 'Tes positions gagnantes', '#/progres', PROG, '', 'session');
+    cleanup = mountConvert(view, Math.max(0, +(q.get('k') ?? 0) || 0), t => { $('#subtitle').textContent = t; });
   } else if (p[0] === 'plan' && p[1] && p[2] === 'jouer') {
     shell(planTitle(p[1]), 'Joue le plan contre le moteur', `#/plan/${p[1]}?vu=1`, TRAIN, '', 'session'); cleanup = mountPlanPlay(view, p[1]);
   } else if (p[0] === 'plan' && p[1]) {
@@ -100,7 +104,7 @@ function route() {
     if (bloc && sys) { setCurrentCourse(sys.id); const v = q.get('v'); location.replace(`#/cours?o=${sys.id}${v ? '&v=' + v : ''}`); return; }
     else if ((p[0] === 'rep' && (p[1] === 'sorties' || p[1] === 'choisir')) || p[0] === 'entrainer') { location.replace('#/rep'); return; }
     else if (p[0] === 'o' && p[1]) { const so = REP.blocs.flatMap(b => b.systemes).find(x => x.id === p[1]);
-      shell(so ? shortName(so.titre.split(' : ')[0]) : 'Ouverture', '', '#/rep', TRAIN); cleanup = viewOpeningPage(view, p[1]) || null; }
+      shell(so ? famTitle(so.titre) : 'Ouverture', '', '#/rep', TRAIN); cleanup = viewOpeningPage(view, p[1]) || null; }
     else if (p[0] === 'cours') { const o = q.get('o'); if (o) setCurrentCourse(o); const cur = courseNow();
       shell(cur ? shortName(cur.titre) : 'Le cours', 'Le cours', cur ? `#/o/${cur.id}` : '#/rep', TRAIN); viewPath(view); }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }

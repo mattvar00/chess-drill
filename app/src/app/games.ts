@@ -12,6 +12,7 @@ import { BR, store } from './store';
 import { pullChessCom, fullGame } from './api';
 import { lineUrl } from './session';
 import { devOk, refBranch } from '../core/drill';
+import { insightsHtml } from './insights';
 import { themeLabel } from '../core/wood';
 import { punishRate } from './exits';
 import { lineTitle } from '../core/names';
@@ -141,6 +142,7 @@ export function viewGames(root: HTMLElement) {
     ${periods.length > 1 ? seg('period', periods, period) : ''}
     ${tcs.length > 1 ? seg('tc', [['all', 'Toutes'], ...tcs.map(x => [x, TC[x]] as const)], cadence) : ''}
     ${list.length ? `
+    ${insightsHtml(list)}
     ${card.overall != null ? `<a class="pcard" href="#/profil" aria-label="Ta carte joueur. Voir le détail">
       <div class="pcard-top"><div class="pcard-id"><b>${esc(String(store.state.settings.user || ''))}</b><span>${esc(card.type)}${card.best && card.worst ? ` : fort sur ${article(card.best)}, à travailler sur ${article(card.worst)}` : ''}</span></div>
         <div class="pcard-elo">${elo.slice(0, 2).map(([tc, p], k) => `<span class="${k ? 'out' : ''}">${TC[tc] ?? tc} ${p[p.length - 1].e}</span>`).join('')}</div></div>

@@ -39,7 +39,9 @@ function gamesBySys(): Map<string, Game[]> {
   return m;
 }
 /** Une ouverture = une famille de cours : « Sveshnikov : ligne principale » et « Sveshnikov : quand il prend en c6 » n'en font qu'une. */
-const famName = (s: System) => shortName(s.titre.split(' : ')[0]);
+/** Le nom de l'ouverture : la partie avant « : », sauf quand elle ne dit rien (« Les autres : Fermée, Grand Prix… »). */
+export const famTitle = (t: string) => { const [a, ...r] = t.split(' : '); return shortName(r.length && /^les autres$/i.test(a.trim()) ? r.join(' : ') : a); };
+const famName = (s: System) => famTitle(s.titre);
 const partName = (s: System) => { const t = s.titre.split(' : '); return t.length > 1 ? t.slice(1).join(' : ') : 'le cours'; };
 function familyOf(sysId: string): { b: Bloc; list: System[] } | null {
   for (const b of REP.blocs) { const s = b.systemes.find(x => x.id === sysId); if (s) return { b, list: b.systemes.filter(x => famName(x) === famName(s) && (x.statut !== 'alternatif' || x.id === s.id)) }; }
