@@ -38,6 +38,13 @@ function gamesBySys(): Map<string, Game[]> {
   for (const l of m.values()) l.sort((a, b) => b.t - a.t);
   return m;
 }
+/** Une ouverture = une famille de cours : « Sveshnikov : ligne principale » et « Sveshnikov : quand il prend en c6 » n'en font qu'une. */
+const famName = (s: System) => shortName(s.titre.split(' : ')[0]);
+const partName = (s: System) => { const t = s.titre.split(' : '); return t.length > 1 ? t.slice(1).join(' : ') : 'le cours'; };
+function familyOf(sysId: string): { b: Bloc; list: System[] } | null {
+  for (const b of REP.blocs) { const s = b.systemes.find(x => x.id === sysId); if (s) return { b, list: b.systemes.filter(x => famName(x) === famName(s) && (x.statut !== 'alternatif' || x.id === s.id)) }; }
+  return null;
+}
 const groupName = (b: Bloc) => `${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'}, ${b.titre.charAt(0).toLowerCase()}${b.titre.slice(1)}`;
 export const openingUrl = (sysId: string) => `#/o/${sysId}`;
 
@@ -45,16 +52,19 @@ export const openingUrl = (sysId: string) => `#/o/${sysId}`;
 export function viewOpeningList(root: HTMLElement) {
   const by = gamesBySys(), unseen: { b: Bloc; s: System }[] = [];
   const groups = REP.blocs.filter(b => b.id !== 'plans').map(b => {
-    const rows = b.systemes.map(s => ({ s, gs: by.get(s.id) ?? [] })).filter(x => x.gs.length || x.s.statut !== 'alternatif');
+    const fams = new Map<string, { s: System; gs: Game[] }>();
+    for (const s of b.systemes) { const gs = by.get(s.id) ?? []; if (!gs.length && s.statut === 'alternatif') continue;
+      const f = fams.get(famName(s)); if (f) f.gs = [...f.gs, ...gs]; else fams.set(famName(s), { s, gs: [...gs] }); }
+    const rows = [...fams.values()];
     for (const x of rows) if (!x.gs.length) unseen.push({ b, s: x.s });
     const played = rows.filter(x => x.gs.length).sort((a, c) => c.gs.length - a.gs.length);
     return { b, played, all: played.flatMap(x => x.gs) };
   }).filter(g => g.played.length).sort((a, c) => (a.b.side === c.b.side ? c.all.length - a.all.length : a.b.side === 'w' ? -1 : 1));
   const row = (b: Bloc, s: System, gs: Game[]) => { const p = scoreOf(gs), v = verdict(p, gs.length);
-    return `<a class="orow" href="${openingUrl(s.id)}">${courseBoard(unitFor(b, s))}<span class="ot"><b>${esc(shortName(s.titre))}</b>${bar(p, v)}<small>${plural(gs.length, 'partie')}</small></span>${pct(p, v)}</a>`; };
+    return `<a class="orow" href="${openingUrl(s.id)}">${courseBoard(unitFor(b, s))}<span class="ot"><b>${esc(famName(s))}</b>${bar(p, v)}<small>${plural(gs.length, 'partie')}</small></span>${pct(p, v)}</a>`; };
   root.innerHTML = `<div class="ol">${groups.map(g => { const p = scoreOf(g.all), v = verdict(p, g.all.length);
       return `<section><h2 class="oh">${esc(groupName(g.b))}<span class="opct ${v}">${p} %</span></h2>${g.played.map(x => row(g.b, x.s, x.gs)).join('')}</section>`; }).join('')}
-    ${unseen.length ? `<details class="ounseen"><summary>Pas encore jouées <span>${unseen.length}</span></summary>${unseen.map(x => `<a class="orow" href="${openingUrl(x.s.id)}">${courseBoard(unitFor(x.b, x.s))}<span class="ot"><b>${esc(shortName(x.s.titre))}</b><small>${x.b.side === 'w' ? 'Blancs' : 'Noirs'} · ${esc(x.b.titre.toLowerCase())}</small></span>${icon('chev', 'chev')}</a>`).join('')}</details>` : ''}
+    ${unseen.length ? `<details class="ounseen"><summary>Pas encore jouées <span>${unseen.length}</span></summary>${unseen.map(x => `<a class="orow" href="${openingUrl(x.s.id)}">${courseBoard(unitFor(x.b, x.s))}<span class="ot"><b>${esc(famName(x.s))}</b><small>${x.b.side === 'w' ? 'Blancs' : 'Noirs'} · ${esc(x.b.titre.toLowerCase())}</small></span>${icon('chev', 'chev')}</a>`).join('')}</details>` : ''}
     <p class="onote">Vert ou rouge : nettement au-dessus ou en dessous de 50 %. Gris : moins de ${MIN_N} parties, trop peu pour juger.</p></div>`;
 }
 
@@ -79,19 +89,21 @@ function endBoard(id: string): string {
 }
 
 export function viewOpeningPage(root: HTMLElement, sysId: string): (() => void) | void {
-  const found = REP.blocs.flatMap(b => b.systemes.map(s => ({ b, s }))).find(x => x.s.id === sysId);
-  if (!found) { location.replace('#/rep'); return; }
-  const { b, s } = found, games = gamesBySys().get(s.id) ?? [], n = games.length, p = scoreOf(games), v = verdict(p, n);
-  const here = openingUrl(s.id), u = unitFor(b, s), lines = u.sys.branches.filter(x => !x.plus), known = lines.filter(x => passed(store.state.br[x.id])).length;
-  const ids = new Set(games.map(g => g.id)), faults = store.faults.filter(f => ids.has(f.game)).length, nPlans = plansFor(s.id).length;
-  const courseUrl = `#/cours?o=${s.id}`;
-  const tiles = `<h2 class="oh">Pour travailler</h2><div class="otiles">
-      <a href="${courseUrl}" data-course><b>${known}/${lines.length}</b><span>Le cours</span></a>
-      <a href="${nPlans ? courseUrl + '&v=plans' : courseUrl}" data-course><b>${nPlans}</b><span>${nPlans > 1 ? 'Les plans' : 'Plan'}</span></a>
-      <a href="#/wood?o=${s.id}&r=${encodeURIComponent(here)}"><b>${faults}</b><span>Tes fautes</span></a></div>`;
+  const fam = familyOf(sysId);
+  if (!fam) { location.replace('#/rep'); return; }
+  const { b, list } = fam, s = list[0], byS = gamesBySys(), games = list.flatMap(x => byS.get(x.id) ?? []).sort((x, y) => y.t - x.t);
+  const n = games.length, p = scoreOf(games), v = verdict(p, n), here = openingUrl(sysId);
+  const ids = new Set(games.map(g => g.id)), faults = store.faults.filter(f => ids.has(f.game)).length;
+  const nPlans = new Set(list.flatMap(x => plansFor(x.id).map(pl => pl.id))).size;
+  const courseUrl = (x: System) => `#/cours?o=${x.id}`;
+  const cRow = (x: System) => { const u = unitFor(b, x), ls = u.sys.branches.filter(y => !y.plus), k = ls.filter(y => passed(store.state.br[y.id])).length;
+    return `<a class="orow" href="${courseUrl(x)}" data-course="${x.id}">${courseBoard(u)}<span class="ot"><b>${esc(list.length > 1 ? partName(x).charAt(0).toUpperCase() + partName(x).slice(1) : 'Le cours')}</b>${bar(ls.length ? Math.round(100 * k / ls.length) : 0, 'few')}<small>${k} variantes sur ${ls.length}</small></span>${icon('chev', 'chev')}</a>`; };
+  const tiles = `<h2 class="oh">${list.length > 1 ? 'Les cours' : 'Le cours'}</h2>${list.map(cRow).join('')}
+    <div class="otiles two"><a href="${courseUrl(s)}&v=plans" data-course="${s.id}"><b>${nPlans}</b><span>${nPlans > 1 ? 'Les plans' : 'Plan'}</span></a>
+      <a href="#/wood?o=${list.map(x => x.id).join(',')}&r=${encodeURIComponent(here)}"><b>${faults}</b><span>Tes fautes ici</span></a></div>`;
   if (!n) {
     root.innerHTML = `<div class="op"><p class="osub">${b.side === 'w' ? 'Avec les Blancs' : 'Avec les Noirs'} · ${esc(b.titre.toLowerCase())}</p><p class="oempty">Pas encore de partie dans cette ouverture : le cours t'y prépare.</p>${tiles}</div>`;
-    bindCourse(root, s.id); return;
+    bindCourse(root); return;
   }
   // où se jouent tes défaites (le coup qui a fait le plus chuter tes chances)
   const lost = games.filter(g => g.res === 'L'), ph: Record<Phase, Game[]> = { ouv: [], mil: [], fin: [] };
@@ -120,7 +132,7 @@ export function viewOpeningPage(root: HTMLElement, sysId: string): (() => void) 
     <div class="olegend"><span><i class="W"></i>gagnée</span><span><i class="L"></i>perdue</span><span><i class="D"></i>nulle</span></div>
     <div id="glist">${games.slice(0, 4).map(grow).join('')}</div>
     ${tiles}</div>`;
-  bindCourse(root, s.id);
+  bindCourse(root);
   $('#vmore', root)?.addEventListener('click', e => { $('#vlist', root).innerHTML = vars.map(vrow).join(''); (e.currentTarget as HTMLElement).remove(); });
   const P = root.querySelector<HTMLElement>('#ophases'), D = $('#odots', root), L = $('#glist', root);
   P?.addEventListener('click', e => { const bt = (e.target as HTMLElement).closest<HTMLElement>('[data-ph]'); if (!bt) return;
@@ -131,4 +143,4 @@ export function viewOpeningPage(root: HTMLElement, sysId: string): (() => void) 
     L.innerHTML = ph[k].slice(0, 6).map(grow).join(''); });
 }
 /** Le cours s'ouvre comme « cours en cours » : c'est lui que montre la page du cours. */
-function bindCourse(root: HTMLElement, sysId: string) { root.querySelectorAll('[data-course]').forEach(a => a.addEventListener('click', () => setCurrentCourse(sysId))); }
+function bindCourse(root: HTMLElement) { root.querySelectorAll<HTMLElement>('[data-course]').forEach(a => a.addEventListener('click', () => setCurrentCourse(a.dataset.course!))); }

@@ -40,7 +40,7 @@ const sysName = (id: string) => shortName(Object.values(BR).find(r => r.sys.id =
 /** Un sous-ensemble du stock, choisi depuis une autre page : une ouverture (`o`), un type de faute (`t`) ou une structure de pions (`s`). */
 function filtered(q: URLSearchParams): { label: string; faults: Fault[] } | null {
   const all = store.faults;
-  if (q.get('o')) { const o = q.get('o')!, of = sysOfFault(); return { label: `Fautes : ${sysName(o)}`, faults: all.filter(f => of(f) === o) }; }
+  if (q.get('o')) { const os = q.get('o')!.split(','), of = sysOfFault(); return { label: `Fautes : ${sysName(os[0]).split(' : ')[0]}`, faults: all.filter(f => os.includes(of(f) ?? '')) }; }
   if (q.get('g') === 'prise') return { label: 'Pièces en prise', faults: hangFaults(all) };
   if (q.get('t')) { const t = q.get('t')!; return { label: themeLabel(t), faults: all.filter(f => f.theme === t) }; }
   if (q.get('s')) { const s = q.get('s')!, S = STRUCT[s], ids = new Set((structureStats(store.games.filter(g => g.st && g.wp)) [s]?.games ?? []).map(g => g.id));

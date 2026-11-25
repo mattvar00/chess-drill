@@ -100,7 +100,7 @@ function route() {
     if (bloc && sys) { setCurrentCourse(sys.id); const v = q.get('v'); location.replace(`#/cours?o=${sys.id}${v ? '&v=' + v : ''}`); return; }
     else if ((p[0] === 'rep' && (p[1] === 'sorties' || p[1] === 'choisir')) || p[0] === 'entrainer') { location.replace('#/rep'); return; }
     else if (p[0] === 'o' && p[1]) { const so = REP.blocs.flatMap(b => b.systemes).find(x => x.id === p[1]);
-      shell(so ? shortName(so.titre) : 'Ouverture', '', '#/rep', TRAIN); cleanup = viewOpeningPage(view, p[1]) || null; }
+      shell(so ? shortName(so.titre.split(' : ')[0]) : 'Ouverture', '', '#/rep', TRAIN); cleanup = viewOpeningPage(view, p[1]) || null; }
     else if (p[0] === 'cours') { const o = q.get('o'); if (o) setCurrentCourse(o); const cur = courseNow();
       shell(cur ? shortName(cur.titre) : 'Le cours', 'Le cours', cur ? `#/o/${cur.id}` : '#/rep', TRAIN); viewPath(view); }
     else if (p[0] === 'rep' && p[1] === 'chercher') { shell('Chercher en jouant les coups', 'Tes lignes qui passent par la position', '#/rep', TRAIN, '', 'board'); cleanup = mountFreeExplorer(view, '#/rep', true); }

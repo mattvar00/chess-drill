@@ -1228,7 +1228,7 @@ h1,h2,.pbn,.ftext h2,.cpick b{letter-spacing:-.015em}
 .ores{flex:none;width:9px;height:9px;border-radius:3px}
 .otiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:6px var(--pad) 0}
 .otiles a{min-height:84px;padding:14px;border:1px solid var(--line);border-radius:16px;display:flex;flex-direction:column;justify-content:space-between;color:var(--c-ink);text-decoration:none;transition:background .2s}
-.otiles a:active{background:var(--surface)}.otiles b{font-size:22px;font-weight:650;letter-spacing:-.02em}.otiles span{font-size:13px;color:var(--c-mute)}
+.otiles.two{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}.otiles a:active{background:var(--surface)}.otiles b{font-size:22px;font-weight:650;letter-spacing:-.02em}.otiles span{font-size:13px;color:var(--c-mute)}
 /* les pages glissent : vers la gauche quand on avance, vers la droite quand on revient */
 main.go-in{animation:goin .34s cubic-bezier(.22,.9,.24,1)}main.go-out{animation:goout .34s cubic-bezier(.22,.9,.24,1)}
 @keyframes goin{from{opacity:0;transform:translateX(28px)}}@keyframes goout{from{opacity:0;transform:translateX(-28px)}}
