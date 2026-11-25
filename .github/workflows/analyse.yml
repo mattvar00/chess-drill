@@ -16,6 +16,7 @@ on:
       analyse_days: { description: "Fenêtre de l'analyse au moteur en jours (vide = comme l'import)", required: false, default: '' }
       max: { description: 'Nombre maximal de parties analysées au moteur', required: false, default: '200' }
       redo: { description: 'Réanalyser aussi les parties déjà analysées', type: boolean, required: false, default: false }
+permissions: { contents: write }
 concurrency: { group: analyse, cancel-in-progress: false }
 jobs:
   analyse:
@@ -44,3 +45,11 @@ jobs:
             ARGS="--days ${{ inputs.days || '3' }} --analyse-days ${{ inputs.analyse_days || inputs.days || '3' }} --max ${{ inputs.max || '200' }} --depth 16 ${{ inputs.redo && '--redo' || '' }}"
           fi
           npx tsx scripts/analyse.ts $ARGS 2>&1 | tee "$RUNNER_TEMP/analyse.log" || { echo "::error title=Analyse::$(grep -v '^✓' "$RUNNER_TEMP/analyse.log" | tail -c 1500 | tr '\n' ' ')"; exit 1; }
+      # le journal d'une analyse ratée est publié sur la branche « journal » (sans secret : le jeton n'y est jamais écrit)
+      - name: Publier le journal en cas d'échec
+        if: failure()
+        working-directory: ${{ runner.temp }}
+        run: |
+          mkdir journal && cp analyse.log journal/ 2>/dev/null || echo "pas de journal" > journal/analyse.log
+          cd journal && git init -q -b journal && git config user.name "chess-drill" && git config user.email "analyse@users.noreply.github.com"
+          git add -A && git commit -q -m "Journal du $(date -u +%Y-%m-%d\ %H:%M) UTC" && git push -q -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}" journal
