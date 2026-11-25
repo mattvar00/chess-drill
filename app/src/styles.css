@@ -1242,3 +1242,10 @@ main.go-in{animation:goin .34s cubic-bezier(.22,.9,.24,1)}main.go-out{animation:
 .irow span{display:flex;flex-direction:column;gap:3px}.irow b{font-size:16px;font-weight:600;line-height:1.3}.irow small{color:var(--c-mute);font-size:13px}
 .irow em{font-style:normal;font-weight:600;font-size:14px;color:var(--accent-text);margin-top:4px}
 .idot{flex:none;width:10px;height:10px;border-radius:3px;margin-top:6px}.idot.bad{background:var(--bad)}.idot.warn{background:var(--mist)}.idot.good{background:var(--ok)}
+
+/* ---------- Pour toi : le plan de la semaine ---------- */
+.wsteps{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.wsteps span{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--c-mute)}
+.wsteps i{flex:none;width:16px;height:16px;border-radius:50%;border:2px solid var(--line);box-sizing:border-box}
+.wsteps .now{color:var(--c-ink);font-weight:600}.wsteps .now i{border-color:var(--accent)}
+.wsteps .ok{text-decoration:line-through}.wsteps .ok i{background:var(--ok);border-color:var(--ok)}

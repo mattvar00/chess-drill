@@ -15,6 +15,7 @@ import { confetti } from '../ui/fx';
 import { SFX } from '../ui/sound';
 import { store } from './store';
 import { thrown } from './insights';
+import { countConvert } from './week';
 
 const MOVES = 10, DEPTH = 12, TIME = 900, SERIES = 5;
 const pov = (r: EngineResult, side: Color) => { const s = r.mate != null ? (r.mate > 0 ? 2000 - r.mate : -2000 - r.mate) : r.cp ?? 0; return side === 'w' ? s : -s; };
@@ -91,7 +92,7 @@ export function mountConvert(root: HTMLElement, k: number, setSub: (t: string) =
     void yourTurn();
   }
   function finish(won: boolean, head: string) {
-    over = true; busy = false; btns(won); paint();
+    over = true; busy = false; btns(won); paint(); countConvert();
     if (won && !errs && !miss) { SFX.done(); confetti(20); }
     say(won ? 'happy' : 'talk', `${head} ${won ? 'Avantage gardé !' : 'Fini.'}`, won ? (errs || miss ? `Avec ${errs ? `${errs} coup${errs > 1 ? 's' : ''} repris` : ''}${errs && miss ? ' et ' : ''}${miss ? `${miss} indice${miss > 1 ? 's' : ''}` : ''}. Rejoue-la sans aide.` : 'Sans aide : c\'est ça, conclure.') : 'L\'avantage a fondu : rejoue-la.');
   }

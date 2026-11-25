@@ -15,7 +15,7 @@ const pts = (gs: Game[]) => gs.reduce((a, g) => a + (g.res === 'W' ? 1 : g.res =
 const score = (gs: Game[]) => Math.round(100 * pts(gs) / gs.length);
 /** L'écart à 50 % dépasse la marge du hasard (intervalle à 90 %). */
 const clear = (p: number, n: number) => Math.abs(p - 50) > 164.5 * Math.sqrt(.25 / n);
-const fam = famTitle;
+const fam = (t: string) => famTitle(t);   // pas d'alias direct : import circulaire
 /** Parties où tes chances ont atteint 75 % sans que tu gagnes : les positions gagnantes laissées filer. */
 export const thrown = (list: Game[]) => list.filter(g => g.res !== 'W' && (myWp(g) ?? []).some(w => w >= 75));
 const HANG = new Set(['Pièce en prise oubliée', 'Pièce déposée en prise', 'Pièce mise en prise']);

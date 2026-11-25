@@ -18,6 +18,8 @@ import { duePositions, hangFaults, priorityFaults } from '../core/wood';
 import { gameRow, gameUrl } from './games';
 import { PLAN_LINES } from './trainer';
 import { startCycle } from './wood';
+import { currentWeek, stepDone } from './week';
+import { convertList } from './convert';
 import { woodHistory } from './store';
 import { coldStart, keyMoment, lastSession, myWp } from '../core/stats';
 import { courseHead, gamesOfSystem, mountTree, plansPanel, type CourseTab } from './course';
@@ -101,12 +103,18 @@ export function viewHome(root: HTMLElement) {
     cards.splice(Math.min(1, cards.length), 0, { kick: 'Ta finale', title: material(c.fen(), eg.color), why: `${eg.res === 'L' ? 'Perdue' : 'Nulle'} contre ${esc(eg.opp)}. La table dit où ça s'est joué.`, board: miniBoard(c, eg.color), cta: 'Voir ma finale', go: () => { location.hash = `#/finale/${encodeURIComponent(eg.id)}`; } }); }
   // des finales à revoir (tes fautes d'abord, puis les leçons dont le délai est passé)
   else { const due = endDue(); if (due) cards.splice(Math.min(1, cards.length), 0, { kick: 'Finales', title: due.title, why: `${plural(due.n, 'position')} à revoir.`, board: miniBoard(new Chess(due.fen), due.side), cta: 'Revoir', go: () => { location.hash = due.href; } }); }
-  // avant de jouer : 5 positions où tu as laissé une pièce en prise, ta faute la plus coûteuse (une fois par jour)
-  const hang = hangFaults(store.faults), warmed = woodHistory().some(c => c.label === WARM && dayKey(c.date) === dayKey(Date.now()));
-  if (hang.length >= 5 && !warmed) { const five = priorityFaults(hang, store.state.fault, 5);
-    cards.splice(Math.min(1, cards.length), 0, { kick: 'Avant de jouer', title: 'Pièces en prise', why: 'Ta faute la plus fréquente. 5 positions de tes parties, avant chaque session.', board: miniBoard(new Chess(five[0].fen), five[0].side), cta: 'Commencer · 2 min', go: () => startCycle(WARM, five, '#/') }); }
+  // le plan de la semaine : l'étape du jour d'abord, les trois étapes en dessous
+  { const w = currentWeek(), st = w.steps.map(x => ({ x, ok: stepDone(w, x) })), nx = st.find(y => !y.ok), nDone = st.filter(y => y.ok).length;
+    if (st.length) {
+      const list = `<span class="wsteps">${st.map(({ x, ok }) => `<span class="${ok ? 'ok' : x === nx?.x ? 'now' : ''}"><i></i>${esc(x.title)}</span>`).join('')}</span>`;
+      // la miniature de l'étape : l'ouverture, la position à conclure, ou une de ces fautes
+      const sysId = nx?.x.id === 'open' ? nx.x.href.slice(4) : null, fb = sysId ? REP.blocs.find(b => b.systemes.some(x => x.id === sysId)) : null;
+      const cv = nx?.x.id === 'conv' ? convertList()[0] : null, ft = store.faults.find(f => nx?.x.label === 'Pièces en prise' ? /en prise/.test(f.theme) : true);
+      const brd = fb && sysId ? courseBoard(unitFor(fb, fb.systemes.find(x => x.id === sysId)!)).replace('mini cthumb', 'mini') : cv ? miniBoard(new Chess(cv.fen), cv.g.color) : ft ? miniBoard(new Chess(ft.fen), ft.side) : '';
+      cards.unshift({ kick: `Ta semaine · ${nDone} sur ${st.length}`, title: nx ? nx.x.title : 'Semaine terminée', why: `${nx ? esc(nx.x.sub) : 'Les trois étapes sont faites. Le nouveau plan arrive lundi.'}${list}`,
+        board: brd, cta: nx ? 'Commencer' : 'Voir mes progrès', go: () => { location.hash = nx ? nx.x.href : '#/progres'; } }); } }
   for (const s of todo) cards.push({ kick: 'Ta séance', title: s.title, why: s.sub, board: s.thumb, cta: `Commencer · ${s.min} min`, go: s.go });
-  for (const a of up ? otherUps(up.u.sys.id) : []) cards.push({ kick: shortName(a.u.sys.titre), fam: familyColor(a.u.bloc.id), title: shortName(a.u.sys.titre), why: a.why, board: courseBoard(a.u), cta: 'Ouvrir le cours', go: () => openCourse(a.u) });
+  // les autres cours ne sont plus poussés ici : ils sont dans l'onglet Ouvertures, rangés par ouverture
   const head = `<header class="hello fhead"><h1>Pour toi</h1>
       <div class="hello-r">${n ? `<span class="pill${trainedToday(days) ? '' : ' off'}" title="${trainedToday(days) ? 'Série d\'entraînement en cours' : 'Entraîne-toi aujourd\'hui pour garder ta série'}">${n > 1 ? `${n} jours` : '1 jour'}</span>` : ''}<a class="iconbtn" href="#/reglages" aria-label="Réglages">${icon('sliders')}</a></div></header>`;
   if (!cards.length) {
