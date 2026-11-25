@@ -11,7 +11,7 @@ import { $, esc, icon, plural } from '../ui/dom';
 import { BR, store } from './store';
 import { pullChessCom, fullGame } from './api';
 import { lineUrl } from './session';
-import { refBranch } from '../core/drill';
+import { devOk, refBranch } from '../core/drill';
 import { themeLabel } from '../core/wood';
 import { punishRate } from './exits';
 import { lineTitle } from '../core/names';
@@ -71,8 +71,8 @@ function axisFacts(pr: Profile): Record<AxisKey, string> {
   const o = pr.opening, t = pr.tactics, c = pr.clock, ti = pr.tilt, fr = (n: number) => String(n).replace('.', ',');
   return {
     ouverture: o.coverage == null ? '' : `${o.coverage} % de tes parties restent dans ton répertoire`,
-    milieu: pr.phases?.m != null ? `${pr.phases.m} % de précision du 11e au 30e coup` : '',
-    finale: pr.phases?.f != null ? `${pr.phases.f} % de précision après le 30e coup, sur ${plural(pr.phases.nF, 'partie')}` : '',
+    milieu: pr.phases?.m != null ? `${pr.phases.m} % de précision en milieu de partie` : '',
+    finale: pr.phases?.f != null ? `${pr.phases.f} % de précision en finale, sur ${plural(pr.phases.nF, 'partie')}` : '',
     tactique: t ? `${t.acc} % de précision, ${fr(t.blunders)} gaffe${t.blunders >= 2 ? 's' : ''} par partie` : '',
     conversion: pr.conversion?.rate != null ? `${pr.conversion.rate} % de positions gagnantes converties` : '',
     resilience: pr.resilience?.rate != null ? `${pr.resilience.rate} % de positions perdantes sauvées` : '',
@@ -186,7 +186,7 @@ export function viewProfile(root: HTMLElement) {
       </svg></section>
     <section class="grp"><h2>Axe par axe</h2><div class="surf card list axes">
       ${axis('Ouverture', String(card.scores.ouverture ?? '–'), facts.ouverture, card.scores.ouverture, `${plural(o.devs, 'sortie')}, ${plural(o.gaps, 'trou')}${o.wp10 != null ? `. Au coup 10, tu as en moyenne ${o.wp10} % de chances.` : '.'}`)}
-      ${card.scores.milieu != null ? axis('Milieu de jeu', String(card.scores.milieu), facts.milieu, card.scores.milieu, `Sur ${plural(pr.phases!.nM, 'partie')} qui dépassent le 10e coup.${phF.m ? ` ${plural(phF.m, 'faute relevée', 'fautes relevées')} dans cette phase${phF.top ? `, surtout : ${esc(phF.top.toLowerCase())}` : ''}. <a href="#/wood">Les rejouer</a>` : ''}`) : ''}
+      ${card.scores.milieu != null ? axis('Milieu de jeu', String(card.scores.milieu), facts.milieu, card.scores.milieu, `Sur ${plural(pr.phases!.nM, 'partie')} arrivées au milieu de partie.${phF.m ? ` ${plural(phF.m, 'faute relevée', 'fautes relevées')} dans cette phase${phF.top ? `, surtout : ${esc(phF.top.toLowerCase())}` : ''}. <a href="#/wood">Les rejouer</a>` : ''}`) : ''}
       ${card.scores.finale != null ? axis('Finale', String(card.scores.finale), facts.finale, card.scores.finale, `${egRec ? `D'après la table de finales : ${esc(egRec)}. ` : ''}<a href="#/finales">Voir tes finales</a>`) : ''}
       ${t && card.scores.tactique != null ? axis('Tactique', String(card.scores.tactique), facts.tactique, card.scores.tactique, `${String(t.mistakes).replace('.', ',')} erreur${t.mistakes >= 2 ? 's' : ''} par partie.${t.themes.length ? ` Fautes les plus fréquentes : ${t.themes.map(([k, v]) => `${k.toLowerCase()} (${v})`).join(', ')}.` : ''}`) : ''}
       ${card.scores.conversion != null ? axis('Conversion', String(card.scores.conversion), facts.conversion, card.scores.conversion, `Sur ${plural(pr.conversion!.n, 'partie')} où tu as eu au moins 80 % de chances à un moment.`) : ''}
@@ -217,7 +217,7 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
     if (!g.ev?.length) { root.innerHTML = `<section class="empty"><p>${g.st ? "L'analyse de cette partie n'a pas pu être chargée. Vérifie ta connexion." : "Cette partie n'est pas encore analysée : elle le sera cette nuit."}</p><a class="btn" href="${back}">Retour</a></section>`; return; }
     const ev = g.ev, A = reviewGame({ ...g, ev }), me = g.color, n = A.R.length;
     let i = start ?? (A.key.length ? A.key[0].i + 1 : 0); i = Math.max(0, Math.min(n, i));
-    const ref = g.a?.status === 'dev' && !store.state.fixed[g.id] ? refBranch(g, BR) : null, st = gameStructure(g.sans);
+    const ref = g.a?.status === 'dev' && !devOk(g) && !store.state.fixed[g.id] ? refBranch(g, BR) : null, st = gameStructure(g.sans);
     const mineWp = A.wpW.map(w => (me === 'w' ? w : 100 - w));
     const marks = A.R.filter(r => ['mistake', 'blunder', 'miss', 'brilliant'].includes(r.k)).map(r => ({ i: r.i + 1, cls: r.k, label: `${num(r.i)}${r.m.san} : ${CLASS[r.k][0].toLowerCase()}${r.me === me ? '' : " de l'adversaire"}` }));
     const counts = (['brilliant', 'great', 'best', 'excellent', 'good', 'book', 'inacc', 'mistake', 'miss', 'blunder'] as ReviewClass[]).filter(k => A.counts[k]);

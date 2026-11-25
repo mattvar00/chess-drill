@@ -56,3 +56,20 @@ describe('théorie', () => {
     expect(theoryStart({}, 'w')).toBe(0);
   });
 });
+
+import { devOk, isDeviation, refBranch as refB } from '../src/core/drill';
+describe('sorties du cours', () => {
+  const g = (status: string, ply: number, cls?: string[]) => ({ a: { status, ply, depth: ply, branches: ['x'] }, cls } as never);
+  const BRS = { x: { sys: { statut: 'joué' } } } as never;
+  it('un coup aussi bon que le cours n\'est pas une sortie à corriger', () => {
+    expect(devOk(g('dev', 3, ['best', 'best', 'best', 'good']))).toBe(true);
+    expect(isDeviation(g('dev', 3, ['best', 'best', 'best', 'good']))).toBe(false);
+    expect(isDeviation(g('dev', 3, ['best', 'best', 'best', 'mistake']))).toBe(true);
+    expect(isDeviation(g('dev', 3))).toBe(true);   // pas encore analysée : on le signale
+  });
+  it('une partie qui quitte le répertoire dès le premier coup n\'appartient à aucun cours', () => {
+    expect(refB(g('gap', 0), BRS)).toBeNull();
+    expect(refB(g('gap', 1), BRS)).toBeNull();
+    expect(refB(g('gap', 2), BRS)).toBe('x');
+  });
+});

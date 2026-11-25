@@ -3,6 +3,7 @@
  * les analyse avec Stockfish natif (plusieurs moteurs en parallèle) et envoie le résultat à l'API.
  *
  *   npx tsx scripts/analyse.ts --user matt_chess00 --days 3 --depth 16
+ *   npx tsx scripts/analyse.ts --user matt_chess00 --days 60 --redo        (réanalyse tout, après un changement de l'analyse)
  *   npx tsx scripts/analyse.ts --input parties.json --user matt_chess00 --out resultat.json   (hors ligne)
  *
  * Variables d'environnement : STOCKFISH (chemin du binaire), API_URL + API_TOKEN (envoi des résultats).
@@ -11,7 +12,8 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { cpus } from 'node:os';
 import { parseArgs } from 'node:util';
 import { Chess } from '../src/core/chess';
-import { replay, rateGame, type RawEval, type Rated } from '../src/core/analysis';
+import { FAULT_LOSS, replay, rateGame, type RawEval, type Rated } from '../src/core/analysis';
+import { winPct } from '../src/core/winpct';
 import { toGame, monthsSince, type ChessComGame } from '../src/core/ingest';
 import { buildBook, indexBranches } from '../src/core/book';
 import type { Game, Repertoire } from '../src/core/types';
@@ -21,7 +23,7 @@ import { UciEngine } from './uci';
 const { values: a } = parseArgs({ options: {
   user: { type: 'string', multiple: true }, days: { type: 'string', default: '3' }, depth: { type: 'string', default: '16' },
   max: { type: 'string', default: '200' }, 'analyse-days': { type: 'string' }, engines: { type: 'string' }, input: { type: 'string' }, out: { type: 'string' },
-  skip: { type: 'string', multiple: true, default: [] },
+  skip: { type: 'string', multiple: true, default: [] }, redo: { type: 'boolean', default: false },
 } });
 const users = a.user ?? (process.env.USERS || '').split(',').filter(Boolean);
 if (!users.length) throw new Error('--user requis');
@@ -62,10 +64,23 @@ function terminal(fen: string): RawEval | null {
   return c.isCheckmate() ? { cp: null, mate: c.turn() === 'w' ? -1 : 1, best: null, pv: [], end: true } : { cp: 0, mate: null, best: null, pv: [], end: true };
 }
 
+/**
+ * Analyse d'une partie, puis vérification de chaque faute : le coup joué et le meilleur coup sont recherchés ensemble depuis la même position.
+ * Deux recherches séparées (avant et après le coup) bougent d'une profondeur à l'autre ; une faute qui ne coûte plus 15 points de chances ainsi n'en est pas une.
+ */
 async function analyse(g: Game, E: UciEngine): Promise<Rated> {
   const { fens } = replay(g.sans); const ev: RawEval[] = [];
   for (const fen of fens) ev.push(terminal(fen) ?? await E.eval(fen, DEPTH, 2));
-  return rateGame(g, ev, DEPTH);
+  const r = rateGame(g, ev, DEPTH), kept = [];
+  for (const f of r.faults) {
+    try {
+      const s = await E.compare(f.fen, DEPTH, [f.best.uci, f.played.uci]), b = s[f.best.uci], p = s[f.played.uci];
+      if (!b || !p) { kept.push(f); continue; }
+      const me = (x: { cp: number | null; mate: number | null }) => { const w = winPct(x.cp, x.mate); return f.side === 'w' ? w : 100 - w; };
+      if (me(b) - me(p) >= FAULT_LOSS) kept.push(f);
+    } catch { kept.push(f); }
+  }
+  return { ...r, faults: kept };
 }
 
 async function main() {
@@ -73,7 +88,7 @@ async function main() {
   const input: ChessComGame[] | null = a.input ? JSON.parse(await readFile(a.input, 'utf8')) : null;
   const todo: { user: string; game: Game }[] = [];
   for (const user of users) {
-    const raw = input ?? await recentGames(user); const skip = new Set([...await ids('analysed', user), ...a.skip!]), have = await ids('known', user);
+    const raw = input ?? await recentGames(user); const skip = new Set([...(a.redo ? [] : await ids('analysed', user)), ...a.skip!]), have = await ids('known', user);
     const games = raw.map(r => toGame(r, user, book, branches)).filter((g): g is Game => !!g && g.sans.length > 0);
     // 1. Import léger : toutes les parties de la fenêtre, sans moteur (quelques secondes). Elles servent tout de suite aux statistiques.
     const light = games.filter(g => !have.has(g.id));

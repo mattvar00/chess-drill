@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ['app/scripts/export.mjs', '.github/workflows/export.yml']
+    paths: ['app/scripts/export.ts', '.github/workflows/export.yml']
 permissions: { contents: write }
 concurrency: { group: export, cancel-in-progress: true }
 jobs:
@@ -16,12 +16,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
-        with: { node-version: 22 }
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci
+        working-directory: app
       - name: Export
+        working-directory: app
         env:
           API_URL: ${{ vars.API_URL || 'https://chess-drill.mattvar36.workers.dev' }}
           USERS: ${{ vars.USERS || 'matt_chess00' }}
-        run: node app/scripts/export.mjs "$RUNNER_TEMP/donnees"
+        run: npx tsx scripts/export.ts "$RUNNER_TEMP/donnees"
       - name: Publier sur la branche donnees
         working-directory: ${{ runner.temp }}/donnees
         run: |

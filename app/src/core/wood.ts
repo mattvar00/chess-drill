@@ -29,6 +29,12 @@ const HINTS: Record<string, string> = {
   'Pièce mise en prise': 'Que défend la pièce que tu veux bouger ? Regarde ce qui reste en l\'air.',
   'Échec adverse ignoré': 'Quels échecs l\'adversaire aura-t-il après ton coup ?',
   'Coup calme': 'Pas de tactique immédiate : cherche le coup le plus utile et vérifie la réponse adverse.',
+  'Pion perdu': 'Un pion va tomber. Compte qui l\'attaque et qui le défend.',
+  'Menace ignorée': 'Que menace son dernier coup ? Réponds à la menace avant de jouer ton idée.',
+  'Mat adverse ignoré': 'Ton roi est en danger : regarde ses échecs avant tout.',
+  'Mat raté': 'Il y a un mat : essaie chaque échec jusqu\'au bout.',
+  'Tactique ratée': 'Un coup gagne du matériel : cherche les fourchettes, les clouages et les attaques doubles.',
+  'Mauvaise reprise': 'Il vient de prendre : choisis bien la pièce qui reprend.',
 };
 /** Noms de thèmes dits plus simplement, partout où ils s'affichent. */
 const THEME_LABEL: Record<string, string> = { 'Coup calme': 'Bon coup tranquille manqué' };

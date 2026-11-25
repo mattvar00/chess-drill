@@ -31,12 +31,21 @@ export function todayPool(rep: Repertoire, st: States, now = Date.now(), maxNew 
   return { due, fresh: fresh.slice(0, maxNew) };
 }
 
-/** Ligne de référence d'une déviation : de préférence une ligne d'un système réellement joué. */
+/**
+ * Ligne de référence d'une partie : de préférence une ligne d'un système réellement joué.
+ * Une partie qui quitte le répertoire dès les deux premiers demi-coups (1.e3, 1.d3, 1…b6) n'est rattachée à aucun cours.
+ */
 export function refBranch(g: Game, branches: Record<string, BranchRef>): string | null {
+  if ((g.a.status === 'dev' || g.a.status === 'gap') && g.a.ply != null && g.a.ply < 2) return null;
   const ids = (g.a.branches || []).filter(id => branches[id]);
   return ids.find(id => branches[id].sys.statut === 'joué') ?? ids[0] ?? null;
 }
-const isDeviation = (g: Game) => g.a.status === 'dev' && !g.a.soft;
+/** Classes de coup aussi bons que le cours (à moins de 5 points de chances du meilleur coup, environ 0,3 pion en position égale). */
+const AS_GOOD = new Set(['best', 'good']);
+/** Tu as quitté le cours, mais avec un coup que le moteur juge aussi bon : ce n'est pas une faute à corriger. */
+export const devOk = (g: Game) => g.a.status === 'dev' && g.a.ply != null && AS_GOOD.has(g.cls?.[g.a.ply] ?? '');
+/** Une vraie sortie du cours, à corriger : un coup du cours joué autrement, et moins bien. */
+export const isDeviation = (g: Game) => g.a.status === 'dev' && !g.a.soft && !devOk(g);
 
 /** Parties récentes où tu es sorti de ton répertoire, de la plus récente à la plus ancienne. */
 export function recentDeviations(games: Game[], fixed: Record<string, boolean>, branches: Record<string, BranchRef>, now = Date.now(), days = 30, max = 6): Game[] {

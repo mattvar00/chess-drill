@@ -7,6 +7,7 @@
  */
 import { Chess, tryMove } from './chess';
 import type { Game } from './types';
+import { devOk, isDeviation } from './drill';
 
 /** Gain de chances (sur 100) qui fait d'un coup adverse une erreur : environ +0,8 en position égale. */
 export const ERR = 8;
@@ -15,6 +16,8 @@ export const KEEP = 4;
 const WEEK = 7 * 864e5;
 /** Classes de coup qui gardent l'avantage. */
 const GOOD = new Set(['brilliant', 'great', 'best', 'excellent', 'good', 'forced']);
+/** Classes données par l'analyse au moteur (les autres valeurs, comme « book », ne disent rien de la qualité du coup). */
+const RATED = new Set(['best', 'good', 'inacc', 'mistake', 'blunder']);
 
 export interface ExitCard {
   key: string; kind: 'punir' | 'connaitre'; color: 'w' | 'b';
@@ -31,7 +34,10 @@ function exitOf(g: Game) {
   const t = new Chess(); for (const s of line) if (!tryMove(t, s)) return null;
   let err: boolean | null = null, ok: boolean | null = null, gain = 0;
   if (wp && wp.length > ply + 2) {
-    gain = mine(g, wp[ply + 1]) - mine(g, wp[ply]); err = gain >= ERR;
+    gain = mine(g, wp[ply + 1]) - mine(g, wp[ply]);
+    // une erreur à punir : son coup perd au moins 10 points de chances face au meilleur coup (environ un pion en position égale) ;
+    // la classe du coup, calculée sans arrondi depuis la même analyse, est plus sûre que l'écart entre deux évaluations arrondies
+    const kc = g.cls?.[ply]; err = kc && RATED.has(kc) ? kc === 'mistake' || kc === 'blunder' : gain >= ERR;
     // la classe du coup (calculée contre le meilleur coup) est plus sûre que l'écart de chances, qui bouge d'une profondeur à l'autre
     const k = g.cls?.[ply + 1];
     ok = k ? GOOD.has(k) : mine(g, wp[ply + 1]) - mine(g, wp[ply + 2]) < KEEP;
@@ -43,7 +49,8 @@ export function scanExits(games: Game[], ignored: Record<string, boolean> = {}) 
   const cards: Record<string, ExitCard> = {}; const mineDev: Game[] = [];
   for (const g of games) {
     if (ignored[g.id]) continue;
-    if (g.a.status === 'dev' && !g.a.soft) { mineDev.push(g); continue; }
+    if (isDeviation(g)) { mineDev.push(g); continue; }
+    if (devOk(g) || g.a.status === 'dev') continue;
     const x = exitOf(g); if (!x) continue;
     const key = `${g.color}|${x.fen}|${x.played}`;
     const c = cards[key] ??= { key, kind: 'connaitre', color: g.color, fen: x.fen, fenAfter: x.fenAfter, played: x.played, line: x.line, ply: x.ply,

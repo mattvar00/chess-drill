@@ -52,7 +52,8 @@ const plainBloc = (id: string) => { const { bloc: b, sys } = BR[id]; return `${s
 
 /** Les thèmes de faute, dits simplement. */
 const PLAIN_THEME: Record<string, string> = { 'Coup calme': 'un bon coup tranquille manqué', 'Pièce en prise oubliée': 'une pièce en prise oubliée', 'Pièce déposée en prise': 'une pièce donnée', 'Pièce mise en prise': 'une pièce laissée en prise',
-  'Pièce à prendre': 'une pièce à prendre', 'Capture gagnante ratée': 'une prise gagnante manquée', 'Échec gagnant raté': 'un échec gagnant manqué', 'Échec adverse ignoré': 'un échec adverse oublié' };
+  'Pièce à prendre': 'une pièce à prendre', 'Capture gagnante ratée': 'une prise gagnante manquée', 'Échec gagnant raté': 'un échec gagnant manqué', 'Échec adverse ignoré': 'un échec adverse oublié',
+  'Pion perdu': 'un pion perdu', 'Menace ignorée': 'une menace ignorée', 'Mat adverse ignoré': 'un mat oublié', 'Mat raté': 'un mat manqué', 'Tactique ratée': 'une tactique manquée', 'Mauvaise reprise': 'une mauvaise reprise' };
 /** Les étapes du plan du jour, tirées de tes parties et de ton répertoire : tactique, lignes, un coup à retrouver. */
 function dailyPlan() {
   const done = planDone(), steps: { key: string; thumb: string; title: string; sub: string; min: number; done: boolean; go: () => void }[] = [];

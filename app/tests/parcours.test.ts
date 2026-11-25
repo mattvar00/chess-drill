@@ -101,6 +101,10 @@ describe('sorties d\'ouverture', () => {
     expect(s.punir[0]).toMatchObject({ count: 4, punished: 2, missed: 2, played: 'Bg4' });   // le 4e : la classe « meilleur coup » prime sur l'écart
     expect(s.connaitre).toHaveLength(0);
   });
+  it("une petite imprécision adverse n'est pas une erreur à punir", () => {
+    const g = { ...mk('6', 68), cls: [...Array(7).fill('best'), 'inacc', 'best'] } as Game;
+    expect(scanExits([g]).punir).toHaveLength(0);
+  });
   it('un coup normal hors répertoire est à connaître', () => {
     const g = { ...mk('4', 52), wp: [50, 50, 50, 50, 50, 50, 50, 50, 52, 52] } as Game;
     expect(scanExits([g]).connaitre).toHaveLength(1);

@@ -20,8 +20,14 @@ export class UciEngine {
   }
   private send(s: string) { this.p.stdin.write(s + '\n'); }
 
+  /** Évalue quelques coups depuis la même position, dans une seule recherche (`searchmoves`) : des scores comparables entre eux. */
+  async compare(fen: string, depth: number, moves: string[]): Promise<Record<string, { cp: number | null; mate: number | null }>> {
+    const r = await this.eval(fen, depth, moves.length, 60_000, moves), out: Record<string, { cp: number | null; mate: number | null }> = {};
+    for (const l of r.lines ?? []) out[l.pv[0]] = { cp: l.cp, mate: l.mate };
+    return out;
+  }
   /** Évalue une position ; scores ramenés au point de vue des Blancs. */
-  async eval(fen: string, depth: number, multipv = 2, timeoutMs = 60_000): Promise<RawEval> {
+  async eval(fen: string, depth: number, multipv = 2, timeoutMs = 60_000, searchmoves?: string[]): Promise<RawEval & { lines?: { cp: number | null; mate: number | null; pv: string[] }[] }> {
     await this.ready;
     if (multipv !== this.mpv) { this.send(`setoption name MultiPV value ${multipv}`); this.mpv = multipv; }
     const black = fen.split(' ')[1] === 'b'; const lines: Record<number, { cp: number | null; mate: number | null; pv: string[] }> = {};
@@ -36,10 +42,10 @@ export class UciEngine {
           clearTimeout(t); this.onLine = null; const best = s.split(' ')[1]; const l1 = lines[1], l2 = lines[2];
           if (!l1 && best === '(none)') return rej(new Error('aucun coup légal'));
           res({ cp: l1?.cp ?? 0, mate: l1?.mate ?? null, best: best === '(none)' ? null : best, pv: l1?.pv ?? [],
-            alt: l2 ? { uci: l2.pv[0], cp: l2.cp, mate: l2.mate } : null });
+            alt: l2 ? { uci: l2.pv[0], cp: l2.cp, mate: l2.mate } : null, lines: Object.values(lines) });
         }
       };
-      this.send(`position fen ${fen}`); this.send(`go depth ${depth}`);
+      this.send(`position fen ${fen}`); this.send(`go depth ${depth}${searchmoves?.length ? ' searchmoves ' + searchmoves.join(' ') : ''}`);
     });
   }
   quit() { try { this.send('quit'); } catch { /* déjà fermé */ } this.p.kill(); }

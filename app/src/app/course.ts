@@ -3,7 +3,8 @@
  * En tête, ton bilan dans cette ouverture. Et la page « Tes ouvertures » : le bilan de toutes, les plus faibles d'abord.
  */
 import { Chess, tryMove } from '../core/chess';
-import { refBranch } from '../core/drill';
+import { devOk, refBranch } from '../core/drill';
+import { phaseAt, type Phase } from '../core/phase';
 import { myWp } from '../core/stats';
 import type { Bloc, Branch, Color, Game, System } from '../core/types';
 import { miniBoard } from '../ui/board';
@@ -16,12 +17,14 @@ export type CourseTab = 'chemin' | 'plans' | 'arbre';
 export const gamesOfSystem = (sys: System) => store.games.filter(g => { const id = refBranch(g, BR); return !!id && BR[id].sys.id === sys.id; }).sort((a, b) => b.t - a.t);
 
 /* ---------- le bilan ---------- */
-type Phase = 'ouv' | 'mil' | 'fin';
-/** Où une partie perdue a basculé : le demi-coup où tes chances ont le plus chuté (ouverture jusqu'au 12e coup, finale après le 35e). */
-function lossPhase(g: Game): Phase | null {
+/**
+ * Où une partie perdue a basculé : ton coup qui a fait le plus chuter tes chances, et la phase de la position avant ce coup
+ * (d'après le matériel, calculée à l'analyse ; à défaut, d'après le numéro du coup).
+ */
+export function lossPhase(g: Game): Phase | null {
   const c = myWp(g); if (!c || c.length < 4) return null;
-  let worst = 0, at = 0; for (let i = 1; i < c.length; i++) { const d = c[i - 1] - c[i]; if (d > worst) { worst = d; at = i; } }
-  return at <= 24 ? 'ouv' : at <= 70 ? 'mil' : 'fin';
+  let worst = 0, at = -1; for (let i = g.color === 'w' ? 0 : 1; i + 1 < c.length; i += 2) { const d = c[i] - c[i + 1]; if (d > worst) { worst = d; at = i; } }
+  return at < 0 ? null : phaseAt(at, g.st?.ph);
 }
 const PH: Record<Phase, string> = { ouv: "dès l'ouverture", mil: 'en milieu de partie', fin: 'en finale' };
 const WHY: Record<Phase, string> = { ouv: 'c\'est la théorie qui te manque.', mil: 'ce sont les plans qui te manquent.', fin: 'c\'est la finale qui te coûte.' };
@@ -34,7 +37,7 @@ export function bilanOf(sys: System, games = gamesOfSystem(sys)): Bilan {
   // la sortie du cours la plus fréquente
   const ex = new Map<string, number>();
   // « dev » : c'est toi qui as quitté le cours ; « gap » : c'est lui (le cours ne prévoyait pas son coup). `ply` compte depuis 0.
-  for (const g of games) { const a = g.a; if ((a.status !== 'dev' && a.status !== 'gap') || a.ply == null || !a.played) continue;
+  for (const g of games) { const a = g.a; if ((a.status !== 'dev' && a.status !== 'gap') || a.ply == null || !a.played || devOk(g)) continue;
     const k = `${a.ply}|${a.played}|${a.status}|${a.expected?.[0]?.san ?? ''}`; ex.set(k, (ex.get(k) ?? 0) + 1); }
   const e = [...ex].sort((a, b) => b[1] - a[1])[0];
   const exit = e && e[1] >= 2 ? (() => { const [pl, mv, st, exp] = e[0].split('|'), ply = +pl, k2 = Math.floor(ply / 2) + 1, n2 = k2 === 1 ? '1er' : `${k2}e`, d = ply % 2 ? '…' : '';

@@ -5,6 +5,8 @@
 import { plyTimes } from './clock';
 import { gameStructure } from './structures';
 import type { Game } from './types';
+import { devOk } from './drill';
+import { phaseAt } from './phase';
 
 /** Chances de ton point de vue, avant chaque coup (null si la partie n'est pas analysée). */
 export const myWp = (g: Game): number[] | null => (g.wp?.length ? g.wp.map(w => (g.color === 'w' ? w : 100 - w)) : null);
@@ -15,7 +17,7 @@ const mean = (l: number[]) => (l.length ? l.reduce((a, b) => a + b, 0) / l.lengt
 /** Part des parties restées dans ton répertoire (un trou, c'est l'adversaire qui sort du livre). */
 export function coverage(list: Game[]): number | null {
   const rel = list.filter(g => g.a && g.a.status !== 'nobook' && g.a.status !== 'err'); if (!rel.length) return null;
-  return pct(rel.filter(g => g.a.status === 'ok' || g.a.status === 'gap' || g.a.depth >= 8).length, rel.length);
+  return pct(rel.filter(g => g.a.status === 'ok' || g.a.status === 'gap' || g.a.depth >= 8 || devOk(g)).length, rel.length);
 }
 
 export interface Profile {
@@ -42,14 +44,14 @@ export function profile(list: Game[], themes: (ids: Set<string>) => [string, num
   const wp10 = an.map(g => { const w = myWp(g)!; return w[Math.min(20, w.length - 1)]; });
   const pr: Profile = {
     n: all.length, nAn: an.length, winRate: winRate(all),
-    opening: { coverage: coverage(all), devs: all.filter(g => g.a?.status === 'dev').length, gaps: all.filter(g => g.a?.status === 'gap').length, wp10: wp10.length ? Math.round(mean(wp10)!) : null },
+    opening: { coverage: coverage(all), devs: all.filter(g => g.a?.status === 'dev' && !devOk(g)).length, gaps: all.filter(g => g.a?.status === 'gap').length, wp10: wp10.length ? Math.round(mean(wp10)!) : null },
     tactics: null, conversion: null, resilience: null, tilt: null, elo: {},
     clock: { timeouts: all.filter(g => g.rr === 'timeout' && g.res === 'L').length, avgMove: null, fastShare: null, blunders: 0, fastBlunders: null, slowBlunders: null, n: 0 },
   };
   if (an.length) {
     pr.tactics = { acc: Math.round(mean(an.map(g => g.st!.acc ?? 0))!), blunders: +(an.reduce((a, g) => a + g.st!.blunder, 0) / an.length).toFixed(1), mistakes: +(an.reduce((a, g) => a + g.st!.mistake, 0) / an.length).toFixed(1), themes: themes(new Set(an.map(g => g.id))) };
     const won = an.filter(g => Math.max(...myWp(g)!) >= 80), lost = an.filter(g => Math.min(...myWp(g)!) <= 20);
-    const ph = phaseAccuracy(an); pr.phases = { m: ph.m, f: ph.f, nM: an.filter(g => g.nply > 20).length, nF: an.filter(g => g.nply > 60).length };
+    const ph = phaseAccuracy(an); pr.phases = { m: ph.m, f: ph.f, nM: an.filter(g => phaseAt(g.nply - 1, g.st?.ph) !== 'ouv').length, nF: an.filter(g => phaseAt(g.nply - 1, g.st?.ph) === 'fin').length };
     pr.conversion = { n: won.length, rate: pct(won.filter(g => g.res === 'W').length, won.length) };
     pr.resilience = { n: lost.length, rate: pct(lost.filter(g => g.res !== 'L').length, lost.length) };
   }
@@ -119,11 +121,11 @@ export function playerCard(pr: Profile): Card {
   const best = known[0]?.[0] ?? null, worst = known.length > 1 ? known[known.length - 1][0] : null;
   return { scores, overall: known.length ? Math.round(known.reduce((a, x) => a + x[1], 0) / known.length) : null, best, worst, type: best ? `${STRONG[best]}${worst ? ' ' + WEAK[worst] : ''}` : '' };
 }
-/** Précision par phase (ouverture : 10 premiers coups, milieu : jusqu'au 30ᵉ, finale ensuite), à partir de la courbe des chances. */
+/** Précision par phase (d'après le matériel quand la partie a été analysée avec ; sinon : 10 premiers coups, puis jusqu'au 30ᵉ), à partir de la courbe des chances. */
 export function phaseAccuracy(list: Game[]): { o: number | null; m: number | null; f: number | null } {
   const sum = { o: [0, 0], m: [0, 0], f: [0, 0] };
   for (const g of list) { const w = myWp(g); if (!w) continue;
-    for (let i = g.color === 'w' ? 0 : 1; i + 1 < w.length; i += 2) { const k = i < 20 ? 'o' : i < 60 ? 'm' : 'f'; sum[k][0] += Math.max(0, w[i] - w[i + 1]); sum[k][1]++; } }
+    for (let i = g.color === 'w' ? 0 : 1; i + 1 < w.length; i += 2) { const p = phaseAt(i, g.st?.ph), k = p === 'ouv' ? 'o' : p === 'mil' ? 'm' : 'f'; sum[k][0] += Math.max(0, w[i] - w[i + 1]); sum[k][1]++; } }
   const acc = ([l, n]: number[]) => (n ? clamp(103.1668 * Math.exp(-0.04354 * (l / n)) - 3.1669) : null);
   return { o: acc(sum.o), m: acc(sum.m), f: acc(sum.f) };
 }
