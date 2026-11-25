@@ -38,5 +38,8 @@ export function themeCounts(faults: Fault[]): [string, number][] {
   const c: Record<string, number> = {}; for (const f of faults) c[f.theme] = (c[f.theme] || 0) + 1;
   return Object.entries(c).sort((a, b) => b[1] - a[1]);
 }
+/** Pièces en prise : une de tes pièces attaquée et oubliée, posée sur une case attaquée, ou laissée sans défense. La faute qui coûte le plus de parties. */
+export const HANG = new Set(['Pièce en prise oubliée', 'Pièce déposée en prise', 'Pièce mise en prise']);
+export const hangFaults = (faults: Fault[]) => faults.filter(f => HANG.has(f.theme));
 export const themeHint = (theme: string) => HINTS[theme] ?? 'Échecs, prises, menaces : vérifie-les dans cet ordre.';
 export const fmtTime = (ms: number) => { const s = Math.round(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };

@@ -2,7 +2,7 @@
 import { Chess, tryMove, uciOf, uciToObj, type Move } from '../core/chess';
 import type { Fault } from '../core/analysis';
 import { schedulePos } from '../core/schedule';
-import { costliestFaults, duePositions, fmtTime, matPhrase, priorityFaults, themeCounts, themeHint, themeLabel } from '../core/wood';
+import { HANG, costliestFaults, duePositions, fmtTime, hangFaults, matPhrase, priorityFaults, themeCounts, themeHint, themeLabel } from '../core/wood';
 import { refBranch } from '../core/drill';
 import { STRUCT } from '../core/structures';
 import { structureStats } from '../core/stats';
@@ -41,6 +41,7 @@ const sysName = (id: string) => shortName(Object.values(BR).find(r => r.sys.id =
 function filtered(q: URLSearchParams): { label: string; faults: Fault[] } | null {
   const all = store.faults;
   if (q.get('o')) { const o = q.get('o')!, of = sysOfFault(); return { label: `Fautes : ${sysName(o)}`, faults: all.filter(f => of(f) === o) }; }
+  if (q.get('g') === 'prise') return { label: 'Pièces en prise', faults: hangFaults(all) };
   if (q.get('t')) { const t = q.get('t')!; return { label: themeLabel(t), faults: all.filter(f => f.theme === t) }; }
   if (q.get('s')) { const s = q.get('s')!, S = STRUCT[s], ids = new Set((structureStats(store.games.filter(g => g.st && g.wp)) [s]?.games ?? []).map(g => g.id));
     return S ? { label: `Fautes : ${S.name}`, faults: all.filter(f => ids.has(f.game)) } : null; }
@@ -57,6 +58,7 @@ export function viewWood(root: HTMLElement, q = new URLSearchParams()) {
   const here = location.hash, F = filtered(q), egs = dueMoments();
   const month = costliestFaults(all, 30, 30), n = Math.min(10, all.length), prio = priorityFaults(all, store.state.fault, n);
   const of = sysOfFault(), bySys: Record<string, number> = {}; for (const f of all) { const s = of(f); if (s) bySys[s] = (bySys[s] || 0) + 1; }
+  const hang = hangFaults(all), other = themeCounts(all.filter(f => !HANG.has(f.theme)))[0]?.[1] ?? 0;
   const themes = themeCounts(all).slice(0, 6), opens = Object.entries(bySys).sort((a, b) => b[1] - a[1]).slice(0, 6);
   const pick = F ? cycleOf(F.faults) : [], shown = (F && pick[0]) || (cur && byId().get(cur.ids[cur.i])) || prio[0];
   const hero = F
@@ -72,6 +74,7 @@ export function viewWood(root: HTMLElement, q = new URLSearchParams()) {
       ${F ? (pick.length ? '<button class="btn pri block" id="bPick">Commencer le cycle</button>' : '') : `<button class="btn pri block" id="${cur ? 'bResume' : 'bPrio'}">${cur ? 'Reprendre le cycle' : 'Commencer le cycle'}</button>`}
     </section>
     ${F ? '<a class="quiet" href="#/wood">Voir tous les cycles</a>' : ''}
+    ${!F && hang.length >= 5 && hang.length >= other ? `<section class="grp"><h2>Ta faute la plus fréquente</h2><div class="surf card list">${row('bHang', 'target', 'Pièces en prise', `${plural(hang.length, 'position')} de tes parties : une pièce attaquée oubliée, ou posée sur une case attaquée. 10 par cycle.`)}</div></section>` : ''}
     ${themes.length ? `<section class="grp"><h2>Par type de faute</h2><div class="fchips">${themes.map(([t, k]) => chip('t:' + t, themeLabel(t), k)).join('')}</div></section>` : ''}
     ${opens.length ? `<section class="grp"><h2>Par ouverture</h2><div class="fchips">${opens.map(([o, k]) => chip('o:' + o, sysName(o), k)).join('')}</div></section>` : ''}
     <section class="grp"><h2>Autres cycles</h2><div class="surf card list">
@@ -86,6 +89,7 @@ export function viewWood(root: HTMLElement, q = new URLSearchParams()) {
   $('#bResume', root)?.addEventListener('click', () => { location.hash = GO; });
   $('#bPick', root)?.addEventListener('click', () => startCycle(F!.label, pick, here));
   $('#bPrio', root)?.addEventListener('click', startPriority);
+  $('#bHang', root)?.addEventListener('click', () => startCycle('Pièces en prise', cycleOf(hang), here));
   $('#bMonth', root)?.addEventListener('click', () => startCycle('Fautes du mois', month));
   $('#bAll', root).addEventListener('click', () => startCycle('Tout le stock', all));
   root.querySelectorAll<HTMLButtonElement>('[data-c]').forEach(b => b.addEventListener('click', () => {

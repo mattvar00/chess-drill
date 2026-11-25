@@ -14,10 +14,11 @@ import { Chess, tryMove, uciToObj } from '../core/chess';
 import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
 import { dayKey, streak, trainedToday } from '../core/streak';
 import { lineUrl, startSession } from './session';
-import { duePositions, priorityFaults } from '../core/wood';
+import { duePositions, hangFaults, priorityFaults } from '../core/wood';
 import { gameRow, gameUrl } from './games';
 import { PLAN_LINES } from './trainer';
 import { startCycle } from './wood';
+import { woodHistory } from './store';
 import { coldStart, keyMoment, lastSession, myWp } from '../core/stats';
 import { courseHead, gamesOfSystem, mountTree, plansPanel, type CourseTab } from './course';
 
@@ -81,6 +82,7 @@ function weekStrip(days: string[]) {
  * Aujourd'hui = « Pour toi » : une pile de cartes plein écran, une chose à faire par carte, la plus utile d'abord.
  * Pas d'étiquette « recommandé » : c'est l'ordre qui recommande. On glisse vers le haut pour la suivante.
  */
+const WARM = 'Échauffement : pièces en prise';
 export function viewHome(root: HTMLElement) {
   const up = nextUp(), steps = dailyPlan(), todo = steps.filter(s => !s.done), did = steps.filter(s => s.done);
   const days = trainingDays(), n = streak(days);
@@ -98,6 +100,10 @@ export function viewHome(root: HTMLElement) {
     cards.splice(Math.min(1, cards.length), 0, { kick: 'Ta finale', title: material(c.fen(), eg.color), why: `${eg.res === 'L' ? 'Perdue' : 'Nulle'} contre ${esc(eg.opp)}. La table dit où ça s'est joué.`, board: miniBoard(c, eg.color), cta: 'Voir ma finale', go: () => { location.hash = `#/finale/${encodeURIComponent(eg.id)}`; } }); }
   // des finales à revoir (tes fautes d'abord, puis les leçons dont le délai est passé)
   else { const due = endDue(); if (due) cards.splice(Math.min(1, cards.length), 0, { kick: 'Finales', title: due.title, why: `${plural(due.n, 'position')} à revoir.`, board: miniBoard(new Chess(due.fen), due.side), cta: 'Revoir', go: () => { location.hash = due.href; } }); }
+  // avant de jouer : 5 positions où tu as laissé une pièce en prise, ta faute la plus coûteuse (une fois par jour)
+  const hang = hangFaults(store.faults), warmed = woodHistory().some(c => c.label === WARM && dayKey(c.date) === dayKey(Date.now()));
+  if (hang.length >= 5 && !warmed) { const five = priorityFaults(hang, store.state.fault, 5);
+    cards.splice(Math.min(1, cards.length), 0, { kick: 'Avant de jouer', title: 'Pièces en prise', why: 'Ta faute la plus fréquente. 5 positions de tes parties, avant chaque session.', board: miniBoard(new Chess(five[0].fen), five[0].side), cta: 'Commencer · 2 min', go: () => startCycle(WARM, five, '#/') }); }
   for (const s of todo) cards.push({ kick: 'Ta séance', title: s.title, why: s.sub, board: s.thumb, cta: `Commencer · ${s.min} min`, go: s.go });
   for (const a of up ? otherUps(up.u.sys.id) : []) cards.push({ kick: shortName(a.u.sys.titre), fam: familyColor(a.u.bloc.id), title: shortName(a.u.sys.titre), why: a.why, board: courseBoard(a.u), cta: 'Ouvrir le cours', go: () => openCourse(a.u) });
   const head = `<header class="hello fhead"><h1>Pour toi</h1>
