@@ -62,8 +62,10 @@ export function viewOpeningList(root: HTMLElement) {
     const played = rows.filter(x => x.gs.length).sort((a, c) => c.gs.length - a.gs.length);
     return { b, played, all: played.flatMap(x => x.gs) };
   }).filter(g => g.played.length).sort((a, c) => (a.b.side === c.b.side ? c.all.length - a.all.length : a.b.side === 'w' ? -1 : 1));
+  /** Une ouverture qui a plusieurs cours les nomme dans la liste : on sait qu'ils existent avant d'ouvrir la page. */
+  const courses = (s: System) => { const l = familyOf(s.id)?.list ?? []; return l.length > 1 ? ` · ${l.length} cours : ${l.map(x => esc(partName(x))).join(', ')}` : ''; };
   const row = (b: Bloc, s: System, gs: Game[]) => { const p = scoreOf(gs), v = verdict(p, gs.length);
-    return `<a class="orow" href="${openingUrl(s.id)}">${courseBoard(unitFor(b, s))}<span class="ot"><b>${esc(famName(s))}</b>${bar(p, v)}<small>${plural(gs.length, 'partie')}</small></span>${pct(p, v)}</a>`; };
+    return `<a class="orow" href="${openingUrl(s.id)}">${courseBoard(unitFor(b, s))}<span class="ot"><b>${esc(famName(s))}</b>${bar(p, v)}<small>${plural(gs.length, 'partie')}${courses(s)}</small></span>${pct(p, v)}</a>`; };
   root.innerHTML = `<div class="ol">${groups.map(g => { const p = scoreOf(g.all), v = verdict(p, g.all.length);
       return `<section><h2 class="oh">${esc(groupName(g.b))}<span class="opct ${v}">${p} %</span></h2>${g.played.map(x => row(g.b, x.s, x.gs)).join('')}</section>`; }).join('')}
     ${unseen.length ? `<details class="ounseen"><summary>Pas encore jouées <span>${unseen.length}</span></summary>${unseen.map(x => `<a class="orow" href="${openingUrl(x.s.id)}">${courseBoard(unitFor(x.b, x.s))}<span class="ot"><b>${esc(famName(x.s))}</b><small>${x.b.side === 'w' ? 'Blancs' : 'Noirs'} · ${esc(x.b.titre.toLowerCase())}</small></span>${icon('chev', 'chev')}</a>`).join('')}</details>` : ''}
