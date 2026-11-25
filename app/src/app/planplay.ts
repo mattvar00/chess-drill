@@ -27,7 +27,7 @@ export function planStart(P: Plan): number {
 export function mountPlanPlay(root: HTMLElement, id: string): () => void {
   const found = PLANS.find(x => x.id === id); if (!found) { root.innerHTML = '<p class="empty">Plan introuvable.</p>'; return () => {}; }
   const P: Plan = found;
-  const side = P.side, start = planStart(P), back = `#/plan/${P.id}?vu=1`;
+  const goal = P.sub.split(' : ').pop()!, side = P.side, start = planStart(P), back = `#/plan/${P.id}?vu=1`;
   const g0 = new Chess(); P.sans.slice(0, start).forEach(s => tryMove(g0, s)); const startFen = g0.fen();
   // les coups « du plan » : tes coups de la ligne après le départ, et les flèches de tes pièces dans les étapes suivantes
   const theme = new Map<string, string>();
@@ -57,7 +57,13 @@ export function mountPlanPlay(root: HTMLElement, id: string): () => void {
   async function yourTurn() {
     busy = true; here = await think(); if (dead) return; busy = false; paint();
     if (wantHint && here) { wantHint = false; hint(); }
+    else if (n < 2 && !errs) showPlan();   // les deux premiers coups : les flèches du plan restent visibles, pour savoir où aller
     if (!here) say('oops', 'Le moteur ne démarre pas', 'Réessaie dans un instant : il se charge dans le téléphone la première fois.');
+  }
+  /** Les coups du plan jouables ici, en flèches. */
+  function showPlan() {
+    const legal = game.moves({ verbose: true }) as Move[], th = legal.filter(m => theme.has(m.from + m.to)).slice(0, 3);
+    if (th.length) board.overlay({ arrows: th.map(m => ({ from: m.from, to: m.to, cls: 'plan' })) });
   }
   function hint() {
     if (over) return;
@@ -102,8 +108,8 @@ export function mountPlanPlay(root: HTMLElement, id: string): () => void {
     say(inPlan >= 3 ? 'happy' : 'talk', `${head} Fini !`, `${txt} ${inPlan >= 3 ? 'Tu as suivi le plan.' : 'Revois le plan, puis rejoue : ' + esc(P.sub) + '.'}`);
   }
   function restart() { game = new Chess(startFen); last = null; over = false; n = inPlan = good = meh = errs = miss = 0; btns(); intro(); void yourTurn(); }
-  function intro() { say('idle', esc(P.title.split(' · ')[0]), `Le plan : ${esc(P.sub)}. Joue ${MOVES} coups contre le moteur. <span class="dim">Le moteur se prépare…</span>`); }
+  function intro() { say('idle', esc(P.title.split(' · ')[0]), `Ton but : ${esc(goal)}. <span class="dim">Le moteur se prépare…</span>`); }
   paint(); btns(); intro();
-  void yourTurn().then(() => { if (!dead && here) say('idle', esc(P.title.split(' · ')[0]), `Le plan : ${esc(P.sub)}. À toi : ${MOVES} coups contre le moteur.`); });
+  void yourTurn().then(() => { if (!dead && here) say('idle', esc(P.title.split(' · ')[0]), `Ton but : ${esc(goal)}. Les flèches montrent les coups du plan pour démarrer ; ensuite, à toi.`); });
   return () => { dead = true; board.destroy(); };
 }

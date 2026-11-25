@@ -113,10 +113,14 @@ export function viewOpeningPage(root: HTMLElement, sysId: string): (() => void) 
   const nPh = ph.ouv.length + ph.mil.length + ph.fin.length, PHS: Phase[] = ['ouv', 'mil', 'fin'];
   // les variantes : la ligne de ton cours que chaque partie a suivie le plus longtemps
   const byVar = new Map<string, Game[]>(); for (const g of games) { const id = refBranch(g, BR); if (id) (byVar.get(id) ?? byVar.set(id, []).get(id)!).push(g); }
-  const vars = [...byVar].sort((a, c) => c[1].length - a[1].length), top = vars.filter(x => x[1].length >= 2).slice(0, 5);
-  // le titre : l'idée de la variante (« Il attaque b5 avec le pion c ») ; le nom officiel, souvent le même pour plusieurs lignes, passe en dessous
-  const vrow = ([id, gs]: [string, Game[]]) => { const vp = scoreOf(gs), vv = verdict(vp, gs.length), t = variantTitle(BR[id].br), name = t.sub || t.title, off = t.sub ? t.title : '';
-    return `<a class="orow" href="${lineUrl(id, 'explore')}">${endBoard(id)}<span class="ot"><b>${esc(name)}</b>${bar(vp, vv)}<small>${off ? esc(off) + ' · ' : ''}${plural(gs.length, 'partie')}</small></span>${pct(vp, vv)}</a>`; };
+  const vars = [...byVar].sort((a, c) => c[1].length - a[1].length);
+  // une variante se lit d'un coup d'œil : le coup qui la définit, puis l'idée en mots ; la théorie et les erreurs adverses sont séparées
+  const vrow = ([id, gs]: [string, Game[]]) => { const br = BR[id].br, vp = scoreOf(gs), vv = verdict(vp, gs.length), dash = br.titre.split(' — '), [idea, mv] = dash.length > 1 ? [dash.slice(1).join(' — '), ''] : br.titre.split(' : ');
+    const key = mv ? mv.replace(/\s+([?!]+)$/, '$1') : '', off = br.nom ? variantTitle(br).title : '';
+    return `<a class="orow" href="${lineUrl(id, 'explore')}">${endBoard(id)}<span class="ot"><b>${key ? `<span class="okeymv">${esc(key)}</span>` : ''}${esc(idea)}</b>${bar(vp, vv)}<small>${off ? esc(off) + ' · ' : ''}${plural(gs.length, 'partie')}</small></span>${pct(vp, vv)}</a>`; };
+  const isErr = (id: string) => BR[id].br.role === 'erreur' || BR[id].br.type === 'punir';
+  const theory = vars.filter(x => !isErr(x[0])), errors = vars.filter(x => isErr(x[0]));
+  const vblock = (title: string, hint: string, list: [string, Game[]][], k: string) => !list.length ? '' : `<h2 class="oh">${title}${list.length > 3 ? `<button type="button" class="olink" data-more="${k}">Les ${list.length}</button>` : ''}</h2><p class="onote ohint">${hint}</p><div id="v${k}">${list.slice(0, 3).map(vrow).join('')}</div>`;
   const grow = (g: Game) => { const k = keyMoment(g);
     return `<a class="orow" href="${keyUrl(g, here)}">${spark(g)}<span class="ot"><b>${esc(g.opp)}</b><small>${dateFr(g.t)}${k ? ` · ${Math.floor(k.ply / 2) + 1}${k.ply % 2 ? '…' : '.'}${esc(k.san)}, ${k.before} → ${k.after} %` : ''}</small></span><i class="ores ${g.res}"></i></a>`; };
   const phOf = new Map<string, Phase>(); for (const k of PHS) for (const g of ph[k]) phOf.set(g.id, k);
@@ -127,15 +131,15 @@ export function viewOpeningPage(root: HTMLElement, sysId: string): (() => void) 
       <div class="ophases" id="ophases">${PHS.filter(k => ph[k].length).map(k => `<button type="button" data-ph="${k}" class="${k}" style="flex-grow:${ph[k].length}" aria-label="${PHASE_LABEL[k]} : ${plural(ph[k].length, 'défaite')}">${ph[k].length}</button>`).join('')}</div>
       <div class="olegend">${PHS.map(k => `<span><i class="${k}"></i>${PHASE_LABEL[k].replace(' de partie', '')} ${ph[k].length}</span>`).join('')}</div>
       <p class="onote">Touche une phase pour voir ces défaites.</p>` : ''}
-    <h2 class="oh">Variantes${vars.length > top.length ? `<button type="button" class="olink" id="vmore">Les ${vars.length}</button>` : ''}</h2>
-    <div id="vlist">${(top.length ? top : vars.slice(0, 3)).map(vrow).join('')}</div>
+    ${vblock('La théorie', 'Les vraies lignes de l\'ouverture, celles que jouent les bons joueurs.', theory, 't')}
+    ${vblock('Ses erreurs à punir', 'Des coups douteux de l\'adversaire : il y a une punition à connaître.', errors, 'e')}
     <h2 class="oh">${plural(n, 'partie')}<span class="omute">les plus récentes d'abord</span></h2>
     <div class="odots" id="odots">${games.map(g => `<a href="${keyUrl(g, here)}" class="${g.res}" data-ph="${phOf.get(g.id) ?? ''}" aria-label="${esc(g.opp)}, ${dateFr(g.t)}"></a>`).join('')}</div>
     <div class="olegend"><span><i class="W"></i>gagnée</span><span><i class="L"></i>perdue</span><span><i class="D"></i>nulle</span></div>
     <div id="glist">${games.slice(0, 4).map(grow).join('')}</div>
     ${tiles}</div>`;
   bindCourse(root);
-  $('#vmore', root)?.addEventListener('click', e => { $('#vlist', root).innerHTML = vars.map(vrow).join(''); (e.currentTarget as HTMLElement).remove(); });
+  root.querySelectorAll<HTMLElement>('[data-more]').forEach(bt => bt.addEventListener('click', () => { const k = bt.dataset.more!; $('#v' + k, root).innerHTML = (k === 't' ? theory : errors).map(vrow).join(''); bt.remove(); }));
   const P = root.querySelector<HTMLElement>('#ophases'), D = $('#odots', root), L = $('#glist', root);
   P?.addEventListener('click', e => { const bt = (e.target as HTMLElement).closest<HTMLElement>('[data-ph]'); if (!bt) return;
     const on = bt.classList.contains('on'); P.querySelectorAll('button').forEach(x => x.classList.remove('on')); P.classList.toggle('pick', !on); D.classList.toggle('pick', !on);
