@@ -6,7 +6,7 @@ import type { Game } from '../core/types';
 import { Board } from '../ui/board';
 import { SFX } from '../ui/sound';
 import { $, esc, icon, plural } from '../ui/dom';
-import { BR, markActive, markPlan, plansFor, refreshDevs, save, setLastLesson, store } from './store';
+import { BR, markActive, markPlan, refreshDevs, save, setLastLesson, store } from './store';
 import { syncSoon } from './api';
 import { persistSession, lineUrl, nextUrl, remaining, session } from './session';
 import { explorerSlot } from './explorer';
@@ -22,7 +22,7 @@ import { confetti } from '../ui/fx';
  * Une variante déjà sue se rejoue simplement en entier.
  */
 /** Nom de la séance de lignes du plan du jour. */
-export const PLAN_LINES = 'Plan du jour';
+export const PLAN_LINES = 'Séance du jour';
 /** Félicitations du coach de mémoire, qui tournent pour ne pas se répéter. */
 const BRAVO = ['Bien joué', 'Exact', 'Parfait', "C'est ça", 'Bien vu', 'Oui', 'Joli', 'Tout juste'];
 const PRAISE = ['Exact.', 'Bien joué.', "C'est la ligne.", 'Juste.', 'Parfait.'];
@@ -32,13 +32,13 @@ let active: (() => void) | null = null;
 
 export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'explore', fromGame?: Game): () => void {
   const { br, sys, bloc } = BR[id], side = bloc.side, moves = br.moves, S = session();
-  const plan = id.startsWith('plan-') ? id.slice(5) : null, listUrl = plan ? `#/plan/${plan}?vu=1` : `#/o/${sys.id}`;
+  const listUrl = `#/o/${sys.id}`;
   root.innerHTML = `<div class="trainer">
     <div class="tboard"><div id="board"></div><div class="stepper" id="stepper"></div></div>
     <div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">
       <div class="coach" id="coach" aria-live="polite"></div>
       <div class="moves" id="moves"></div>
-      <div class="explnav dock${br.model ? ' two' : ' three'}" id="explnav" ${mode === 'explore' ? '' : 'hidden'}><button class="btn" data-to="prev" aria-label="Coup précédent">${icon('back')}</button>${br.model ? '' : `<a class="btn pri" href="${lineUrl(id, 'drill')}">De mémoire</a>`}<button class="btn" data-to="next" aria-label="Coup suivant">${icon('chev')}</button></div>
+      <div class="explnav dock three" id="explnav" ${mode === 'explore' ? '' : 'hidden'}><button class="btn" data-to="prev" aria-label="Coup précédent">${icon('back')}</button><a class="btn pri" href="${lineUrl(id, 'drill')}">De mémoire</a><button class="btn" data-to="next" aria-label="Coup suivant">${icon('chev')}</button></div>
       <div class="actions" id="actions"></div>
     </div></div></div>`;
   const coach = $('#coach', root), actions = $('#actions', root), movesEl = $('#moves', root), stepper = $('#stepper', root);
@@ -46,7 +46,7 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
   let game = new Chess(), ply = 0, last: Move | null = null;
   let errs = 0, wrongHere = 0, hintLevel = 0, locked = false, finished = false, lastNote: string | null = null;
   const steps: (Step | undefined)[] = []; let timer: ReturnType<typeof setTimeout> | undefined;
-  const course = mode === 'drill' && (!!br.ch || (!!br.type && !plan)) && (!fromGame || !store.state.br[id]?.runs);
+  const course = mode === 'drill' && (!!br.ch || !!br.type) && (!fromGame || !store.state.br[id]?.runs);
   const trunk = course ? trunkOf(moves, sys.branches.filter(o => o.id !== id && o.ch && (passed(store.state.br[o.id]) || S?.done.has(o.id))).map(o => o.moves), side) : 0;
   /** `learn` : premier passage d'une variante jamais jouée de mémoire. Le coach dit chaque coup nouveau et pourquoi ; rien n'est noté. */
   let learn = course && !store.state.br[id]?.runs;   // déjà tentée de mémoire, même ratée : on la retente directement
@@ -195,7 +195,6 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
     const s = store.state.br[id] = scheduleBranch(store.state.br[id], errs);
     if (S && errs === 0) S.clean++;
     if (fromGame && errs === 0) { store.state.fixed[fromGame.id] = true; refreshDevs(); }
-    if (plan) (store.state.planDone ??= {})[plan] = { errs, at: Date.now() };
     markActive(); syncSoon(); S?.done.add(id); persistSession(); paintStepper();
     // fin d'une leçon du chemin : bonus sans faute, puis le bilan (le pion avance)
     if (S?.lesson && !remaining().length) {
@@ -209,14 +208,13 @@ export function mountTrainer(root: HTMLElement, id: string, mode: 'drill' | 'exp
       const allOk = !!S && S.pool.every(i => passed(store.state.br[i])), chName = br.ch ?? 'Tirées de tes parties';
       talk(errs === 0 ? 'party' : 'idle', `<p class="lead ${errs ? 'bad' : 'ok'}">${errs === 0 ? 'Variante validée' : `Pas encore validée : ${plural(errs, 'erreur')}`}</p>`,
         `${closing()}${errs ? ' Elle reviendra.' : ''}`.trim(), `${br.suite ? `<p class="suite"><b>Et après :</b> ${esc(br.suite)}</p>` : ''}${S ? `<p class="why">${left ? `Encore ${left} dans ce chapitre.` : allOk ? 'Chapitre terminé.' : ''}</p>` : ''}`, 120);
-      // toujours le même écran entre deux variantes : où tu en es dans le chapitre, ce qui vient, et le plan s'il y en a un
+      // toujours le même écran entre deux variantes : où tu en es dans le chapitre, et ce qui vient
       const chap = br.ch ? sys.branches.filter(b => b.ch === br.ch && !b.plus === !br.plus) : sys.branches.filter(b => !b.ch && b.type), nid = S?.ordered ? remaining()[0] : null, stop = S?.exit ?? listUrl;
       const info = `<p class="cinfo"><span class="cdots" role="img" aria-label="${chap.filter(b => passed(store.state.br[b.id])).length} sur ${chap.length}">${chap.map(b => `<i class="${passed(store.state.br[b.id]) ? 'ok' : ''}${b.id === id ? ' now' : ''}"></i>`).join('')}</span></p>`; void nid; void chName;
-      const planBtn = !errs && br.role === 'theorie' && plansFor(sys.id).length ? `<a class="btn" href="#/plans?o=${sys.id}&r=${encodeURIComponent(next ?? stop)}">Voir le plan</a>` : '';
-      actions.innerHTML = `${info}${next ? `<a class="btn pri" href="${next}">Suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? (allOk ? 'Chapitre terminé' : 'Voir où j\'en suis') : 'Terminer'}</a>` : `<a class="btn pri" href="${stop}">Retour au cours</a>`}${errs ? `<a class="btn" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a>` : planBtn}${next ? `<a class="btn" href="${stop}">Arrêter là</a>` : ''}`;
+      actions.innerHTML = `${info}${next ? `<a class="btn pri" href="${next}">Suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? (allOk ? 'Chapitre terminé' : 'Voir où j\'en suis') : 'Terminer'}</a>` : `<a class="btn pri" href="${stop}">Retour au cours</a>`}${errs ? `<a class="btn" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a>` : ''}${next ? `<a class="btn" href="${stop}">Arrêter là</a>` : ''}`;
     } else {
     coach.innerHTML = coachSay(errs === 0 ? 'party' : 'idle', `<div class="done"><p class="big">${errs === 0 ? 'Ligne sans faute' : plural(errs, 'erreur')}</p><p>${verdict}</p>${S ? `<p class="why">${esc(S.label)} : ${left ? `encore ${plural(left, 'ligne')}` : 'séance terminée'}.</p>` : ''}</div>`);
-    actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S || plan ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn${plan ? ' pri' : ''}" href="${listUrl}">${plan ? 'Voir le plan' : 'Liste'}</a>`;
+    actions.innerHTML = `${next ? `<a class="btn pri" href="${next}">Ligne suivante</a>` : S ? `<a class="btn pri" href="${S.back}">${S.lesson ? 'Voir le bilan' : 'Terminer'}</a>` : ''}<a class="btn${next || S ? '' : ' pri'}" href="${lineUrl(id, 'drill')}" id="bAgain">Refaire</a><a class="btn" href="${listUrl}">Liste</a>`;
     }
     XS.available(true);
     const again = actions.querySelector<HTMLElement>('#bAgain'); if (again) again.onclick = e => { e.preventDefault(); remount(); };

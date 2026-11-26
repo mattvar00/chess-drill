@@ -11,7 +11,7 @@ import { caseOf, chaptersOf, knownLines, ownLines } from '../core/path';
 import { lineName, lineTitle, nomTitle, plainName, popBars, roleLabel, shortNom, typeLabel, variantTitle } from '../core/names';
 import { structureStats } from '../core/stats';
 import { Chess, tryMove, uciToObj } from '../core/chess';
-import { ALL_IDS, BR, PLANS, REP, markPlan, planDone, plansFor, store, trainingDays } from './store';
+import { ALL_IDS, BR, REP, markPlan, planDone, store, trainingDays } from './store';
 import { dayKey, streak, trainedToday } from '../core/streak';
 import { lineUrl, startSession } from './session';
 import { duePositions, hangFaults, priorityFaults } from '../core/wood';
@@ -22,7 +22,7 @@ import { currentWeek, stepDone } from './week';
 import { convertList } from './convert';
 import { woodHistory } from './store';
 import { coldStart, keyMoment, lastSession, myWp } from '../core/stats';
-import { courseHead, gamesOfSystem, mountTree, plansPanel, type CourseTab } from './course';
+import { courseHead, gamesOfSystem, mountTree, type CourseTab } from './course';
 
 const DAY = 864e5;
 const st = (id: string) => store.state.br[id];
@@ -62,7 +62,7 @@ function dailyPlan() {
   const faults = priorityFaults(store.faults, store.state.fault, 5);
   if (faults.length) { const th: Record<string, number> = {}; for (const f of faults) th[f.theme] = (th[f.theme] || 0) + 1; const top = Object.entries(th).sort((x, y) => y[1] - x[1])[0][0];
     steps.push({ key: 'tac', thumb: miniBoard(new Chess(faults[0].fen), faults[0].side), title: `${plural(faults.length, 'position')} à résoudre`, sub: `Tirées de tes fautes : ${PLAIN_THEME[top] ?? top.toLowerCase()}`, min: Math.max(1, Math.round(faults.length * 0.6)), done: done.includes('tac'),
-      go: () => startCycle('Plan du jour', faults, '#/', true) }); }
+      go: () => startCycle('Séance du jour', faults, '#/', true) }); }
   // la révision du jour : toutes les variantes dues, tous cours confondus (les nouvelles viennent du bouton « Continuer »)
   const due = ALL_IDS.filter(id => st(id)?.runs && isDue(st(id)) && BR[id].sys.statut !== 'plan').sort((x, y) => st(x).due - st(y).due), nCours = new Set(due.map(id => BR[id].sys.id)).size;
   if (due.length) steps.push({ key: 'lines', thumb: preview(due[0]), title: `${plural(due.length, 'variante')} à revoir`,
@@ -111,7 +111,7 @@ export function viewHome(root: HTMLElement) {
       const sysId = nx?.x.id === 'open' ? (/o=([^,&]+)/.exec(nx.x.href)?.[1] ?? null) : null, fb = sysId ? REP.blocs.find(b => b.systemes.some(x => x.id === sysId)) : null;
       const cv = nx?.x.id === 'conv' ? convertList()[0] : null, ft = store.faults.find(f => nx?.x.label === 'Pièces en prise' ? /en prise/.test(f.theme) : true);
       const brd = fb && sysId ? courseBoard(unitFor(fb, fb.systemes.find(x => x.id === sysId)!)).replace('mini cthumb', 'mini') : cv ? miniBoard(new Chess(cv.fen), cv.g.color) : ft ? miniBoard(new Chess(ft.fen), ft.side) : '';
-      cards.unshift({ kick: `Ta semaine · ${nDone} sur ${st.length}`, title: nx ? nx.x.title : 'Semaine terminée', why: `${nx ? esc(nx.x.sub) : 'Les trois étapes sont faites. Le nouveau plan arrive lundi.'}${list}`,
+      cards.unshift({ kick: `Ta semaine · ${nDone} sur ${st.length}`, title: nx ? nx.x.title : 'Semaine terminée', why: `${nx ? esc(nx.x.sub) : 'Les trois étapes sont faites. Le nouveau programme arrive lundi.'}${list}`,
         board: brd, cta: nx ? 'Commencer' : 'Voir mes progrès', go: () => { location.hash = nx ? nx.x.href : '#/progres'; } }); } }
   for (const s of todo) cards.push({ kick: 'Ta séance', title: s.title, why: s.sub, board: s.thumb, cta: `Commencer · ${s.min} min`, go: s.go });
   // les autres cours ne sont plus poussés ici : ils sont dans l'onglet Ouvertures, rangés par ouverture
@@ -169,7 +169,6 @@ export function viewSystem(root: HTMLElement, bloc: Bloc, sys: System, tab: Cour
     return `<a class="rowi vrow" href="${lineUrl(br.id, 'explore')}"><span class="body"><b>${esc(same ? v.sub || v.title : v.title)}</b>${!same && v.sub ? `<small>${esc(v.sub)}</small>` : ''}${due ? '<small class="due">à revoir</small>' : ''}</span>${known && !due ? `<span class="vok">${icon('check')}</span>` : ''}${chev}</a>`; };
   const plusIds = own.filter(b => b.plus).map(b => b.id), plusLeft = plusIds.filter(id => !store.state.br[id]?.clean);
   const head = courseHead(sys, back, tab);
-  if (tab === 'plans') { root.innerHTML = head + plansPanel(sys, back); return; }
   if (tab === 'arbre') { root.innerHTML = head + '<div id="ctree"></div>'; mountTree($('#ctree', root), bloc, sys, own.filter(b => !b.type)); return; }
   root.innerHTML = `${head}
     ${pathBlock(u)}

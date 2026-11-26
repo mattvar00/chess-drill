@@ -1,5 +1,5 @@
 /**
- * La page d'un cours, en trois vues : le chemin (les leçons), les plans (en images), l'arbre (les embranchements avec tes parties).
+ * La page d'un cours, en deux vues : le chemin (les leçons, plan de milieu de jeu compris) et l'arbre (les embranchements avec tes parties).
  * En tête, ton bilan dans cette ouverture. Et la page « Tes ouvertures » : le bilan de toutes, les plus faibles d'abord.
  */
 import { Chess, tryMove } from '../core/chess';
@@ -9,11 +9,11 @@ import { myWp } from '../core/stats';
 import type { Bloc, Branch, Color, Game, System } from '../core/types';
 import { miniBoard } from '../ui/board';
 import { esc, icon, plural } from '../ui/dom';
-import { BR, REP, plansFor, store, type Plan } from './store';
+import { BR, REP, store } from './store';
 import { lineUrl } from './session';
 
 const chev = icon('chev', 'chev');
-export type CourseTab = 'chemin' | 'plans' | 'arbre';
+export type CourseTab = 'chemin' | 'arbre';
 export const gamesOfSystem = (sys: System) => store.games.filter(g => { const id = refBranch(g, BR); return !!id && BR[id].sys.id === sys.id; }).sort((a, b) => b.t - a.t);
 
 /* ---------- le bilan ---------- */
@@ -52,36 +52,15 @@ function bilanBlock(b: Bilan): string {
 }
 
 /* ---------- les vues ---------- */
-export function courseTabs(base: string, tab: CourseTab, nPlans: number): string {
+export function courseTabs(base: string, tab: CourseTab): string {
   const t = (k: CourseTab, label: string) => `<a class="cseg${k === tab ? ' on' : ''}" href="${base}${k === 'chemin' ? '' : '?v=' + k}" ${k === tab ? 'aria-current="page"' : ''}>${label}</a>`;
-  return `<nav class="csegs" aria-label="Vue du cours">${t('chemin', 'Chemin')}${t('plans', nPlans ? `Plans <span class="cn">${nPlans}</span>` : 'Plans')}${t('arbre', 'Arbre')}</nav>`;
+  return `<nav class="csegs" aria-label="Vue du cours">${t('chemin', 'Chemin')}${t('arbre', 'Arbre')}</nav>`;
 }
 /** En tête du cours : ses trois vues. Le bilan (score, phases) est sur la page de l'ouverture, juste avant. */
 export function courseHead(sys: System, base: string, tab: CourseTab): string {
-  return courseTabs(base, tab, plansFor(sys.id).length);
+  return courseTabs(base, tab);
 }
 export const bilanHtml = (sys: System) => bilanBlock(bilanOf(sys));
-
-/** Un petit échiquier avec les flèches et les cases d'une étape de plan. */
-function miniPlan(game: Chess, side: Color, arrows: string[][], keys: string[]): string {
-  const xy = (q: string) => { let x = q.charCodeAt(0) - 97, y = 8 - +q[1]; if (side === 'b') { x = 7 - x; y = 7 - y; } return [x + .5, y + .5]; };
-  let o = keys.map(q => { const [x, y] = xy(q); return `<rect x="${x - .5}" y="${y - .5}" width="1" height="1" class="mk"/>`; }).join('');
-  for (const [a, b] of arrows) { const [x1, y1] = xy(a), [x2, y2] = xy(b), dx = x2 - x1, dy = y2 - y1, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, ex = x2 - ux * .42, ey = y2 - uy * .42;
-    o += `<line x1="${x1}" y1="${y1}" x2="${ex.toFixed(2)}" y2="${ey.toFixed(2)}"/><polygon points="${(x2 - ux * .12).toFixed(2)},${(y2 - uy * .12).toFixed(2)} ${(ex - uy * .3).toFixed(2)},${(ey + ux * .3).toFixed(2)} ${(ex + uy * .3).toFixed(2)},${(ey - ux * .3).toFixed(2)}"/>`; }
-  return `<span class="minip">${miniBoard(game, side)}<svg viewBox="0 0 8 8" aria-hidden="true">${o}</svg></span>`;
-}
-/** L'étape la plus parlante d'un plan : celle qui a le plus de flèches (la dernière à égalité). */
-function keyStep(P: Plan) { return P.steps.reduce((b, s) => (s.a.length >= b.a.length ? s : b), P.steps[0]); }
-
-export function plansPanel(sys: System, back: string): string {
-  const plans = plansFor(sys.id);
-  const cards = plans.map(P => { const st = keyStep(P), g = new Chess(); P.sans.slice(0, st.p).forEach(s => tryMove(g, s));
-    const line = P.title.includes(' · ') ? P.title.split(' · ').slice(1).join(' · ') : P.title;
-    return `<div class="surf card pcard2"><a class="pmain" href="#/plan/${P.id}?vu=1&r=${encodeURIComponent(back + '?v=plans')}">${miniPlan(g, P.side, st.a, st.h)}<span class="body"><b>${esc(P.sub)}</b><small>${esc(line)} · ${plural(P.steps.length, 'étape')}</small></span></a><a class="btn pjouer" href="#/plan/${P.id}/jouer" aria-label="Jouer ce plan contre le moteur">Jouer</a></div>`; }).join('');
-  const models = (sys.modeles ?? []).map(m => `<a class="surf card lk1" href="${lineUrl(m.id, 'explore')}"><b>Partie modèle</b><span class="dim">${esc(m.titre)}</span>${chev}</a>`).join('');
-  if (!plans.length && !models) return '<p class="pnote">Pas encore de plan en images pour cette ouverture.</p>';
-  return `${cards ? `<div class="pcards">${cards}</div><a class="btn pri block" href="#/plan/${plans[0].id}?vu=1&r=${encodeURIComponent(back + '?v=plans')}">Voir les plans en images</a>` : ''}${models ? `<section class="grp"><h2>Pour voir le plan en vrai</h2>${models}</section>` : ''}`;
-}
 
 /* ---------- l'arbre ---------- */
 interface TNode { san: string; ply: number; kids: Map<string, TNode>; brs: string[] }

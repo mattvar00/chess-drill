@@ -158,7 +158,7 @@ export function viewGames(root: HTMLElement) {
     <div class="surf card list">
       <a class="rowi" href="#/ouvertures"><span class="ico">${icon('stack')}</span><span class="body"><b>Tes ouvertures</b><small>Le bilan de chacune, les plus faibles d'abord</small></span>${icon('chev', 'chev')}</a>
       <a class="rowi" href="#/finales"><span class="ico">${icon('rook')}</span><span class="body"><b>Tes finales</b><small>${esc(endRecord().text || 'Gagnant, nul ou perdant : ce que dit la table, coup par coup')}</small></span>${icon('chev', 'chev')}</a>
-      <a class="rowi" href="${weak ? `#/structure/${weak[0]}` : '#/plans'}"><span class="ico">${icon('pawn')}</span><span class="body"><b>${weak ? `À travailler : ${esc(STRUCT[weak[0]].name)}` : 'Tes structures de pions'}</b><small>${weak ? `${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires` : 'Leurs plans, ton score, et tes fautes à y rejouer'}</small></span>${chev}</a>
+      ${weak ? `<a class="rowi" href="#/wood?s=${weak[0]}"><span class="ico">${icon('pawn')}</span><span class="body"><b>À travailler : ${esc(STRUCT[weak[0]].name)}</b><small>${plural(weak[1].n, 'partie')}, ${Math.round(weak[1].errMe - weak[1].errOp)} points d'erreurs de plus que tes adversaires</small></span>${chev}</a>` : ''}
     </div>
     <section class="grp"><h2>Tes parties</h2><div class="surf card list" id="glist">${list.slice(0, shown).map(g => gameRow(g)).join('')}</div>
       ${list.length > shown ? `<button class="btn block" id="bMore">Afficher ${Math.min(30, list.length - shown)} parties de plus</button>` : ''}</section>`
@@ -244,7 +244,6 @@ export function mountReview(root: HTMLElement, id: string, start: number | null,
         </div></section>
         <div class="surf card list">
           ${ref ? `<a class="rowi" href="${lineUrl(ref, 'drill', g.id)}"><span class="ico">${icon('book')}</span><span class="body"><b>Corriger la sortie de répertoire</b><small>Tu as joué ${esc(g.a.played ?? '')} dans « ${esc(lineTitle(BR[ref].br.titre))} »</small></span>${chev}</a>` : ''}
-          ${st && STRUCT[st.id] ? `<a class="rowi" href="#/structure/${st.id}"><span class="ico">${icon('pawn')}</span><span class="body"><b>${esc(STRUCT[st.id].name)}</b><small>Structure de la partie au 12ᵉ coup : ses plans</small></span>${chev}</a>` : ''}
           ${g.url?.startsWith('http') ? `<a class="rowi" href="${esc(g.url)}" target="_blank" rel="noopener"><span class="ico">${icon('link')}</span><span class="body"><b>Voir sur chess.com</b></span>${chev}</a>` : ''}
         </div>
         <div class="actions rvbar" id="rvbar"><button class="btn" data-to="prev" aria-label="Coup précédent">${icon('back')}</button><span id="mid"></span><button class="btn" data-to="next" aria-label="Coup suivant">${icon('chev')}</button></div>

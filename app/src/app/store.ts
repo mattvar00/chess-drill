@@ -1,6 +1,5 @@
 /** État de l'app en mémoire, chargé depuis IndexedDB. */
 import rep from '../data/repertoire.json';
-import plansJson from '../data/plans.json';
 import { Chess, tryMove, uciOf } from '../core/chess';
 import type { Game, Repertoire, BranchState } from '../core/types';
 import { analyseGame, buildBook, indexBranches } from '../core/book';
@@ -16,19 +15,8 @@ const BOOK = buildBook(REP);
 const rematch = (g: Game): Game => { try { return { ...g, a: analyseGame(BOOK, BR, g.sans, g.color) }; } catch { return g; } };
 export const ALL_IDS = Object.keys(BR);
 
-/** Plans animés : chacun se rejoue aussi comme une ligne (« plan-<id> »), hors des tirages du répertoire. */
-export interface PlanStep { p: number; a: [string, string][]; h: string[]; c: string }
-export interface Plan { id: string; sans: string[]; steps: PlanStep[]; cat: string; title: string; side: 'w' | 'b'; sys: string[]; sub: string; src: string[]; /** Partie modèle : le plan suit une vraie partie jusqu'au milieu de jeu, on ne l'apprend pas par cœur. */ game?: string }
-export const PLANS = plansJson as Plan[];
-export const planBranch = (id: string) => 'plan-' + id;
-for (const P of PLANS) {
-  const g = new Chess(), moves = P.sans.slice(0, P.steps[P.steps.length - 1].p).map(san => { const m = tryMove(g, san)!; return { san: m.san, uci: uciOf(m) }; });
-  const br = { id: planBranch(P.id), titre: P.title, moves, notes: {} };
-  BR[br.id] = { br, sys: { id: 'plan', titre: P.title, statut: 'plan', resume: P.sub, branches: [br] }, bloc: { id: 'plans', titre: P.cat, sous: '', side: P.side, systemes: [] } };
-}
-// parties modèles d'un cours : elles se regardent comme une ligne commentée, hors du chemin et des révisions
-for (const bloc of REP.blocs) for (const sys of bloc.systemes) for (const m of sys.modeles ?? []) BR[m.id] = { br: m, sys: { ...sys, statut: 'plan', branches: [m] }, bloc };
-export const plansFor = (sysId: string) => PLANS.filter(p => p.sys.includes(sysId));
+/** Nombre de variantes « Le milieu de jeu » d'un cours : le plan joué au-delà de l'ouverture. */
+export const planLines = (sysId: string) => REP.blocs.flatMap(b => b.systemes).find(x => x.id === sysId)?.branches.filter(b => b.plan).length ?? 0;
 
 /** Cycle Woodpecker en cours (repris après une fermeture de l'app) et cycles terminés. */
 export interface WoodCur { ids: string[]; i: number; solved: number; elapsed: number; label: string; back?: string; plan?: boolean; tried?: number }

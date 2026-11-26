@@ -20,7 +20,7 @@ import { miniBoard, pieceSrc } from '../ui/board';
 import { confetti } from '../ui/fx';
 import { Chess, tryMove, uciToObj } from '../core/chess';
 import { $, esc, icon, plural } from '../ui/dom';
-import { BR, REP, lastLesson, plansFor, save, store } from './store';
+import { BR, REP, lastLesson, planLines, save, store } from './store';
 import { startSession } from './session';
 
 const SIDE_KEY = 'cd_rep_side', LAST_KEY = 'cd_last_sys';
@@ -89,7 +89,7 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
   const vrow = (id: string) => { const br = BR[id].br, v = varLabel(br), m = mark(id), ps = playStat([id]);
     return `<li class="${m}"><a href="${lineUrl(id, 'explore')}">${m === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${v.key ? `<b>${esc(v.key)}</b> ` : ''}${esc(v.idea)}${m === 'rev' ? ' <em>à revoir</em>' : ''}${ps.html}</span></a></li>`; };
   const isErr = (id: string) => BR[id].br.role === 'erreur' || BR[id].br.type === 'punir', isPlan = (id: string) => !!BR[id].br.plan, th = L.ids.filter(id => !isErr(id) && !isPlan(id)), er = L.ids.filter(isErr), pl = L.ids.filter(id => isPlan(id) && !isErr(id));
-  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary>${th.length ? `<p class="pvh">La théorie</p><ul class="plines simple">${th.map(vrow).join('')}</ul>` : ''}${pl.length ? `<p class="pvh">Le plan, au milieu de jeu</p><ul class="plines simple">${pl.map(vrow).join('')}</ul>` : ''}${er.length ? `<p class="pvh">Ses erreurs à punir</p><ul class="plines simple">${er.map(vrow).join('')}</ul>` : ''}</details>`;
+  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary>${th.length ? `<p class="pvh">La théorie</p><ul class="plines simple">${th.map(vrow).join('')}</ul>` : ''}${pl.length ? `<p class="pvh">Le milieu de jeu</p><ul class="plines simple">${pl.map(vrow).join('')}</ul>` : ''}${er.length ? `<p class="pvh">Ses erreurs à punir</p><ul class="plines simple">${er.map(vrow).join('')}</ul>` : ''}</details>`;
   const rest = lessonIds(L).length;
   const note = L.state === 'lock' ? `Finis d'abord la case ${i}.` : '';
   const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">${rest < L.ids.length ? 'Continuer' : 'Commencer'}</button>`
@@ -180,7 +180,7 @@ function factsOf(units: Unit[]): Facts[] {
     return { u, games: gs.length, score: gs.length ? (100 * gs.reduce((a, g) => a + (g.res === 'W' ? 1 : g.res === 'D' ? 0.5 : 0), 0)) / gs.length : null,
       devs: devBy[u.sys.id] || 0, due: ownLines(u.sys).filter(b => { const s = store.state.br[b.id]; return s?.runs && isDue(s); }).length,
       fresh: freshFromGames(u.sys, store.state.br), punir: punBy[u.sys.id] || 0,
-      drop: an.length >= 3 ? an.reduce((a, g) => a + at(g, 40) - at(g, 20), 0) / an.length : null, plans: plansFor(u.sys.id).length };
+      drop: an.length >= 3 ? an.reduce((a, g) => a + at(g, 40) - at(g, 20), 0) / an.length : null, plans: planLines(u.sys.id) };
   });
 }
 /** La raison d'une recommandation, en une phrase, sans chiffres. */
@@ -200,7 +200,6 @@ function actionOf(r: Reco): { label: string; href?: string; run?: () => void } {
   const lesson = i >= 0 ? { label: u.lessons[i].state === 'crack' ? 'Réviser' : 'Apprendre la suite', run: () => startLesson(u, i) } : { label: 'Voir l\'ouverture', href: openingUrl(u) };
   if (r.kind === 'oubli') { const g = recentDeviations(store.games, store.state.fixed, BR, Date.now(), 30, 50).find(x => BR[refBranch(x, BR)!]?.sys.id === u.sys.id);
     return g ? { label: 'Rejouer la ligne', href: lineUrl(refBranch(g, BR)!, 'drill', g.id) } : lesson; }
-  if (r.kind === 'milieu') return { label: 'Voir ses plans', href: `#/plans?o=${u.sys.id}&r=${encodeURIComponent('#/o/' + u.sys.id)}` };
   if (r.kind === 'revoir') { const ids = ownLines(u.sys).map(b => b.id).filter(id => { const s = store.state.br[id]; return s?.runs && isDue(s); });
     return { label: 'Revoir maintenant', run: () => { setLS(LAST_KEY, u.sys.id); location.hash = startSession(`${shortName(u.sys.titre)}, à revoir`, ids, `#/o/${u.sys.id}`); } }; }
   return lesson;
@@ -252,13 +251,13 @@ export function viewPath(root: HTMLElement) {
   if (location.hash.startsWith('#/rep/choisir')) return pickCourse(root, units, cur);
   // le nom du cours est dans l'en-tête ; on change de cours depuis la liste des ouvertures
   root.innerHTML = `<div id="ccourse"></div>`;
-  // le cours lui-même, avec son bilan et ses trois vues (chemin, plans, arbre) : une seule page par cours
+  // le cours lui-même, avec son bilan et ses deux vues (chemin, arbre) : une seule page par cours
   const v = new URLSearchParams(location.hash.split('?')[1] ?? '').get('v');
-  showCourse(root.querySelector<HTMLElement>('#ccourse')!, cur.bloc, cur.sys, v === 'plans' || v === 'arbre' ? v : 'chemin', '#/cours');
+  showCourse(root.querySelector<HTMLElement>('#ccourse')!, cur.bloc, cur.sys, v === 'arbre' ? v : 'chemin', '#/cours');
 }
 /** Fait de ce cours le cours en cours (celui que montre l'onglet Ouvertures). */
 export const setCurrentCourse = (sysId: string) => setLS(LAST_KEY, sysId);
-let showCourse: (root: HTMLElement, bloc: Bloc, sys: System, tab: 'chemin' | 'plans' | 'arbre', base: string) => void = () => {};
+let showCourse: (root: HTMLElement, bloc: Bloc, sys: System, tab: 'chemin' | 'arbre', base: string) => void = () => {};
 /** Branché par la page du cours (pour éviter une dépendance circulaire). */
 export const setCourseView = (f: typeof showCourse) => { showCourse = f; };
 /**

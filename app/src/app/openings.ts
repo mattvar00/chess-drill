@@ -12,8 +12,8 @@ import { variantTitle } from '../core/names';
 import type { Bloc, Game, System } from '../core/types';
 import { miniBoard } from '../ui/board';
 import { $, esc, icon, plural } from '../ui/dom';
-import { BR, REP, plansFor, store } from './store';
-import { lossPhase, plansPanel } from './course';
+import { BR, REP, store } from './store';
+import { lossPhase } from './course';
 import { bindPath, courseBoard, pathBlock, setCurrentCourse, shortName, unitFor } from './path';
 import { lineUrl } from './session';
 import { gameUrl } from './games';
@@ -92,12 +92,11 @@ function endBoard(id: string): string {
   return miniBoard(g, bloc.side).replace('class="mini"', 'class="mini othumb"');
 }
 
-export type OTab = 'chemin' | 'parties' | 'plans';
+export type OTab = 'chemin' | 'parties';
 /**
  * La page d'une ouverture, la seule : ton score en une ligne, puis trois vues.
  * - Chemin : le cours (une case par chapitre, nommée par le coup adverse), avec « Continuer » ;
  * - Mes parties : où se jouent tes défaites, et tes parties ouvertes sur leur moment clé ;
- * - Plans : les plans en images, à jouer contre le moteur.
  * Une ouverture faite de plusieurs cours (Sveshnikov) les propose en haut du chemin.
  */
 export function viewOpeningPage(root: HTMLElement, sysId: string, tab: OTab = 'chemin'): (() => void) | void {
@@ -106,13 +105,11 @@ export function viewOpeningPage(root: HTMLElement, sysId: string, tab: OTab = 'c
   const { b, list } = fam, sys = list.find(x => x.id === sysId) ?? list[0], byS = gamesBySys(), games = list.flatMap(x => byS.get(x.id) ?? []).sort((x, y) => y.t - x.t);
   const n = games.length, p = scoreOf(games), v = verdict(p, n), here = openingUrl(sys.id);
   setCurrentCourse(sys.id);
-  const nPlans = plansFor(sys.id).length;
-  const tabs = `<nav class="csegs" aria-label="Vues de l'ouverture">${([['chemin', 'Chemin'], ['parties', n ? `Mes parties <span class="cn">${n}</span>` : 'Mes parties'], ['plans', nPlans ? `Plans <span class="cn">${nPlans}</span>` : 'Plans']] as [OTab, string][])
+  const tabs = `<nav class="csegs" aria-label="Vues de l'ouverture">${([['chemin', 'Chemin'], ['parties', n ? `Mes parties <span class="cn">${n}</span>` : 'Mes parties']] as [OTab, string][])
     .map(([k, l]) => `<a class="cseg${k === tab ? ' on' : ''}" href="${here}${k === 'chemin' ? '' : '?v=' + k}" ${k === tab ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
   const head = `<p class="oline">${p == null ? '' : `<b class="${v}">${p} %</b>`}<span>${n ? `des points sur ${plural(n, 'partie')}` : 'Pas encore de partie'} · ${b.side === 'w' ? 'Blancs' : 'Noirs'}</span></p>${tabs}`;
   const wrap = (html: string) => { root.innerHTML = `<div class="opage">${head}${html}</div>`; };
 
-  if (tab === 'plans') { wrap(plansPanel(sys, here)); return; }
   if (tab === 'parties') {
     if (!n) { wrap('<p class="oempty">Pas encore de partie dans cette ouverture.</p>'); return; }
     const lost = games.filter(g => g.res === 'L'), ph: Record<Phase, Game[]> = { ouv: [], mil: [], fin: [] };

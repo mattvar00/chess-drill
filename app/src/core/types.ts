@@ -41,15 +41,15 @@ export interface RepMove { san: string; uci: string }
  * (`marks` : demi-coup → « ? », « ?? » ou « ?! », affiché sur sa case), et tes fautes classiques à toi (`wrong` : demi-coup → mauvais coup → pourquoi il est mauvais).
  */
 export interface Branch { id: string; titre: string; moves: RepMove[]; notes: Record<string, string>; type?: 'punir' | 'bon'; ch?: string; role?: 'theorie' | 'erreur'; /** Suite de la variante au milieu de jeu : le plan, joué contre les réponses courantes à ton niveau. */ plan?: boolean; intro?: string; marks?: Record<string, string>; wrong?: Record<string, Record<string, string>>; bilan?: string;
-  /** `suite` : le plan une fois la variante jouée (« Et après »). `model` : une partie de maître à regarder, pas une variante à apprendre. */
-  suite?: string; model?: boolean;
+  /** `suite` : le plan une fois la variante jouée (« Et après »). */
+  suite?: string;
   /** `pop` : nombre de parties Lichess de joueurs entre 1600 et 2000 qui passent par la variante, pour dire lesquelles comptent le plus. */
   pop?: number;
   /** `plus` : variante rare, hors du chemin : elle se travaille après la dame (« Pour aller plus loin »). */
   plus?: boolean;
   /** `nom` : le nom officiel de la variante, en français (d'après lichess-org/chess-openings, CC0). */
   nom?: string }
-export interface System { id: string; titre: string; statut: string; resume: string; branches: Branch[]; modeles?: Branch[];
+export interface System { id: string; titre: string; statut: string; resume: string; branches: Branch[];
   /** Part des parties (à ton niveau) où l'adversaire choisit chaque réponse : nom du chapitre → fraction. */
   shares?: Record<string, number> }
 export interface Bloc { id: string; titre: string; sous: string; side: Color; systemes: System[] }

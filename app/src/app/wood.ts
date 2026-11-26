@@ -205,7 +205,7 @@ export function mountExercise(root: HTMLElement, header: (title: string, sub: st
     store.state.wood = counted ? [...woodHistory(), done] : woodHistory(); store.state.woodCur = undefined; save(); syncSoon();
     header('Cycle terminé', done.label); XS.destroy();
     root.innerHTML = `<div class="endwrap"><section class="endcard">${counted ? `<h1>${done.solved}/${done.n} du premier coup</h1><p>En ${fmtTime(done.time)}${prev ? `. La fois précédente : ${prev.solved}/${prev.n} en ${fmtTime(prev.time)}` : ''}.</p>` : '<h1>Cycle passé</h1><p>Aucune position jouée : ce cycle ne compte pas dans ton historique.</p>'}
-      <div class="row">${cyc.plan ? `<a class="btn pri" href="${cyc.back ?? '#/'}">Continuer le plan du jour</a><button class="btn" id="bAgain">Refaire</button>` : `<button class="btn pri" id="bAgain">Refaire ce cycle</button><a class="btn" href="${cyc.back ?? '#/wood'}">Retour</a>`}</div></section></div>`;
+      <div class="row">${cyc.plan ? `<a class="btn pri" href="${cyc.back ?? '#/'}">Continuer la séance du jour</a><button class="btn" id="bAgain">Refaire</button>` : `<button class="btn pri" id="bAgain">Refaire ce cycle</button><a class="btn" href="${cyc.back ?? '#/wood'}">Retour</a>`}</div></section></div>`;
     if (cyc.plan) markPlan('tac');
     $('#bAgain', root).onclick = () => startCycle(done.label, cyc.ids.map(id => faults.get(id)).filter((f): f is Fault => !!f), cyc.back, cyc.plan);
   }

@@ -54,14 +54,11 @@ describe('fautes par type', () => {
 });
 
 import { earnedQueen, linesThrough } from '../src/core/path';
-import plans from '../src/data/plans.json';
 describe('ouvertures regroupées', () => {
   const R = rep as unknown as Repertoire;
-  it('chaque ligne est rangée une seule fois, les plans pointent vers des ouvertures qui existent', () => {
+  it('chaque ligne est rangée une seule fois', () => {
     const ids = R.blocs.flatMap(b => b.systemes.flatMap(s => s.branches.map(x => x.id)));
     expect(new Set(ids).size).toBe(ids.length);
-    const sys = new Set(R.blocs.flatMap(b => b.systemes.map(s => s.id)));
-    for (const p of plans as { sys: string[] }[]) for (const s of p.sys) expect(sys.has(s)).toBe(true);
   });
   it('trouve tes lignes en jouant les coups', () => {
     const r = linesThrough(R.blocs, ['d4', 'd5', 'Bf4']);

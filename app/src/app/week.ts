@@ -37,7 +37,7 @@ export function stepDone(w: Week, x: WeekStep): boolean {
   if (x.id === 'conv') return w.conv >= (x.need ?? 5);
   const done = woodHistory().filter(c => c.date >= since);
   if (x.id === 'open') return done.some(c => c.label.startsWith('Fautes : '));
-  return done.some(c => (x.label ? c.label === x.label : c.label !== 'Plan du jour' && !c.label.startsWith('Fautes : ')));
+  return done.some(c => (x.label ? c.label === x.label : c.label !== 'Plan du jour' && c.label !== 'Séance du jour' && !c.label.startsWith('Fautes : ')));
 }
 /** Une position à conclure jouée jusqu'au bout compte pour l'étape de la semaine. */
 export function countConvert() { const w = currentWeek(); w.conv++; save(); }
