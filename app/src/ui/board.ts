@@ -15,7 +15,13 @@ export interface BoardOpts {
 /** Glisser en cours. `box` : le plateau mesuré au toucher, pour trouver la case sous le doigt sans interroger le DOM à chaque mouvement. */
 interface Drag { from: string; ghost: HTMLElement; img: HTMLElement; w: number; moved: boolean; wasSel: boolean; x0: number; y0: number; box: DOMRect; hover: string | null; x: number; y: number }
 
+/** Dernier geste de l'utilisateur (appui ou touche) : un échiquier ne fait du bruit qu'après un geste fait depuis qu'il est affiché. */
+let lastGesture = 0;
+if (typeof window !== 'undefined') for (const ev of ['pointerdown', 'keydown'] as const) window.addEventListener(ev, () => { lastGesture = performance.now(); }, { capture: true, passive: true });
+
 export class Board {
+  /** Moment où l'échiquier est apparu : le coup qu'il joue tout seul en s'ouvrant (premier coup de l'adversaire) reste muet. */
+  private born = performance.now();
   private game = new Chess(); private orient: Color = 'w'; private built: Color | null = null;
   private last: Move | null = null; private sel: string | null = null; private legal: Move[] = [];
   private drag: Drag | null = null; private dropped = false; private shown: string[] = []; private pin: { sq: string; text: string; cls: string; label: string } | null = null;
@@ -30,7 +36,7 @@ export class Board {
     if (animate && last) {
       if (!this.dropped) { this.slide(last.from, last.to);
         if (last.flags.includes('k') || last.flags.includes('q')) { const r = last.color === 'w' ? '1' : '8', k = last.flags.includes('k'); this.slide((k ? 'h' : 'a') + r, (k ? 'f' : 'd') + r); } }
-      SFX.forMove(last);
+      if (lastGesture > this.born) SFX.forMove(last);
     }
     this.dropped = false;
   }
