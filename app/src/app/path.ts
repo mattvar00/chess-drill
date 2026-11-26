@@ -88,8 +88,8 @@ function bubble(u: Unit, L: Lesson, i: number, x: number) {
   // ses variantes, nommées comme partout (le coup, puis l'idée) : la théorie d'abord, puis les erreurs adverses ; chacune s'ouvre
   const vrow = (id: string) => { const br = BR[id].br, v = varLabel(br), m = mark(id), ps = playStat([id]);
     return `<li class="${m}"><a href="${lineUrl(id, 'explore')}">${m === 'ok' ? icon('check') : '<i class="pdot" aria-hidden="true"></i>'}<span>${v.key ? `<b>${esc(v.key)}</b> ` : ''}${esc(v.idea)}${m === 'rev' ? ' <em>à revoir</em>' : ''}${ps.html}</span></a></li>`; };
-  const isErr = (id: string) => BR[id].br.role === 'erreur' || BR[id].br.type === 'punir', th = L.ids.filter(id => !isErr(id)), er = L.ids.filter(isErr);
-  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary>${th.length ? `<p class="pvh">La théorie</p><ul class="plines simple">${th.map(vrow).join('')}</ul>` : ''}${er.length ? `<p class="pvh">Ses erreurs à punir</p><ul class="plines simple">${er.map(vrow).join('')}</ul>` : ''}</details>`;
+  const isErr = (id: string) => BR[id].br.role === 'erreur' || BR[id].br.type === 'punir', isPlan = (id: string) => !!BR[id].br.plan, th = L.ids.filter(id => !isErr(id) && !isPlan(id)), er = L.ids.filter(isErr), pl = L.ids.filter(id => isPlan(id) && !isErr(id));
+  const lines = `<details class="pmore"><summary>${plural(L.ids.length, 'variante')}</summary>${th.length ? `<p class="pvh">La théorie</p><ul class="plines simple">${th.map(vrow).join('')}</ul>` : ''}${pl.length ? `<p class="pvh">Le plan, au milieu de jeu</p><ul class="plines simple">${pl.map(vrow).join('')}</ul>` : ''}${er.length ? `<p class="pvh">Ses erreurs à punir</p><ul class="plines simple">${er.map(vrow).join('')}</ul>` : ''}</details>`;
   const rest = lessonIds(L).length;
   const note = L.state === 'lock' ? `Finis d'abord la case ${i}.` : '';
   const act = L.state === 'cur' ? `<button class="btn pri" data-go="${i}">${rest < L.ids.length ? 'Continuer' : 'Commencer'}</button>`

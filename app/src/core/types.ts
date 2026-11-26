@@ -40,7 +40,7 @@ export interface RepMove { san: string; uci: string }
  * qu'elles traitent), un rôle (`role` : la théorie, ou une erreur classique de l'adversaire), une explication (`intro`) et les fautes de l'adversaire
  * (`marks` : demi-coup → « ? », « ?? » ou « ?! », affiché sur sa case), et tes fautes classiques à toi (`wrong` : demi-coup → mauvais coup → pourquoi il est mauvais).
  */
-export interface Branch { id: string; titre: string; moves: RepMove[]; notes: Record<string, string>; type?: 'punir' | 'bon'; ch?: string; role?: 'theorie' | 'erreur'; intro?: string; marks?: Record<string, string>; wrong?: Record<string, Record<string, string>>; bilan?: string;
+export interface Branch { id: string; titre: string; moves: RepMove[]; notes: Record<string, string>; type?: 'punir' | 'bon'; ch?: string; role?: 'theorie' | 'erreur'; /** Suite de la variante au milieu de jeu : le plan, joué contre les réponses courantes à ton niveau. */ plan?: boolean; intro?: string; marks?: Record<string, string>; wrong?: Record<string, Record<string, string>>; bilan?: string;
   /** `suite` : le plan une fois la variante jouée (« Et après »). `model` : une partie de maître à regarder, pas une variante à apprendre. */
   suite?: string; model?: boolean;
   /** `pop` : nombre de parties Lichess de joueurs entre 1600 et 2000 qui passent par la variante, pour dire lesquelles comptent le plus. */
