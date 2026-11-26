@@ -18,7 +18,7 @@ export const ALL_IDS = Object.keys(BR);
 
 /** Plans animés : chacun se rejoue aussi comme une ligne (« plan-<id> »), hors des tirages du répertoire. */
 export interface PlanStep { p: number; a: [string, string][]; h: string[]; c: string }
-export interface Plan { id: string; sans: string[]; steps: PlanStep[]; cat: string; title: string; side: 'w' | 'b'; sys: string[]; sub: string; src: string[] }
+export interface Plan { id: string; sans: string[]; steps: PlanStep[]; cat: string; title: string; side: 'w' | 'b'; sys: string[]; sub: string; src: string[]; /** Partie modèle : le plan suit une vraie partie jusqu'au milieu de jeu, on ne l'apprend pas par cœur. */ game?: string }
 export const PLANS = plansJson as Plan[];
 export const planBranch = (id: string) => 'plan-' + id;
 for (const P of PLANS) {

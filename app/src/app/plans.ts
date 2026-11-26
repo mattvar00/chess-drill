@@ -33,7 +33,7 @@ function positionAt(P: Plan, ply: number): { game: Chess; last: Move | null } {
 export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): () => void {
   const P = PLANS.find(x => x.id === id); if (!P) { root.innerHTML = '<section class="empty"><p>Ce plan n\'existe plus.</p><a class="btn" href="#/plans">Plans</a></section>'; return () => { /* rien */ }; }
   const done = (store.state.planDone as Record<string, { errs: number }> | undefined)?.[P.id];
-  if (!skipIntro && !done) {
+  if (!skipIntro && !done && !P.game) {
     const lastPly = P.steps[P.steps.length - 1].p, mine = Math.ceil((P.side === 'w' ? lastPly : lastPly - 1) / 2), { game } = positionAt(P, P.steps[0].p);
     root.innerHTML = `<section class="surf today"><div class="today-top"><div class="today-text"><p class="label">${esc(P.cat)}</p><h2>${esc(P.title)}</h2><p>${esc(P.sub)}</p></div>${miniBoard(game, P.side)}</div>
       <p>Avant de voir le plan, rejoue la ligne avec les ${P.side === 'w' ? 'Blancs' : 'Noirs'} : ${plural(mine, 'coup')} jusqu'à la position clé. L'adversaire joue tout seul.</p>
@@ -47,8 +47,8 @@ export function mountPlan(root: HTMLElement, id: string, skipIntro: boolean): ()
     <div class="tside"><div id="xp" hidden></div><div class="tmain" id="tmain">
       <div class="coach" aria-live="polite"><p class="meta" id="mv"></p><p class="moves mseg" id="seg"></p><p id="cap"></p></div>
       <div class="explnav three"><button class="btn" id="bPrev" aria-label="Étape précédente">${icon('back')}</button><button class="btn" id="bPlay"></button><button class="btn" id="bNext" aria-label="Étape suivante">${icon('chev')}</button></div>
-      <div class="row"><a class="btn pri" href="#/plan/${P.id}/jouer">Joue le plan contre le moteur</a><a class="btn" href="${lineUrl(planBranch(P.id), 'drill')}">${done ? 'Rejouer la ligne' : 'Jouer la ligne'}</a></div>
-      ${done ? `<p class="hint">Ligne déjà jouée${done.errs ? `, ${plural(done.errs, 'erreur')} la dernière fois` : ' sans faute'}.</p>` : ''}
+      ${P.game ? `<a class="btn pri block" href="#/plan/${P.id}/jouer">Joue cette position contre le moteur</a><p class="hint">Partie modèle : ${esc(P.game)}.</p>` : `<div class="row"><a class="btn pri" href="#/plan/${P.id}/jouer">Joue le plan contre le moteur</a><a class="btn" href="${lineUrl(planBranch(P.id), 'drill')}">${done ? 'Rejouer la ligne' : 'Jouer la ligne'}</a></div>`}
+      ${done && !P.game ? `<p class="hint">Ligne déjà jouée${done.errs ? `, ${plural(done.errs, 'erreur')} la dernière fois` : ' sans faute'}.</p>` : ''}
       <details class="help"><summary>Toute la ligne et les sources</summary><p class="line">${P.sans.map((s, k) => (k % 2 === 0 ? `${k / 2 + 1}.` : '') + esc(s)).join(' ')}</p>
         <p>Idées tirées de : ${P.src.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\/(www\.)?/, '').split('/')[0])}</a>`).join(', ')}. Chaque coup est vérifié au moteur.</p></details>
     </div></div></div>`;
